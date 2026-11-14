@@ -133,8 +133,13 @@ export class PackIndex {
       .slice(0, limit);
   }
 
-  /** Finds a place the user named ("the cathedral", "Plaza de España"). */
-  findPlace(text: string): Place | undefined {
+  /**
+   * Finds a place the user named ("the cathedral", "Plaza de España").
+   * With fuzzy off, only a place name inside the text counts; use that when
+   * the text may be generic ("museum ticket"), which full-text search would
+   * pin to some arbitrary museum.
+   */
+  findPlace(text: string, opts: { fuzzy?: boolean } = {}): Place | undefined {
     const t = fold(text);
     let best: { place: Place; len: number } | undefined;
     for (const { place, names } of this.nameIndex) {
@@ -143,6 +148,7 @@ export class PackIndex {
       }
     }
     if (best) return best.place;
+    if (opts.fuzzy === false) return undefined;
     const hit = this.query(text, 1, ['place'])[0];
     return hit && hit.score > 8 ? this.place(hit.id) : undefined;
   }

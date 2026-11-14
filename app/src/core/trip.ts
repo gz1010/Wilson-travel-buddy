@@ -1,4 +1,4 @@
-import type { PackIndex } from './pack';
+import { fold, type PackIndex } from './pack';
 import { prompts } from './prompts';
 import { addDays, daysBetween, minutesBetween, parseHHMM, weekday, WEEKDAY_NAMES } from './time';
 import { INTERESTS, type Clock, type Interest, type JSONSchema, type LLMClient, type Stop, type Trip } from './types';
@@ -55,6 +55,31 @@ export function calendarLines(startDate: string, days = 7): string {
   }).join('\n');
 }
 
+// Words that describe a kind of place or booking rather than name one.
+const GENERIC_WORDS = new Set(
+  'a an the my our some museum museo ticket tickets visit tour booking reservation entry church gallery exhibition show concert dinner lunch breakfast restaurant bar tapas market park palace garden gardens'.split(
+    ' ',
+  ),
+);
+
+function isGeneric(name: string): boolean {
+  return fold(name)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .every(w => GENERIC_WORDS.has(w));
+}
+
+/**
+ * The pack place a stop refers to. Fuzzy search only runs on a specific
+ * place name from the model; a title or a generic name ("museum") must
+ * contain a real place name, so "Tuesday museum ticket" stays unpinned
+ * instead of landing on whichever museum searches best.
+ */
+function matchStopPlace(s: TripDraft['stops'][number], index: PackIndex) {
+  if (s.place_name) return index.findPlace(s.place_name, { fuzzy: !isGeneric(s.place_name) });
+  return index.findPlace(s.title, { fuzzy: false });
+}
+
 let stopCounter = 0;
 const newStopId = () => `stop-${Date.now().toString(36)}-${(stopCounter++).toString(36)}`;
 
@@ -62,7 +87,7 @@ const newStopId = () => `stop-${Date.now().toString(36)}-${(stopCounter++).toStr
 export function resolveDraft(draft: TripDraft, index: PackIndex, startDate: string, description: string): Trip {
   const days = Math.max(1, Math.min(14, draft.days || 1));
   const stops: Stop[] = draft.stops.map(s => {
-    const place = s.place_name ? index.findPlace(s.place_name) : index.findPlace(s.title);
+    const place = matchStopPlace(s, index);
     let start: string | undefined;
     if (s.start) {
       try {
