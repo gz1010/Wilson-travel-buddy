@@ -176,7 +176,8 @@ describe('translator', () => {
     const s = new SideAssigner('en', 'es');
     expect(s.assign(1, 'es')).toBe('local');
     expect(s.assign(0, 'en')).toBe('traveler');
-    expect(s.assign(1, 'en')).toBe('local'); // a local saying "OK" stays local
+    expect(s.assign(1, 'en')).toBe('traveler'); // language decides when it is known
+    expect(s.assign(1, undefined)).toBe('traveler'); // then the speaker's last side is used
     expect(s.assign(undefined, 'es')).toBe('local');
     expect(s.direction('local', 'en')).toEqual({ from: 'en', to: 'es' });
   });

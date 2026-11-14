@@ -39,9 +39,8 @@ var service: AudioService?
 var readyMessage: Outgoing?
 var lastStatus = Outgoing.status("Starting the audio helper…")
 
-server.onConnect = {
-    server.send(readyMessage ?? lastStatus)
-}
+// No greeting on connect: clients say "hello" and get one "ready" (or status) back.
+// Sending both made clients act on "ready" twice (the test script spoke twice).
 server.onMessage = { data in
     guard let m = try? JSONDecoder().decode(Incoming.self, from: data) else { return }
     if m.type == "hello" {

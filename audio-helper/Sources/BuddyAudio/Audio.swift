@@ -9,21 +9,26 @@ let sampleRate = WhisperKit.sampleRate // 16 kHz
 /// Finds where speech starts and stops in a stream of microphone chunks,
 /// from loudness against an adaptive noise floor.
 struct Endpointer {
-    var silenceToEnd: Double = 0.8 // seconds of quiet that end an utterance
+    var silenceToEnd: Double = 1.0 // seconds of quiet that end an utterance
     var minSpeech: Double = 0.3
     private(set) var noiseFloor: Float = 0.003
     private(set) var inSpeech = false
     private var speechSamples = 0
     private var silenceSamples = 0
+    /// Loudness of recent chunks. The noise floor is the quietest of the last few seconds:
+    /// speech always has gaps, so it stays low while someone talks, but a new steady noise
+    /// (a fan, a café) raises it within a few seconds and can't lock speech on.
+    private var recent: [Float] = []
 
     /// Returns true when an utterance has just ended.
     mutating func feed(_ chunk: [Float]) -> (level: Float, ended: Bool) {
         var rms: Float = 0
         vDSP_rmsqv(chunk, 1, &rms, vDSP_Length(chunk.count))
+        recent.append(rms)
+        let window = max(1, Int(3.0 * Double(sampleRate) / Double(max(chunk.count, 1))))
+        if recent.count > window { recent.removeFirst(recent.count - window) }
+        noiseFloor = max(0.001, recent.min() ?? rms)
         let speech = rms > max(0.006, noiseFloor * 3)
-        if !speech { noiseFloor = noiseFloor * 0.95 + rms * 0.05 }
-        // Drift up slowly during "speech" too, so a new steady noise (a fan, a café) can't lock it on.
-        else { noiseFloor = noiseFloor * 0.98 + min(rms, noiseFloor * 4) * 0.02 }
         if speech {
             speechSamples += chunk.count
             silenceSamples = 0
@@ -53,6 +58,7 @@ struct VoicePrints {
 
     mutating func identify(_ e: [Float]) -> Int {
         let sims = prints.map { cosine($0, e) }
+        log("voice print similarity to known speakers: \(sims.map { String(format: "%.2f", $0) }) (threshold \(threshold))")
         if let best = sims.indices.max(by: { sims[$0] < sims[$1] }), sims[best] >= threshold || prints.count >= 2 {
             prints[best] = zip(prints[best], e).map { $0 * 0.7 + $1 * 0.3 }
             return best
@@ -270,7 +276,8 @@ actor AudioService {
     }
 
     private func voicePrint(_ audio: [Float]) async -> Int? {
-        guard let speakers = models.speakers, audio.count > sampleRate else { return nil }
+        // Short sentences give unreliable voice prints; the app falls back to language for those.
+        guard let speakers = models.speakers, audio.count > sampleRate * 3 / 2 else { return nil }
         do {
             let result = try await speakers.diarize(audioArray: audio, options: PyannoteDiarizationOptions(numberOfSpeakers: 1))
             guard let embedding = result.speakerCentroidEmbeddings.sorted(by: { $0.key < $1.key }).first?.value else { return nil }

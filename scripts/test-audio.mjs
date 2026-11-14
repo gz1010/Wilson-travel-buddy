@@ -18,12 +18,15 @@ ws.onerror = () => {
   process.exit(1);
 };
 ws.onopen = () => send({ type: 'hello', version: 1 });
+let started = false;
 ws.onmessage = ev => {
   const m = JSON.parse(ev.data);
   if (m.type === 'level') return;
   if (m.type === 'status') return console.log(`[${at()}] status: ${m.message}`);
   if (m.type === 'error') return console.log(`[${at()}] ERROR: ${m.message}`);
   if (m.type === 'ready') {
+    if (started) return;
+    started = true;
     console.log(`[${at()}] ready: ${m.models.join(' | ')} (live speakers: ${m.liveSpeakers})`);
     if (mode === 'speak') send({ type: 'speak', id: 'test', text, language: lang });
     else if (mode === 'listen') { console.log('Speak now…'); send({ type: 'listen.start', language: 'en' }); }

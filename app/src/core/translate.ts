@@ -42,10 +42,10 @@ function normalize(s: string): string {
 
 /**
  * Decides who said each sentence in the translator: the traveller (home
- * language) or the local. Argmax gives speaker numbers (0, 1, …) but not who
- * they are; the first time a speaker is heard in a known language decides
- * their side. With no speaker number (push-to-talk or no diarization), the
- * detected language decides.
+ * language) or the local. The detected language decides when it is one of
+ * the two, because Whisper's language detection is more reliable than voice
+ * prints on short sentences. Argmax's speaker numbers decide when the
+ * language is unclear, and are remembered per speaker for that purpose.
  */
 export class SideAssigner {
   private readonly sides = new Map<number, Side>();
@@ -56,16 +56,12 @@ export class SideAssigner {
     const byLanguage: Side | undefined =
       language === this.home ? 'traveler' : language === this.local ? 'local' : undefined;
     if (speaker === undefined) return byLanguage ?? 'traveler';
-    const known = this.sides.get(speaker);
-    if (known) {
-      // With only two voice prints, both can land on one side. If this speaker's language says
-      // the other side and nobody holds it yet, the map is wrong: move them.
-      if (byLanguage && byLanguage !== known && ![...this.sides.values()].includes(byLanguage)) {
-        this.sides.set(speaker, byLanguage);
-        return byLanguage;
-      }
-      return known;
+    if (byLanguage) {
+      this.sides.set(speaker, byLanguage);
+      return byLanguage;
     }
+    const known = this.sides.get(speaker);
+    if (known) return known;
     // A new speaker: language first, otherwise whichever side is still free.
     const taken = new Set(this.sides.values());
     const side = byLanguage ?? (taken.has('traveler') ? 'local' : 'traveler');

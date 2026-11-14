@@ -28,12 +28,16 @@ describe('fixes from the code review', () => {
     expect(index.findPlace('museum ticket')).toBeUndefined();
   });
 
-  it('lets language correct a speaker map where both voices landed on one side', () => {
+  it('puts sentences on the side of their language, even when voice prints disagree', () => {
     const s = new SideAssigner('en', 'es');
     expect(s.assign(0, 'en')).toBe('traveler');
-    expect(s.assign(1, 'en')).toBe('traveler');
+    expect(s.assign(0, 'es')).toBe('local'); // both voices landed on speaker 0
+    expect(s.assign(1, undefined)).toBe('traveler'); // unknown language, new speaker: takes the free side
+  });
+  it('uses the speaker number when the language is unclear', () => {
+    const s = new SideAssigner('en', 'es');
     expect(s.assign(1, 'es')).toBe('local');
-    expect(s.assign(1, 'en')).toBe('local');
+    expect(s.assign(1, 'fr')).toBe('local');
   });
 
   it('shares one model call between identical recommendation requests', async () => {
