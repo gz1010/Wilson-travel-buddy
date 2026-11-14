@@ -616,5 +616,339 @@
   "localName": "Centro Cerámica Triana",
   "neighborhood": "Triana",
   "price": 1
+ },
+ {
+  "id": "eslava",
+  "name": "Eslava",
+  "category": "tapas-bar",
+  "point": {
+   "lat": 37.39755,
+   "lon": -5.99692
+  },
+  "tags": [
+   "food",
+   "tapas",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "mon": "12:30-00:00",
+   "tue": "12:30-00:00",
+   "wed": "12:30-00:00",
+   "thu": "12:30-00:00",
+   "fri": "12:30-00:00",
+   "sat": "12:30-00:00",
+   "sun": "12:30-17:00"
+  },
+  "summary": "A busy modern tapas bar by the San Lorenzo basilica, known for its slow-cooked egg on a mushroom cake.",
+  "neighborhood": "San Lorenzo",
+  "price": 1
+ },
+ {
+  "id": "casa-morales",
+  "name": "Casa Morales",
+  "category": "tapas-bar",
+  "point": {
+   "lat": 37.38653,
+   "lon": -5.99461
+  },
+  "tags": [
+   "food",
+   "tapas",
+   "history",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 45,
+  "hours": {
+   "mon": "12:00-16:00,20:00-00:00",
+   "tue": "12:00-16:00,20:00-00:00",
+   "wed": "12:00-16:00,20:00-00:00",
+   "thu": "12:00-16:00,20:00-00:00",
+   "fri": "12:00-16:00,20:00-00:00",
+   "sat": "12:00-16:00,20:00-00:00",
+   "sun": "closed"
+  },
+  "summary": "An old wine bodega near the Cathedral where tapas are served among huge clay wine jars.",
+  "neighborhood": "Centro",
+  "price": 1
+ },
+ {
+  "id": "el-comercio",
+  "name": "Bar El Comercio",
+  "localName": "El Comercio",
+  "category": "cafe",
+  "point": {
+   "lat": 37.39081,
+   "lon": -5.99236
+  },
+  "tags": [
+   "food",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 30,
+  "hours": {
+   "mon": "06:30-20:30",
+   "tue": "06:30-20:30",
+   "wed": "06:30-20:30",
+   "thu": "06:30-20:30",
+   "fri": "06:30-20:30",
+   "sat": "06:30-20:30",
+   "sun": "closed"
+  },
+  "summary": "A century-old bar famous for churros dipped in thick hot chocolate, a classic Seville breakfast.",
+  "neighborhood": "Centro",
+  "price": 0
+ },
+ {
+  "id": "la-carboneria",
+  "name": "La Carbonería",
+  "category": "bar",
+  "point": {
+   "lat": 37.38776,
+   "lon": -5.98725
+  },
+  "tags": [
+   "nightlife",
+   "flamenco",
+   "music",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 90,
+  "hours": {
+   "daily": "19:00-01:00"
+  },
+  "summary": "A rambling bar in a former coal yard with free, informal flamenco most nights.",
+  "neighborhood": "Santa Cruz",
+  "price": 1
+ },
+ {
+  "id": "alfalfa",
+  "name": "Plaza de la Alfalfa",
+  "category": "neighborhood",
+  "point": {
+   "lat": 37.39038,
+   "lon": -5.99083
+  },
+  "tags": [
+   "nightlife",
+   "tapas",
+   "local-life"
+  ],
+  "indoor": false,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "A lively little square ringed by tapas bars, busy with locals in the evening.",
+  "neighborhood": "Alfalfa"
+ },
+ {
+  "id": "torre-perdigones",
+  "name": "Torre de los Perdigones",
+  "category": "viewpoint",
+  "point": {
+   "lat": 37.40367,
+   "lon": -5.99296
+  },
+  "tags": [
+   "views",
+   "history"
+  ],
+  "indoor": true,
+  "visitMinutes": 45,
+  "hours": {
+   "mon": "closed",
+   "tue": "closed",
+   "wed": "10:00-14:00",
+   "thu": "10:00-14:00",
+   "fri": "10:00-14:00",
+   "sat": "10:00-14:00",
+   "sun": "10:00-14:00"
+  },
+  "summary": "A 19th-century shot tower with a camera obscura at the top that projects live views of the city.",
+  "neighborhood": "Macarena",
+  "price": 1
+ },
+ {
+  "id": "lonja-barranco",
+  "name": "Lonja del Barranco food market",
+  "localName": "Mercado Lonja del Barranco",
+  "category": "market",
+  "point": {
+   "lat": 37.38765,
+   "lon": -6.00213
+  },
+  "tags": [
+   "food",
+   "markets",
+   "tapas",
+   "architecture"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "mon": "10:00-00:00",
+   "tue": "10:00-00:00",
+   "wed": "10:00-00:00",
+   "thu": "10:00-00:00",
+   "fri": "10:00-02:00",
+   "sat": "10:00-02:00",
+   "sun": "10:00-00:00"
+  },
+  "summary": "A gourmet food hall in an iron-and-glass 19th-century fish market on the river, by the Triana bridge.",
+  "neighborhood": "Arenal",
+  "price": 2
+ },
+ {
+  "id": "venerables",
+  "name": "Hospital de los Venerables",
+  "category": "museum",
+  "point": {
+   "lat": 37.38525,
+   "lon": -5.99015
+  },
+  "tags": [
+   "art",
+   "architecture",
+   "history",
+   "museums",
+   "religion"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "10:00-18:00"
+  },
+  "summary": "A baroque former home for retired priests in Santa Cruz, with a painted church and a Velázquez centre.",
+  "neighborhood": "Santa Cruz",
+  "price": 2
+ },
+ {
+  "id": "macarena",
+  "name": "Basilica of La Macarena",
+  "localName": "Basílica de la Macarena",
+  "category": "church",
+  "point": {
+   "lat": 37.40247,
+   "lon": -5.98943
+  },
+  "tags": [
+   "religion",
+   "history",
+   "art",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 45,
+  "hours": {
+   "daily": "09:00-14:00,17:30-21:00"
+  },
+  "summary": "Home of the Virgin of La Macarena, the city's best-loved Holy Week image, beside the old city gate.",
+  "neighborhood": "Macarena",
+  "price": 0
+ },
+ {
+  "id": "plaza-nueva",
+  "name": "Plaza Nueva",
+  "category": "landmark",
+  "point": {
+   "lat": 37.38861,
+   "lon": -5.99554
+  },
+  "tags": [
+   "architecture",
+   "local-life",
+   "shopping"
+  ],
+  "indoor": false,
+  "visitMinutes": 20,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "The broad square in front of the City Hall and its carved Plateresque façade, at the start of the shopping streets.",
+  "neighborhood": "Centro"
+ },
+ {
+  "id": "casa-ciencia",
+  "name": "Casa de la Ciencia",
+  "localName": "Casa de la Ciencia de Sevilla",
+  "category": "museum",
+  "point": {
+   "lat": 37.37757,
+   "lon": -5.99117
+  },
+  "tags": [
+   "museums",
+   "family",
+   "nature"
+  ],
+  "indoor": true,
+  "visitMinutes": 75,
+  "hours": {
+   "mon": "closed",
+   "tue": "10:00-20:00",
+   "wed": "10:00-20:00",
+   "thu": "10:00-20:00",
+   "fri": "10:00-20:00",
+   "sat": "10:00-20:00",
+   "sun": "10:00-20:00"
+  },
+  "summary": "A science museum with a planetarium in the Peru pavilion from the 1929 Ibero-American Exposition.",
+  "neighborhood": "El Prado",
+  "price": 1
+ },
+ {
+  "id": "museo-arqueologico",
+  "name": "Archaeological Museum",
+  "localName": "Museo Arqueológico de Sevilla",
+  "category": "museum",
+  "point": {
+   "lat": 37.37088,
+   "lon": -5.98707
+  },
+  "tags": [
+   "museums",
+   "history",
+   "architecture"
+  ],
+  "indoor": true,
+  "visitMinutes": 75,
+  "hours": {
+   "mon": "closed",
+   "tue": "10:00-17:00",
+   "wed": "10:00-17:00",
+   "thu": "10:00-17:00",
+   "fri": "10:00-17:00",
+   "sat": "10:00-17:00",
+   "sun": "closed"
+  },
+  "summary": "Roman and Tartessian finds, including the gold Carambolo treasure, in a pavilion in María Luisa Park.",
+  "neighborhood": "Parque de María Luisa",
+  "price": 0
+ },
+ {
+  "id": "puerta-macarena",
+  "name": "Macarena Gate and city walls",
+  "localName": "Puerta y Murallas de la Macarena",
+  "category": "landmark",
+  "point": {
+   "lat": 37.40278,
+   "lon": -5.98924
+  },
+  "tags": [
+   "history",
+   "architecture"
+  ],
+  "indoor": false,
+  "visitMinutes": 20,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "The best-preserved stretch of the medieval city walls, with towers and an arched gate.",
+  "neighborhood": "Macarena"
  }
 ]
