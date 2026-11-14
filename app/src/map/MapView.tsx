@@ -1,9 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-
-// react-native-webview's class types don't line up with React 19's ref types; the component itself is fine.
-const WebViewView = WebView as unknown as React.ComponentType<any>;
 import type { GeoPoint } from '../core/types';
 import { buildMapHtml } from './mapHtml';
 
@@ -29,7 +26,8 @@ interface Props {
 
 /** MapLibre GL JS in a web view, fully offline. See mapHtml.ts. */
 export function MapView({ bounds, pins, you, focusId, onPress, onSelect }: Props) {
-  const ref = useRef<any>(null);
+  // react-native-webview types default P to undefined, which makes WebViewProps & P never; pass {}.
+  const ref = useRef<WebView<{}>>(null);
   const [ready, setReady] = useState(false);
   const lastFocus = useRef<string | undefined>(undefined);
   const html = useMemo(() => buildMapHtml(bounds), [bounds]);
@@ -58,7 +56,7 @@ export function MapView({ bounds, pins, you, focusId, onPress, onSelect }: Props
 
   return (
     <View style={styles.wrap}>
-      <WebViewView
+      <WebView<{}>
         ref={ref}
         originWhitelist={['*']}
         source={{ html, baseUrl: 'about:blank' }}
