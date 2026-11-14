@@ -34,6 +34,7 @@ if args.contains("--prepare") {
 }
 
 let server = try WebSocketServer(port: port)
+let (inbox, inboxContinuation) = AsyncStream<Incoming>.makeStream()
 var service: AudioService?
 var readyMessage: Outgoing?
 var lastStatus = Outgoing.status("Starting the audio helper…")
@@ -47,12 +48,16 @@ server.onMessage = { data in
         server.send(readyMessage ?? lastStatus)
         return
     }
-    guard let service else {
+    guard service != nil else {
         if m.type == "listen.start" { server.send(.error("Still loading models")); server.send(.listenDone) }
         if m.type == "speak", let id = m.id { server.send(.speakDone(id: id)) }
         return
     }
-    Task { await service.handle(m) }
+    inboxContinuation.yield(m)
+}
+// One consumer, so messages reach the audio service in the order the app sent them.
+Task {
+    for await m in inbox { await service?.handle(m) }
 }
 server.start()
 log("Listening on ws://127.0.0.1:\(port)")

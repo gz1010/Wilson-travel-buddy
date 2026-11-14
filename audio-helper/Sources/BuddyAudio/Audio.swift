@@ -22,6 +22,8 @@ struct Endpointer {
         vDSP_rmsqv(chunk, 1, &rms, vDSP_Length(chunk.count))
         let speech = rms > max(0.006, noiseFloor * 3)
         if !speech { noiseFloor = noiseFloor * 0.95 + rms * 0.05 }
+        // Drift up slowly during "speech" too, so a new steady noise (a fan, a café) can't lock it on.
+        else { noiseFloor = noiseFloor * 0.98 + min(rms, noiseFloor * 4) * 0.02 }
         if speech {
             speechSamples += chunk.count
             silenceSamples = 0
@@ -103,6 +105,7 @@ actor AudioService {
     private var finals: Task<Void, Never> = Task {}
     private var listenStarted = Date()
     private var lastLevelSent = Date.distantPast
+    private var startGeneration = 0
 
     private var speech: Task<Void, Never> = Task {}
     private var speechGeneration = 0
@@ -120,11 +123,18 @@ actor AudioService {
     func handle(_ m: Incoming) async {
         switch m.type {
         case "listen.start": await start(.listen, languages: [], listenLanguage: m.language)
-        case "listen.stop": if mode == .listen { await endListen() }
+        case "listen.stop":
+            if mode == .listen {
+                if micTask == nil { startGeneration += 1; mode = .idle; send(.listenDone) } // still waiting for permission
+                else { await endListen() }
+            }
         case "conversation.start":
             prints.reset()
             await start(.conversation, languages: m.languages ?? ["en", "es"], listenLanguage: nil)
-        case "conversation.stop": stopMic(); mode = .idle
+        case "conversation.stop":
+            startGeneration += 1
+            stopMic()
+            mode = .idle
         case "mute":
             muted = m.muted ?? false
             utterance = []
@@ -133,6 +143,8 @@ actor AudioService {
         case "speak.stop":
             speechGeneration += 1
             cancelSpeech.value = true
+            let out = models.tts.audioOutput
+            Task { await out.stopPlayback(waitForCompletion: false) }
         default: break
         }
     }
@@ -141,12 +153,17 @@ actor AudioService {
 
     private func start(_ newMode: Mode, languages: [String], listenLanguage: String?) async {
         stopMic()
+        mode = newMode
+        startGeneration += 1
+        let generation = startGeneration
         guard await AudioProcessor.requestRecordPermission() else {
+            mode = .idle
             send(.error("Microphone access was refused. Allow it in System Settings > Privacy & Security > Microphone."))
             if newMode == .listen { send(.listenDone) }
             return
         }
-        mode = newMode
+        // A stop (or another start) arrived while we waited for permission.
+        guard generation == startGeneration, mode == newMode else { return }
         self.languages = languages
         self.listenLanguage = listenLanguage
         utterance = []
@@ -175,7 +192,8 @@ actor AudioService {
     private func stopMic() {
         partialTask?.cancel()
         partialTask = nil
-        micTask?.cancel()
+        // Not cancelled: endListen() runs inside micTask, and a cancelled task makes WhisperKit
+        // throw CancellationError. Finishing the stream below ends the loop instead.
         micTask = nil
         models.whisper.audioProcessor.stopRecording()
         micContinuation?.finish()
@@ -199,7 +217,8 @@ actor AudioService {
             let waited = Date().timeIntervalSince(listenStarted)
             if ended || (heardSpeech && waited > 20) || (!heardSpeech && waited > 8) { await endListen() }
         case .conversation:
-            if ended {
+            if ended || (heardSpeech && utterance.count > 15 * sampleRate) {
+                endpointer.reset()
                 let audio = utterance
                 utterance = []
                 heardSpeech = false
@@ -228,8 +247,9 @@ actor AudioService {
         stopMic()
         mode = .idle
         if spoke {
-            let (text, lang) = await transcribe(audio, language: listenLanguage)
-            if !text.isEmpty { send(.final(text: text, language: lang ?? listenLanguage, speaker: nil)) }
+            let language = listenLanguage
+            let (text, lang) = await Task { await self.transcribe(audio, language: language, confirmedSpeech: true) }.value
+            if !text.isEmpty { send(.final(text: text, language: lang ?? language, speaker: nil)) }
         }
         send(.listenDone)
     }
@@ -239,10 +259,11 @@ actor AudioService {
     private func finishConversationTurn(_ audio: [Float]) async {
         // Pick the more likely of the two conversation languages, then transcribe in it.
         var lang = languages.first
+        // langProbs holds only the sampled language's log-probability, so use the detected code directly.
         if languages.count > 1, let detected = try? await models.whisper.detectLangauge(audioArray: audio) {
-            lang = languages.max { (detected.langProbs[$0] ?? 0) < (detected.langProbs[$1] ?? 0) }
+            lang = languages.contains(detected.language) ? detected.language : languages.first
         }
-        let (text, _) = await transcribe(audio, language: lang)
+        let (text, _) = await transcribe(audio, language: lang, confirmedSpeech: true)
         guard !text.isEmpty else { return }
         let speaker = await voicePrint(audio)
         send(.final(text: text, language: lang, speaker: speaker))
@@ -262,7 +283,7 @@ actor AudioService {
 
     // MARK: Whisper
 
-    private func transcribe(_ audio: [Float], language: String?) async -> (String, String?) {
+    private func transcribe(_ audio: [Float], language: String?, confirmedSpeech: Bool = false) async -> (String, String?) {
         let options = DecodingOptions(
             task: .transcribe,
             language: language,
@@ -277,7 +298,9 @@ actor AudioService {
             let text = results.map(\.text).joined(separator: " ")
                 .replacingOccurrences(of: "<\\|[^|]*\\|>", with: "", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return (isHallucination(text) ? "" : text, results.first?.language)
+            // Phantom phrases ("Thank you.") are only filtered when the endpointer did not confirm speech,
+            // so a real "Thank you" or "¡Gracias!" in the translator still gets through.
+            return (!confirmedSpeech && isHallucination(text) ? "" : text, results.first?.language)
         } catch {
             log("Transcription failed: \(error)")
             return ("", nil)
