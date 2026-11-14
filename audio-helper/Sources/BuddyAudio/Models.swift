@@ -86,11 +86,15 @@ final class ArgmaxModels {
                 whisperFolder: whisper.modelFolder?.path ?? "",
                 ttsFolder: tts.modelFolder?.path ?? "",
                 ttsTokenizerFolder: findTokenizer(named: "Qwen3-0.6B", under: [dir, FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("huggingface")])?.path,
-                speakerFolder: speakers?.diarizer.modelFolder?.path
+                // SpeakerKit only reports a folder it was given, so fall back to where the Hub put it.
+                speakerFolder: speakers?.diarizer.modelFolder?.path ?? existingFolder(dir.appendingPathComponent("models/argmaxinc/speakerkit-coreml"))
             )
             let data = try JSONEncoder().encode(m)
             try data.write(to: manifestURL(dir))
             log("Wrote \(manifestURL(dir).path):\n\(String(data: data, encoding: .utf8) ?? "")")
+            if m.speakerFolder == nil {
+                log("WARNING: could not find the speaker models on disk; the translator may not label speakers offline.")
+            }
             if m.ttsTokenizerFolder == nil {
                 log("WARNING: could not find the Qwen3 tokenizer on disk; an offline start may fail. Check ~/Documents/huggingface.")
             }
@@ -101,6 +105,10 @@ final class ArgmaxModels {
             "Qwen3-TTS 0.6B (Argmax)",
         ] + (speakers != nil ? ["Pyannote speakers (Argmax)"] : [])
         return ArgmaxModels(whisper: whisper, tts: tts, speakers: speakers, names: names)
+    }
+
+    private static func existingFolder(_ url: URL) -> String? {
+        FileManager.default.fileExists(atPath: url.path) ? url.path : nil
     }
 
     /// Finds a folder with this name that holds a tokenizer.json.
