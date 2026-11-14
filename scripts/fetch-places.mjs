@@ -40,11 +40,18 @@ ${names.map(n => `  nwr["name"~"${escape(n)}",i](${bbox});`).join('\n')}
 );
 out center tags;`;
 
-const res = await fetch('https://overpass-api.de/api/interpreter', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', 'User-Agent': 'travel-buddy-pack-builder' },
-  body: 'data=' + encodeURIComponent(query),
-});
+// Overpass sheds load with 429/502/503/504 and asks for exponential backoff.
+let res;
+for (let attempt = 0, wait = 5; ; attempt++, wait *= 2) {
+  res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', 'User-Agent': 'travel-buddy-pack-builder' },
+    body: 'data=' + encodeURIComponent(query),
+  });
+  if (res.ok || ![429, 502, 503, 504].includes(res.status) || attempt === 4) break;
+  console.error(`Overpass busy (${res.status}); retrying in ${wait} s…`);
+  await new Promise(r => setTimeout(r, wait * 1000));
+}
 if (!res.ok) {
   console.error(`Overpass returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
   process.exit(1);
