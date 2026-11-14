@@ -102,6 +102,9 @@ actor AudioService {
     private var micContinuation: AsyncThrowingStream<[Float], Error>.Continuation?
     private var endpointer = Endpointer()
     private var utterance: [Float] = []
+    /// Translator: the conversation's audio so far (last 90 s), diarized as a whole after each sentence.
+    private var session: [Float] = []
+    private let sessionLimit = 90 * sampleRate
     private var heardSpeech = false
     private var listenLanguage: String?
     private var languages: [String] = ["en"]
@@ -136,6 +139,7 @@ actor AudioService {
             }
         case "conversation.start":
             prints.reset()
+            session = []
             await start(.conversation, languages: m.languages ?? ["en", "es"], listenLanguage: nil)
         case "conversation.stop":
             startGeneration += 1
@@ -216,6 +220,10 @@ actor AudioService {
         if endpointer.inSpeech { heardSpeech = true }
         // Keep a little audio before speech starts so the first word is not clipped.
         utterance.append(contentsOf: chunk)
+        if mode == .conversation {
+            session.append(contentsOf: chunk)
+            if session.count > sessionLimit { session.removeFirst(session.count - sessionLimit) }
+        }
         if !heardSpeech, utterance.count > sampleRate { utterance.removeFirst(utterance.count - sampleRate / 2) }
 
         switch mode {
@@ -229,9 +237,11 @@ actor AudioService {
                 utterance = []
                 heardSpeech = false
                 let previous = finals
+                let snapshot = session
+                let range = max(0, snapshot.count - audio.count) ..< snapshot.count
                 finals = Task { [weak self] in
                     await previous.value
-                    await self?.finishConversationTurn(audio)
+                    await self?.finishConversationTurn(audio, session: snapshot, range: range)
                 }
             }
         case .idle: break
@@ -262,7 +272,7 @@ actor AudioService {
 
     // MARK: Translator
 
-    private func finishConversationTurn(_ audio: [Float]) async {
+    private func finishConversationTurn(_ audio: [Float], session: [Float], range: Range<Int>) async {
         // Pick the more likely of the two conversation languages, then transcribe in it.
         var lang = languages.first
         // langProbs holds only the sampled language's log-probability, so use the detected code directly.
@@ -271,8 +281,36 @@ actor AudioService {
         }
         let (text, _) = await transcribe(audio, language: lang, confirmedSpeech: true)
         guard !text.isEmpty else { return }
-        let speaker = await voicePrint(audio)
+        // Diarizing the whole conversation is far more reliable than one short sentence alone;
+        // the per-sentence voice print is the fallback.
+        var speaker = await sessionSpeaker(session, sentence: range)
+        if speaker == nil { speaker = await voicePrint(audio) }
         send(.final(text: text, language: lang, speaker: speaker))
+    }
+
+    /// Runs SpeakerKit over the conversation so far, finds the speaker cluster that overlaps this
+    /// sentence most, and matches that cluster's centroid to the speakers seen before, so the
+    /// numbers stay stable from one run to the next.
+    private func sessionSpeaker(_ session: [Float], sentence range: Range<Int>) async -> Int? {
+        guard let speakers = models.speakers, range.count > sampleRate / 2 else { return nil }
+        do {
+            let result = try await speakers.diarize(audioArray: session, options: PyannoteDiarizationOptions())
+            let s0 = Float(range.lowerBound) / Float(sampleRate)
+            let s1 = Float(range.upperBound) / Float(sampleRate)
+            var overlap: [Int: Float] = [:]
+            for segment in result.segments {
+                guard let id = segment.speaker.speakerId else { continue }
+                let o = min(segment.endTime, s1) - max(segment.startTime, s0)
+                if o > 0 { overlap[id, default: 0] += o }
+            }
+            log("conversation diarization: \(result.speakerCount) speakers; this sentence overlaps \(overlap.mapValues { String(format: "%.1fs", $0) })")
+            guard let cluster = overlap.max(by: { $0.value < $1.value })?.key,
+                  let centroid = result.speakerCentroidEmbeddings[cluster] else { return nil }
+            return prints.identify(centroid)
+        } catch {
+            log("Conversation diarization failed: \(error)")
+            return nil
+        }
     }
 
     private func voicePrint(_ audio: [Float]) async -> Int? {
