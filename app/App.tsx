@@ -1,12 +1,25 @@
-import React from 'react';
-import { SafeAreaView, Text } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { PackIndex } from './src/core/pack';
+import { seville } from './src/pack/seville';
+import { connectRuntime, type Runtime } from './src/services/runtime';
+import { Home } from './src/ui/Home';
+import { Loading } from './src/ui/Loading';
+import { useBuddy } from './src/ui/useBuddy';
 
-// Placeholder while the screens land (src/ui). Replaced in the next push.
 export default function App() {
-  return (
-    <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f6f2ea' }}>
-      <Text style={{ fontSize: 22, fontWeight: '700' }}>Travel Buddy</Text>
-      <Text style={{ marginTop: 8, color: '#7a7268' }}>Base project is running. Screens are coming in the next push.</Text>
-    </SafeAreaView>
-  );
+  const index = useMemo(() => new PackIndex(seville), []);
+  const [runtime, setRuntime] = useState<Runtime>();
+  const [status, setStatus] = useState('Starting…');
+
+  useEffect(() => {
+    connectRuntime(setStatus).then(setRuntime);
+  }, []);
+
+  if (!runtime) return <Loading status={status} />;
+  return <Ready runtime={runtime} index={index} />;
+}
+
+function Ready({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
+  const b = useBuddy(runtime, index);
+  return <Home b={b} />;
 }

@@ -15,13 +15,18 @@ const aliases = {
   },
 };
 
+const defaultConfig = getDefaultConfig(__dirname);
+// Keep React Native's own resolver: it is what sends `react-native` to
+// `react-native-macos` when building for macOS. Replacing it breaks the app.
+const upstream = defaultConfig.resolver.resolveRequest;
+
 const config = {
   resolver: {
     resolveRequest: (context, moduleName, platform) => {
       if (aliases[moduleName]) return { type: 'sourceFile', filePath: aliases[moduleName]() };
-      return context.resolveRequest(context, moduleName, platform);
+      return upstream ? upstream(context, moduleName, platform) : context.resolveRequest(context, moduleName, platform);
     },
   },
 };
 
-module.exports = mergeConfig(getDefaultConfig(__dirname), config);
+module.exports = mergeConfig(defaultConfig, config);
