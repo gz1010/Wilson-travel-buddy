@@ -13,12 +13,19 @@ describe('SideAssigner', () => {
     expect(sides).toEqual(['traveler', 'local', 'traveler', 'local', 'traveler', 'local']);
   });
 
-  test('a speaker keeps their side even when language detection slips', () => {
+  test('the detected language wins over a speaker number (voice prints are weak on short sentences)', () => {
+    const a = new SideAssigner('en', 'es');
+    a.assign(0, 'en');
+    // Diarization put the local's Spanish under speaker 0: the language decides.
+    expect(a.assign(0, 'es')).toBe('local');
+  });
+
+  test('when the language is unclear, the speaker\'s last known side decides', () => {
     const a = new SideAssigner('en', 'es');
     a.assign(0, 'en');
     a.assign(1, 'es');
-    // The local says "OK" and it is detected as English: still the local.
-    expect(a.assign(1, 'en')).toBe('local');
+    expect(a.assign(1, undefined)).toBe('local');
+    expect(a.assign(0, 'fr')).toBe('traveler');
   });
 
   test('unknown language: a new speaker takes whichever side is free', () => {
