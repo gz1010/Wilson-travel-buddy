@@ -1,5 +1,8 @@
 # Travel Buddy — build spec
 
+Who builds what, and by when, is in [PLAN.md](PLAN.md). Where the two files
+differ, PLAN.md wins.
+
 Build a macOS app called Travel Buddy for a hackathon. Submissions close at
 noon on Sunday 11/15, so scope is fixed by the clock: a small app that works
 flawlessly beats a large one that stutters.
@@ -74,9 +77,10 @@ translation as a mode you switch into.
    Mac. Argmax transcribes and uses diarization to tell the two speakers
    apart automatically, so nobody presses a button to take turns. Bonsai-2
    translates each utterance and Argmax speaks it. The screen shows a
-   two-sided transcript with original and translation. If real-time
-   diarization proves unreliable, fall back to a push-to-talk button per
-   speaker and say so.
+   two-sided transcript with original and translation. The open-source
+   Argmax SDK only diarizes finished audio, so the speaker is labelled after
+   each sentence ends rather than live. If that proves unreliable, fall back
+   to a push-to-talk button per speaker and say so.
 
 5. **Offline map.** A bundled map of the destination with itinerary stops
    and recommended places marked. When the companion mentions a place, the
@@ -97,7 +101,8 @@ arbitrary destinations, walking directions, camera-based visual inspection.
 
 ## Destination pack
 
-Ship one destination, bundled with the app: map tiles, cultural and
+Ship one destination, bundled with the app (Seville, Spanish and English,
+unless the hour-one language check fails): map tiles, cultural and
 historical facts, common phrases, a saved forecast, and a places list. Each
 place needs coordinates, a category, opening hours, a typical visit length,
 whether it is indoor or outdoor, and tags that match likely interests (food,
@@ -110,12 +115,15 @@ Store everything in SQLite with full-text search.
 ## Stack
 
 - Swift and SwiftUI, native macOS.
-- Bonsai-2 on-device. Benchmark the 2B, 4B, and 9B variants on this Mac
+- Bonsai-2 on-device, served by PrismML's `llama-server` on localhost and
+  started by the app. Benchmark the 2B, 4B, and 9B variants on this Mac
   early and report the numbers. Translation needs the fastest variant that
   is accurate; itinerary extraction and recommendation reasons need reliable
   structured output, which may favor a larger one.
-- Argmax SDK for speech-to-text, text-to-speech, and diarization.
-- MapLibre Native with vector tiles from OpenStreetMap, bundled.
+- The open-source Argmax SDK: WhisperKit for speech-to-text, TTSKit for
+  text-to-speech, SpeakerKit for diarization.
+- MapLibre GL JS in a web view, with vector tiles from OpenStreetMap,
+  bundled.
 
 Read the current Bonsai-2 and Argmax documentation before writing
 integration code; do not guess their APIs. If either cannot do something

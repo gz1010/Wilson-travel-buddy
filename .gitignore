@@ -1,0 +1,14 @@
+# Models and runtimes: downloaded by Scripts/fetch-models.sh, never committed
+*.gguf
+*.mlmodelc/
+*.mlpackage/
+Models/
+bin/llama-server
+
+# Build output
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+.DS_Store
