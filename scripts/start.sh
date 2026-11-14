@@ -13,6 +13,20 @@ export BONSAI_MODEL="${BONSAI_MODEL:-4B}"
 # M5 Macs on macOS 26.2-26.4 need this for llama.cpp's Metal backend; harmless elsewhere.
 export GGML_METAL_TENSOR_DISABLE="${GGML_METAL_TENSOR_DISABLE:-1}"
 
+# The app's setup must be done before anything else starts.
+if [ "${1:-}" != "--app" ]; then
+  if [ ! -x "$ROOT/app/node_modules/.bin/react-native" ]; then
+    echo "The app's dependencies are not installed. Run once:"
+    echo "  cd \"$ROOT/app\" && npm install && cd macos && pod install"
+    exit 1
+  fi
+  if [ ! -d "$ROOT/app/macos/Pods" ]; then
+    echo "CocoaPods have not been installed for the app. Run once:"
+    echo "  cd \"$ROOT/app/macos\" && pod install"
+    exit 1
+  fi
+fi
+
 pids=()
 cleanup() { for p in "${pids[@]:-}"; do kill "$p" 2>/dev/null || true; done; }
 trap cleanup EXIT INT TERM
