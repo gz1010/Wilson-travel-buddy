@@ -48,7 +48,7 @@ server.onMessage = { data in
         return
     }
     guard service != nil else {
-        if m.type == "listen.start" { server.send(.error("Still loading models")); server.send(.listenDone) }
+        if m.type == "listen.start" { server.send(.error("Still loading models")); server.send(.listenDone()) }
         if m.type == "speak", let id = m.id { server.send(.speakDone(id: id)) }
         return
     }

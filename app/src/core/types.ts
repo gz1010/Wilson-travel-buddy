@@ -254,13 +254,15 @@ export interface LLMClient {
 export interface Heard {
   text: string;
   language?: Lang;
+  /** Date.now() when the person stopped speaking, if the helper reported it. */
+  endedAt?: number;
 }
 
 export type Side = 'traveler' | 'local';
 
 export type TurnEvent =
   | { type: 'partial'; text: string; speaker?: number }
-  | { type: 'final'; text: string; language?: Lang; speaker?: number }
+  | { type: 'final'; text: string; language?: Lang; speaker?: number; turn?: string }
   | { type: 'level'; value: number };
 
 export interface AudioInfo {
@@ -287,8 +289,9 @@ export interface AudioClient {
    * the speaker of every sentence.
    */
   conversation(languages: Lang[], onEvent: (e: TurnEvent) => void, options?: { pushToTalk?: boolean }): () => void;
-  turnStart(): void;
-  turnEnd(): void;
+  /** Push-to-talk: a button was pressed. turn is echoed on its final; language is the button's. */
+  turnStart(turn: string, language?: Lang): void;
+  turnEnd(turn: string): void;
   /** Ignore the microphone while our own voice is playing. */
   setMuted(muted: boolean): void;
 }

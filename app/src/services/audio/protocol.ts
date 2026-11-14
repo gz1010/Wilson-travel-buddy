@@ -14,9 +14,12 @@ export type AppToHelper =
   | { type: 'listen.stop' }
   /** Translator: listen continuously and label speakers. */
   | { type: 'conversation.start'; languages: Lang[]; pushToTalk?: boolean }
-  /** Push-to-talk only: someone pressed / released their button. */
-  | { type: 'turn.start' }
-  | { type: 'turn.end' }
+  /**
+   * Push-to-talk only: someone pressed / released their button. `turn` is an id the helper
+   * echoes on that turn's final; `language` is the button's language, so Whisper doesn't guess.
+   */
+  | { type: 'turn.start'; turn: string; language?: Lang }
+  | { type: 'turn.end'; turn: string }
   | { type: 'conversation.stop' }
   /** Drop microphone audio while the app's own voice is playing. */
   | { type: 'mute'; muted: boolean }
@@ -35,8 +38,10 @@ export type HelperToApp =
   | { type: 'status'; message: string }
   | { type: 'level'; value: number }
   | { type: 'partial'; text: string; speaker?: number }
-  | { type: 'final'; text: string; language?: Lang; speaker?: number }
-  | { type: 'listen.done' }
+  /** turn: the push-to-talk turn this answers. Every release gets exactly one final, maybe empty. */
+  | { type: 'final'; text: string; language?: Lang; speaker?: number; turn?: string }
+  /** sinceEndMs: how long ago the person stopped speaking (latency readout). */
+  | { type: 'listen.done'; sinceEndMs?: number }
   /** The first audio of this request is ready to play (for latency measurement). */
   | { type: 'speak.started'; id: string }
   | { type: 'speak.done'; id: string }

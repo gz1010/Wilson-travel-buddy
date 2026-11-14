@@ -38,17 +38,21 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
   const stopRef = useRef<(() => void) | undefined>(undefined);
   const holdingRef = useRef<Side | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
-  /** Push-to-talk: the side of each released button, in order, waiting for its sentence. */
-  const pendingSides = useRef<Side[]>([]);
+  /** Push-to-talk: which side each turn id belongs to. The helper echoes the id on the turn's final. */
+  const turnSides = useRef(new Map<string, Side>());
+  const turnCounter = useRef(0);
+  const holdingTurn = useRef<string | undefined>(undefined);
+  const [playing, setPlaying] = useState(false);
   const counter = useRef(0);
   const scroll = useRef<ScrollView>(null);
   const { audio } = b.runtime;
   const translator = b.companion.translator;
 
   const onFinal = useCallback(
-    (text: string, language: Lang | undefined, speaker: number | undefined) => {
-      // In push-to-talk every button release gets exactly one final, even an empty one.
-      const pressed = pendingSides.current.shift();
+    (text: string, language: Lang | undefined, speaker: number | undefined, turn: string | undefined) => {
+      // In push-to-talk every release gets exactly one final with its turn id, even an empty one.
+      const pressed = turn ? turnSides.current.get(turn) : undefined;
+      if (turn) turnSides.current.delete(turn);
       if (!text.trim()) {
         setLive(undefined);
         return;
@@ -74,9 +78,11 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
           out = `(translation failed: ${e instanceof Error ? e.message : e})`;
         }
         setTurns(t => t.map(x => (x.id === id ? { ...x, translation: out } : x)));
+        setPlaying(true);
         audio.setMuted(true);
         await audio.speak(out, to).catch(() => {});
         audio.setMuted(false);
+        setPlaying(false);
       });
     },
     [audio, local, sides, translator],
@@ -84,14 +90,14 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
 
   const start = useCallback(() => {
     sides.reset();
-    pendingSides.current = [];
+    turnSides.current.clear();
     setTurns([]);
     setRunning(true);
     stopRef.current = audio.conversation(
       [home, local],
       e => {
         if (e.type === 'partial') setLive({ side: holdingRef.current ?? 'traveler', text: e.text });
-        else if (e.type === 'final') onFinal(e.text, e.language, e.speaker);
+        else if (e.type === 'final') onFinal(e.text, e.language, e.speaker, e.turn);
       },
       { pushToTalk: mode === 'push' },
     );
@@ -115,16 +121,20 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
   };
 
   const press = (side: Side) => {
+    const turn = `t${++turnCounter.current}`;
+    turnSides.current.set(turn, side);
+    holdingTurn.current = turn;
     holdingRef.current = side;
     setHolding(side);
-    audio.turnStart();
+    audio.turnStart(turn, side === 'traveler' ? home : local);
   };
   const release = (side: Side) => {
-    if (holdingRef.current !== side) return;
+    if (holdingRef.current !== side || !holdingTurn.current) return;
+    const turn = holdingTurn.current;
+    holdingTurn.current = undefined;
     holdingRef.current = undefined;
     setHolding(undefined);
-    pendingSides.current.push(side);
-    audio.turnEnd();
+    audio.turnEnd(turn);
   };
 
   const subtitle =
@@ -143,7 +153,7 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
       onPressOut={() => release(side)}
       style={[styles.talk, side === 'traveler' ? styles.talkLeft : styles.talkRight, holding === side && styles.talkOn, !running && { opacity: 0.4 }]}>
       <Text style={styles.talkText}>
-        {holding === side ? 'Listening… release when done' : side === 'traveler' ? `Hold to speak ${LANG_NAMES[home]}` : `Mantenga para hablar ${LANG_NAMES[local].toLowerCase() === 'spanish' ? 'español' : LANG_NAMES[local]}`}
+        {holding === side ? (playing ? 'Wait: playing the translation…' : 'Listening… release when done') : side === 'traveler' ? `Hold to speak ${LANG_NAMES[home]}` : `Mantenga para hablar ${LANG_NAMES[local].toLowerCase() === 'spanish' ? 'español' : LANG_NAMES[local]}`}
       </Text>
     </Pressable>
   );

@@ -118,7 +118,7 @@ export class HelperAudioClient implements AudioClient {
           this.conversationHandler(
             m.type === 'partial'
               ? { type: 'partial', text: m.text, speaker: m.speaker }
-              : { type: 'final', text: m.text, language: m.language, speaker: m.speaker },
+              : { type: 'final', text: m.text, language: m.language, speaker: m.speaker, turn: m.turn },
           );
         }
         break;
@@ -138,7 +138,7 @@ export class HelperAudioClient implements AudioClient {
         else if (m.type === 'final') heard = { text: m.text, language: m.language };
         else if (m.type === 'listen.done') {
           this.listener = undefined;
-          resolve(heard);
+          resolve(m.sinceEndMs != null ? { ...heard, endedAt: Date.now() - m.sinceEndMs } : heard);
         } else if (m.type === 'error') {
           this.listener = undefined;
           reject(new Error(m.message));
@@ -178,12 +178,12 @@ export class HelperAudioClient implements AudioClient {
     };
   }
 
-  turnStart() {
-    this.send({ type: 'turn.start' });
+  turnStart(turn: string, language?: Lang) {
+    this.send({ type: 'turn.start', turn, language });
   }
 
-  turnEnd() {
-    this.send({ type: 'turn.end' });
+  turnEnd(turn: string) {
+    this.send({ type: 'turn.end', turn });
   }
 
   setMuted(muted: boolean) {

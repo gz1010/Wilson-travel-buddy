@@ -13,6 +13,8 @@ struct Endpointer {
     var minSpeech: Double = 0.3
     private(set) var noiseFloor: Float = 0.003
     private(set) var inSpeech = false
+    /// Whether the last chunk was speech (for timing when the person stopped talking).
+    private(set) var chunkIsSpeech = false
     private var speechSamples = 0
     private var silenceSamples = 0
     /// Loudness of recent chunks. The noise floor is the quietest of the last few seconds:
@@ -29,6 +31,7 @@ struct Endpointer {
         if recent.count > window { recent.removeFirst(recent.count - window) }
         noiseFloor = max(0.001, recent.min() ?? rms)
         let speech = rms > max(0.006, noiseFloor * 3)
+        chunkIsSpeech = speech
         if speech {
             speechSamples += chunk.count
             silenceSamples = 0
@@ -118,6 +121,12 @@ actor AudioService {
     /// Translator fallback: record only between turn.start and turn.end (one button per person).
     private var pushToTalk = false
     private var pttActive = false
+    /// The app's id for the held button's turn, echoed on its final so the app never pairs by order.
+    private var pttTurn: String?
+    /// The held button's language: Whisper transcribes in it instead of guessing.
+    private var pttLanguage: String?
+    /// When the person last made a sound in a listen, for "end of speech → first audio".
+    private var lastSpeechAt: Date?
 
     private var speech: Task<Void, Never> = Task {}
     private var speechGeneration = 0
@@ -137,36 +146,39 @@ actor AudioService {
         case "listen.start": await start(.listen, languages: [], listenLanguage: m.language)
         case "listen.stop":
             if mode == .listen {
-                if micTask == nil { startGeneration += 1; mode = .idle; send(.listenDone) } // still waiting for permission
+                if micTask == nil { startGeneration += 1; mode = .idle; send(.listenDone()) } // still waiting for permission
                 else { await endListen() }
             }
         case "conversation.start":
-            prints.reset()
-            session = []
+            resetConversation()
             pushToTalk = m.pushToTalk ?? false
-            pttActive = false
             await start(.conversation, languages: m.languages ?? ["en", "es"], listenLanguage: nil)
         case "turn.start":
             guard mode == .conversation, pushToTalk else { break }
+            if pttActive { pttActive = false; finishTurnNow() } // a press without a release: close it first
             utterance = []
             heardSpeech = false
             endpointer.reset()
+            pttTurn = m.turn
+            pttLanguage = m.language.flatMap { languages.contains($0) ? $0 : nil }
             pttActive = true
         case "turn.end":
-            guard mode == .conversation, pushToTalk, pttActive else { break }
+            guard mode == .conversation, pushToTalk, pttActive, m.turn == nil || m.turn == pttTurn else { break }
             pttActive = false
-            if utterance.count > sampleRate * 3 / 10 { finishTurnNow() } else {
-                utterance = []
-                send(.final(text: "", language: nil, speaker: nil)) // the app pairs every release with a final
-            }
+            finishTurnNow()
         case "conversation.stop":
             startGeneration += 1
             stopMic()
             mode = .idle
+            resetConversation()
         case "mute":
             muted = m.muted ?? false
-            utterance = []
-            endpointer.reset()
+            // A held push-to-talk turn keeps what was said before the translation started playing;
+            // chunks are still dropped while muted, so the voice is never recorded.
+            if !(mode == .conversation && pushToTalk && pttActive) {
+                utterance = []
+                endpointer.reset()
+            }
         case "speak": if let id = m.id, let text = m.text { speak(id: id, text: text, language: m.language ?? "en") }
         case "speak.stop":
             speechGeneration += 1
@@ -187,7 +199,7 @@ actor AudioService {
         guard await AudioProcessor.requestRecordPermission() else {
             mode = .idle
             send(.error("Microphone access was refused. Allow it in System Settings > Privacy & Security > Microphone."))
-            if newMode == .listen { send(.listenDone) }
+            if newMode == .listen { send(.listenDone()) }
             return
         }
         // A stop (or another start) arrived while we waited for permission.
@@ -198,6 +210,7 @@ actor AudioService {
         heardSpeech = false
         endpointer.reset()
         listenStarted = Date()
+        lastSpeechAt = nil
         let (stream, continuation) = models.whisper.audioProcessor.startStreamingRecordingLive(inputDeviceID: nil)
         micContinuation = continuation
         micTask = Task { [weak self] in
@@ -232,7 +245,10 @@ actor AudioService {
         guard mode != .idle, !muted else { return }
         // Push-to-talk: nothing is recorded until someone holds their button.
         if mode == .conversation, pushToTalk, !pttActive { return }
+        // Push-to-talk cap: keep the first 30 s and wait for the release, which always sends the final.
+        if mode == .conversation, pushToTalk, utterance.count >= 30 * sampleRate { return }
         let (level, ended) = endpointer.feed(chunk)
+        if endpointer.chunkIsSpeech { lastSpeechAt = Date() }
         if Date().timeIntervalSince(lastLevelSent) > 0.1 {
             send(.level(level))
             lastLevelSent = Date()
@@ -251,14 +267,20 @@ actor AudioService {
             let waited = Date().timeIntervalSince(listenStarted)
             if ended || (heardSpeech && waited > 20) || (!heardSpeech && waited > 8) { await endListen() }
         case .conversation:
-            if pushToTalk {
-                // The button ends the turn; cap it in case it is never released.
-                if utterance.count > 30 * sampleRate { pttActive = false; finishTurnNow() }
-            } else if ended || (heardSpeech && utterance.count > 15 * sampleRate) {
+            if !pushToTalk, ended || (heardSpeech && utterance.count > 15 * sampleRate) {
                 finishTurnNow()
             }
         case .idle: break
         }
+    }
+
+    /// What a queued sentence needs, captured when it ends: the session may change before it runs.
+    struct TurnContext {
+        let generation: Int
+        let pushToTalk: Bool
+        let languages: [String]
+        let forcedLanguage: String?
+        let turn: String?
     }
 
     /// Hands the current sentence to the translator pipeline (transcribe, label the speaker), in order.
@@ -267,18 +289,37 @@ actor AudioService {
         let audio = utterance
         utterance = []
         heardSpeech = false
+        let ctx = TurnContext(
+            generation: startGeneration,
+            pushToTalk: pushToTalk,
+            languages: languages,
+            forcedLanguage: pushToTalk ? pttLanguage : nil,
+            turn: pushToTalk ? pttTurn : nil
+        )
         let previous = finals
         let snapshot = session
         let range = max(0, snapshot.count - audio.count) ..< snapshot.count
         finals = Task { [weak self] in
             await previous.value
-            await self?.finishConversationTurn(audio, session: snapshot, range: range)
+            await self?.finishConversationTurn(audio, session: snapshot, range: range, ctx: ctx)
         }
+    }
+
+    private func resetConversation() {
+        finals.cancel()
+        finals = Task {}
+        prints.reset()
+        session = []
+        utterance = []
+        heardSpeech = false
+        pttActive = false
+        pttTurn = nil
+        pttLanguage = nil
     }
 
     private func partial() async {
         guard mode != .idle, heardSpeech, utterance.count > sampleRate / 2 else { return }
-        let lang = mode == .listen ? listenLanguage : nil
+        let lang = mode == .listen ? listenLanguage : (pushToTalk && pttActive ? pttLanguage : nil)
         let (text, _) = await transcribe(utterance, language: lang)
         if !text.isEmpty, mode != .idle { send(.partial(text: text, speaker: nil)) }
     }
@@ -290,34 +331,44 @@ actor AudioService {
         let spoke = heardSpeech
         stopMic()
         mode = .idle
+        let endedAt = lastSpeechAt ?? Date()
         if spoke {
             let language = listenLanguage
             let (text, lang) = await Task { await self.transcribe(audio, language: language, confirmedSpeech: true) }.value
             if !text.isEmpty { send(.final(text: text, language: lang ?? language, speaker: nil)) }
         }
-        send(.listenDone)
+        send(.listenDone(sinceEndMs: spoke ? Int(Date().timeIntervalSince(endedAt) * 1000) : nil))
     }
 
     // MARK: Translator
 
-    private func finishConversationTurn(_ audio: [Float], session: [Float], range: Range<Int>) async {
-        // Pick the more likely of the two conversation languages, then transcribe in it.
-        var lang = languages.first
+    private func finishConversationTurn(_ audio: [Float], session: [Float], range: Range<Int>, ctx: TurnContext) async {
+        // A sentence from a conversation that has since stopped or restarted is dropped.
+        func current() -> Bool { ctx.generation == startGeneration && mode == .conversation }
+        guard current() else { return }
+        // Push-to-talk: every release gets exactly one final with its turn id, even when nothing was heard.
+        guard audio.count > sampleRate * 3 / 10 else {
+            if ctx.pushToTalk { send(.final(text: "", language: ctx.forcedLanguage, speaker: nil, turn: ctx.turn)) }
+            return
+        }
+        // The pressed button's language if there is one; otherwise the more likely of the two.
+        var lang = ctx.forcedLanguage ?? ctx.languages.first
         // langProbs holds only the sampled language's log-probability, so use the detected code directly.
-        if languages.count > 1, let detected = try? await models.whisper.detectLangauge(audioArray: audio) {
-            lang = languages.contains(detected.language) ? detected.language : languages.first
+        if ctx.forcedLanguage == nil, ctx.languages.count > 1, let detected = try? await models.whisper.detectLangauge(audioArray: audio) {
+            lang = ctx.languages.contains(detected.language) ? detected.language : ctx.languages.first
         }
         let (text, _) = await transcribe(audio, language: lang, confirmedSpeech: true)
+        guard current() else { return }
         guard !text.isEmpty else {
-            // In push-to-talk the app pairs each button release with one final, so always send one.
-            if pushToTalk { send(.final(text: "", language: lang, speaker: nil)) }
+            if ctx.pushToTalk { send(.final(text: "", language: lang, speaker: nil, turn: ctx.turn)) }
             return
         }
         // Diarizing the whole conversation is far more reliable than one short sentence alone;
-        // the per-sentence voice print is the fallback.
+        // the per-sentence voice print is the fallback. Argmax labels speakers in both modes.
         var speaker = await sessionSpeaker(session, sentence: range)
         if speaker == nil { speaker = await voicePrint(audio) }
-        send(.final(text: text, language: lang, speaker: speaker))
+        guard current() else { return }
+        send(.final(text: text, language: lang, speaker: speaker, turn: ctx.turn))
     }
 
     /// Runs SpeakerKit over the conversation so far, finds the speaker cluster that overlaps this
@@ -399,24 +450,31 @@ actor AudioService {
         let flag = cancelSpeech
         let voice = voices[language] ?? voices["default"] ?? .aiden
         let sendStarted = send
-        let started = Flag()
+        let audioOut = tts.audioOutput
         speech = Task { [weak self] in
             await previous.value
             let current = await self?.speechGeneration ?? -1
             if current == generation {
                 flag.value = false
+                // speak.started fires when sound is actually playing (the player's clock moves),
+                // not when the first audio is generated: TTSKit pre-buffers before playing.
+                let watcher = Task {
+                    while !Task.isCancelled {
+                        if audioOut.currentPlaybackTime > 0 {
+                            sendStarted(.speakStarted(id: id))
+                            return
+                        }
+                        try? await Task.sleep(nanoseconds: 20_000_000)
+                    }
+                }
                 do {
                     _ = try await tts.play(text: text, speaker: voice, language: ttsLanguage(language), playbackStrategy: .auto) { _ in
-                        // First audio is ready: the app measures "heard → first audio" from this.
-                        if !started.value {
-                            started.value = true
-                            sendStarted(.speakStarted(id: id))
-                        }
-                        return flag.value ? false : nil
+                        flag.value ? false : nil
                     }
                 } catch {
                     log("Speech failed: \(error)")
                 }
+                watcher.cancel()
             }
             await self?.sendDone(id)
         }

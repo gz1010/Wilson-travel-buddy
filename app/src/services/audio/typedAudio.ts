@@ -26,9 +26,9 @@ export class TypedAudio implements AudioClient {
     onStart?.();
   }
 
-  turnStart() {}
+  turnStart(_turn: string, _language?: Lang) {}
 
-  turnEnd() {}
+  turnEnd(_turn: string) {}
 
   stopSpeaking() {}
 

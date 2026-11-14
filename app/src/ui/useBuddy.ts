@@ -84,17 +84,9 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     storage.loadVisited().then(v => setSituation(s => ({ ...s, visited: v }))).catch(() => {});
   }, []);
 
-  // --- Latency: from the end of what the user said to the first audio of the reply (target 2.5 s).
-  // The helper ends a listen after 1.0 s of silence, so that is added to what we measure here.
-  const ENDPOINT_SILENCE_MS = 1000;
+  // --- Latency: from when the user stopped speaking (reported by the helper; it includes the
+  // silence wait and the final transcription) to when the reply's voice is actually playing.
   const [latency, setLatency] = useState<{ ms: number; voice: boolean } | undefined>();
-  const latencyFrom = useRef<{ at: number; voice: boolean } | undefined>(undefined);
-  const firstAudio = useCallback(() => {
-    const from = latencyFrom.current;
-    if (!from) return;
-    latencyFrom.current = undefined;
-    setLatency({ ms: Date.now() - from.at + (from.voice ? ENDPOINT_SILENCE_MS : 0), voice: from.voice });
-  }, []);
 
   // --- Voice output: one sentence at a time, microphone muted while speaking.
   // speechGen goes up on every stop, so sentences queued before a stop are dropped.
@@ -102,14 +94,14 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
   const pendingSpeech = useRef(0);
   const speechGen = useRef(0);
   const say = useCallback(
-    (text: string, lang: Lang = 'en') => {
+    (text: string, lang: Lang = 'en', onStart?: () => void) => {
       if (!text.trim()) return;
       const gen = speechGen.current;
       pendingSpeech.current++;
       setSpeaking(true);
       rt.audio.setMuted(true);
       speechQueue.current = speechQueue.current
-        .then(() => (gen === speechGen.current ? rt.audio.speak(text, lang, firstAudio) : undefined))
+        .then(() => (gen === speechGen.current ? rt.audio.speak(text, lang, onStart) : undefined))
         .catch(() => {})
         .finally(() => {
           if (gen !== speechGen.current) return; // cancelled by stopSpeaking
@@ -119,7 +111,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
           }
         });
     },
-    [rt.audio, firstAudio],
+    [rt.audio],
   );
   const stopSpeaking = useCallback(() => {
     speechGen.current++;
@@ -134,7 +126,14 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     async (text: string, heardAt?: number) => {
       const t = text.trim();
       if (!t) return;
-      latencyFrom.current = { at: heardAt ?? Date.now(), voice: heardAt !== undefined };
+      // Only this reply's first sentence measures latency.
+      const startedAt = heardAt ?? Date.now();
+      let measured = false;
+      const onFirstAudio = () => {
+        if (measured) return;
+        measured = true;
+        setLatency({ ms: Date.now() - startedAt, voice: heardAt !== undefined });
+      };
       const replyId = lineId();
       setChat(c => [...c, { id: lineId(), who: 'you', text: t }, { id: replyId, who: 'buddy', text: '', pending: true }]);
       setBusy(true);
@@ -143,7 +142,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
       // If the user stops the voice mid-reply, the rest of this reply stays silent.
       const replyGen = speechGen.current;
       const speak = (s: string, lang?: Lang) => {
-        if (replyGen === speechGen.current) say(s, lang);
+        if (replyGen === speechGen.current) say(s, lang, onFirstAudio);
       };
       const update = (patch: Partial<ChatLine>) => setChat(c => c.map(l => (l.id === replyId ? { ...l, ...patch } : l)));
       await companion.handle(t, ev => {
@@ -194,7 +193,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     setPartial('');
     try {
       const heard = await rt.audio.listen(setPartial, 'en');
-      const heardAt = Date.now();
+      const heardAt = heard.endedAt ?? Date.now();
       setPartial('');
       setListening(false);
       if (heard.text.trim()) await send(heard.text, heardAt);
