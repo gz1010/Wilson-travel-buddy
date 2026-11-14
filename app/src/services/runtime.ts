@@ -5,6 +5,7 @@ import { HelperAudioClient } from './audio/helperClient';
 import { TypedAudio, type ScriptedLine } from './audio/typedAudio';
 import { FixtureLLM } from './llm/fixtureLLM';
 import { LlamaClient } from './llm/llamaClient';
+import { AUDIO_HELPER_URL, LLM_URL } from '../config';
 
 export interface Runtime {
   llm: LLMClient;
@@ -19,13 +20,13 @@ export interface Runtime {
  */
 export async function connectRuntime(onStatus: (s: string) => void): Promise<Runtime> {
   onStatus('Connecting to Bonsai-2…');
-  const llama = new LlamaClient();
+  const llama = new LlamaClient(LLM_URL);
   const llmOk = await waitFor(() => llama.connect(), 4);
 
   onStatus('Connecting to the Argmax audio helper…');
   const helper = new HelperAudioClient();
   helper.onStatus = onStatus;
-  const audioOk = await helper.connect();
+  const audioOk = await helper.connect(AUDIO_HELPER_URL);
 
   return {
     llm: llmOk ? llama : new FixtureLLM(llmAnswers),

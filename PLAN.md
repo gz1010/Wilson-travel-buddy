@@ -12,6 +12,27 @@ in what order, and by when. Where the two differ, this file wins.
 
 Times are Eastern. Sunday's times are fixed by the noon deadline.
 
+**Two voices:** the translator needs two different people at hour one, at the
+1:30am run-through and at the recording. Whenever B is not in the room, B is
+the local over a phone call on speaker, held near the Mac. Settle this on the
+first call.
+
+## What the base code already does
+
+The base code on `main` has a first version of every feature, so the job
+from here is to make each one real, fast and reliable rather than to build
+it from nothing.
+
+| Piece | State |
+|---|---|
+| Core logic (`app/src/core`): trip extraction, scoring, recommendations, guide, intent routing, translation, sunrise and sunset | Written and covered by 34 Node tests (`npm test`) |
+| Screens (`app/src/ui`): home, suggestions, itinerary, conversation, time/place/weather controls, translator, loading | Written, type-checked, bundled for macOS. **Never run on a Mac** |
+| Offline map (`app/src/map`) | Written; tiles come from `scripts/build-tiles.mjs`. **Never run** |
+| Bonsai-2 client | Streams from `llama-server`; falls back to recorded answers |
+| Audio helper (`audio-helper/`, open-source Argmax) | Written against the SDK's source. **Never compiled**: expect fixes on the first build |
+| Argmax Pro | Licence step only; live speaker labels not wired (see `audio-helper/README.md`) |
+| Seville pack | 25 seed places, 25 facts, 20 phrases, sample forecast. Coordinates approximate, hours unverified |
+
 ## How the app is put together
 
 Three local processes, all on 127.0.0.1, so everything works with Wi-Fi off:
@@ -58,7 +79,9 @@ After that they do not change.
 |---|---|---|
 | Framework | react-native-macos **0.81** (with react-native 0.81.6), TypeScript | 0.83.0 is a six-week-old dot-zero release. 0.81 still allows old-style native modules if anything needs one. |
 | Destination | Seville, Spanish ↔ English | Argmax's voice speaks only ten languages (English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish, Italian). Spanish is the safest of them for a small model. One of you has to speak it on camera; if neither can, pick a language from that list that one of you speaks. |
-| Argmax | **Pro SDK** for speech-to-text and live speaker labels; open-source **TTSKit** for the voice | Pro's streaming diarization labels speakers while they talk, which makes the translator. Fallback: the open-source SDK for everything, labelling each sentence after it ends by comparing voice prints. |
+| Argmax | Start on the **open-source SDK** (what the base code uses); try **Pro** for live speaker labels as a stretch | The open-source path is written; Pro needs its models wired (see `audio-helper/README.md`). |
+| Diarization floor | SpeakerKit runs in the judged build however turns are taken, and its labels are on screen and in the video | It is a hard rule. Turn-taking can fall back; diarization cannot. |
+| Turn-taking ladder | (1) Pro live labels, (2) voice prints after each sentence (base code), (3) push-to-talk per speaker, with SpeakerKit still labelling each recorded sentence | Each step down keeps Argmax diarization in the app. |
 | Pro key | Read by the helper from `ARGMAX_API_KEY` or `~/.travelbuddy/argmax-key` | Never in the repository, never in the app. |
 | Bonsai-2 runtime | PrismML's `llama-server` with the GGUF file, on both machines, at `127.0.0.1:8080` | It runs on Intel too (CPU only), so B can test prompts against the real model. |
 | Bonsai-2 size | 4B for everything | Drop to 2B if a 12-word sentence takes over 1.5 s to translate on A. Move to 9B only if 4B fails the JSON tests. |
@@ -89,8 +112,11 @@ interface Companion {
 }
 ```
 
-`Companion` is the seam between the two halves: A's voice loop hands it
-text and speaks what comes back; everything behind it is B's.
+`Companion` is the seam between the two halves; `useBuddy`
+(`app/src/ui/useBuddy.ts`) is the one loop that drives it. Typed text and the
+microphone both go through `send()`, every screen reads from the hook, and
+nobody writes a second loop. A owns the voice parts of the hook (`talk`,
+`say`, muting); B owns the rest.
 
 ### Between the app and the audio helper (WebSocket, JSON messages)
 
@@ -99,8 +125,8 @@ text and speaks what comes back; everything behind it is B's.
 | `hello` | `ready` with the model names and whether Pro is active |
 | `listen.start` / `listen.stop` | `partial {text}`, then one `final {text, language}` |
 | `conversation.start {languages}` / `conversation.stop` | `partial {text, speaker}`, `final {text, language, speaker}` |
-| `mute {muted}` (while the app's voice is speaking) | `level {value}` for the microphone meter |
-| `speak {id, text, language}` / `speak.stop` | `speak.done {id}` |
+| `mute {muted}`: while muted the helper drops microphone audio and starts from an empty buffer on unmute | `level {value}` for the microphone meter |
+| `speak {id, text, language}` / `speak.stop` | `speak.done {id}`, sent when playback has finished (check TTSKit's `play` returns after playback, not after generation) |
 | | `status {message}`, `error {message}` |
 
 The full message shapes are in `app/src/services/audioProtocol.ts`; the
@@ -128,58 +154,81 @@ helper must match it.
 
 ## Hour one (4:30–5:30)
 
-**Both, first 15 minutes on a call:** read the contracts above and agree
-them. Create `main` from the base-code branch and pull it.
+Hour one answers three questions for the 5:30 sync: does the app run on
+both Macs, does Spanish work on Bonsai-2, and does the audio helper run.
+
+**Now, before the call:** both start the downloads (`scripts/fetch-models.sh`;
+on B's Mac it skips Argmax). They take a while.
+
+**Both, first 10 minutes on a call:** agree the contracts above, settle the
+two-voices question, and create `main` from the base-code branch.
 
 **A**
 1. Ask in Discord: is it fine for the app to run `llama-server` and an
-   audio helper as local processes?
-2. Pro SDK: follow Argmax's installation guide (it needs the provisioning
-   token, `axst_…`, as well as the `ax_…` key), build `buddy-audio` in Pro
-   mode, run it online once so the licence activates, then **turn Wi-Fi off
-   and run it again**. If it fails offline, switch to open-source mode
-   (`audio-helper/README.md`) and do not revisit.
-3. Prove the three audio pieces through the helper: `listen` in Spanish and
-   English, `speak` in Spanish, and live speaker labels on a two-person
-   exchange.
-4. Run PrismML's `Bonsai-demo` setup for 2B, 4B and 9B. Record tokens per
-   second and time to first token in `docs/BENCHMARKS.md`. Translate ten
-   traveller sentences each way on 2B and 4B and grade them. This is the
-   go/no-go on Spanish.
-5. With Wi-Fi off, cold-start the helper and `llama-server` from
-   `scripts/start.sh`.
+   audio helper as local processes; must the submission use Argmax
+   diarization or are speech-to-text and voice enough; and is the video a
+   file in the post or a link?
+2. `cd audio-helper && swift build -c release`. It has never been compiled;
+   fix what breaks. Then `.build/release/BuddyAudio --prepare`, turn Wi-Fi
+   off, and run it again: it must log `Ready`.
+3. With the app open, prove the three audio pieces: the microphone button
+   (English), a spoken reply, and the translator on a two-person exchange.
+4. Run 2B and 4B; record tokens per second and time to first token in
+   `docs/BENCHMARKS.md`. Translate ten traveller sentences each way and grade
+   them. This is the go/no-go on Spanish.
 
 **B**
 1. `cd app && npm install && npm test`; then `cd macos && pod install`, and
    run the app from Xcode (scheme `TravelBuddy-macOS`) or with
-   `npm run macos`. It should open on stand-ins.
-2. Run the Intel build of `llama-server` with 2B and note the speed. If it
-   is too slow to work with, the app uses `FixtureLLM` automatically.
-3. Map spike, 45 minutes: run `scripts/build-tiles.mjs` for Seville, then
-   check the map shows streets and pins with Wi-Fi off. If not by then, the
-   map stays pins on a plain background.
+   `npm run macos`. It should open on stand-ins. Fix what breaks: it has
+   never run on a Mac.
+2. Run the Intel `llama-server` with 2B (`scripts/start.sh` does it) and
+   time one reply of about 100 tokens. Under 8 tokens per second is too slow:
+   A then runs a second `llama-server` for development, and B points
+   `LLM_URL` in `app/src/config.ts` at it locally, never committed.
+3. Map: `node scripts/build-tiles.mjs`, restart Metro with
+   `--reset-cache`, and check the map shows streets with Wi-Fi off. If not
+   within 45 minutes, the map stays pins on a plain background.
 
-**5:30 sync (15 minutes):** confirm language, model size, Pro or
-open-source, and the map route.
+**5:30 sync (15 minutes):** confirm the app runs on both Macs, language,
+model size, and the map route.
+
+## The video (1:50, budgeted now)
+
+The rule is under 2:00; the script targets 1:50. Change it only at a sync.
+
+| Beat | Seconds | On screen | Needs |
+|---|---|---|---|
+| 1 | 10 | Wi-Fi switched off; "Offline" badge and model names in frame | Launch |
+| 2 | 25 | A says the spec's example sentence; the itinerary appears with the Tuesday museum slot | Feature 1 |
+| 3 | 20 | Clock at 13:00, "What should I do now?"; spoken reason; map flies to the place | Features 2, 5 |
+| 4 | 15 | Clock to 17:00 (rain at 16:00); the list switches to indoor places, the reason cites rain | Features 2, 6 |
+| 5 | 10 | A guide question answered aloud from the pack | Feature 3 |
+| 6 | 30 | Two people talk across the Mac; sides labelled by Argmax, each translation spoken | Feature 4 |
+
+**Owners:** A records (screen recording plus room audio). B trims, writes
+the one-sentence description (the README's first line), and posts in
+`#submissions` with team names, repository link and video.
 
 ## Schedule
 
 | When | A | B | At the checkpoint; if behind, cut |
 |---|---|---|---|
-| Sat 5:30–8:00 | Voice loop: `listen` → `Companion` → `speak`, on the base code's simple companion | Pack to 30 places; feature 1 on typed text | **8:00 merge:** feature 1 by voice; first Wi-Fi-off cold launch on A. Behind: cap the pack at 40 places |
-| 8:30–11:00 | Loading screen and `start.sh`; translator with push-to-talk | Feature 2, then feature 3, on typed text | **11:00 merge:** features 2 and 3 by voice. Behind: itinerary edits by voice go; editing on screen stays |
-| 11:00–1:30 | Translator with live speaker labels; write the shot list | Map, environment panel, pack to 60 places | **1:30 merge:** every feature in, full shot list once with Wi-Fi off. Speaker labels under 5 of 6: ship push-to-talk |
+| Sat 5:30–8:00 | Voice loop working end to end in the app: microphone → companion → voice, with sentence-by-sentence speech and muting | Real Seville data: places from OpenStreetMap with hours checked, to 40; replace `src/fixtures/llmAnswers.ts` with real Bonsai output | **8:00 merge:** beats 1–2 by voice; first Wi-Fi-off cold launch on A |
+| 8:30–11:00 | Translator: voice prints after each sentence, tune `--voice-threshold`; push-to-talk fallback with SpeakerKit labels | Tune recommendations against the real model (beats 3–4); map tiles and polish | **11:00 merge:** beats 1–5 by voice. Behind: itinerary edits by voice go; editing on screen stays |
+| 11:00–1:30 | Stretch: Pro live speaker labels. Otherwise translator polish | Guide answers (beat 5), environment panel with a real forecast, pack to 60 places | **1:30 merge:** full shot list once with Wi-Fi off; **A records it as the backup video** |
 | 2:00–7:00 | Sleep | Sleep | |
-| Sun 7:00–9:00 | Speed, badge, model names | Pack fixes, README | **9:00 freeze:** tag it. Anything failing its "done when" leaves the app |
+| Sun 7:00–9:00 | Speed: first reply, first audio | Pack fixes, README, check the backup video's timing | **9:00 freeze:** tag it. A feature failing its "done when" drops to its fallback in the cut order; it is hidden only if it crashes |
 | 9:00–9:45 | Restart, Wi-Fi off, cold launch, shot list twice, confirm nothing connects outward | Fresh clone, set up using only the README | Bug fixes only |
-| 9:45–10:45 | Record, three takes at most | Plays the local | |
-| 10:45–11:15 | | Trim the video to under 2:00 | |
-| **11:15** | Post in `#submissions` | | Hard stop 11:30 |
+| 9:45–10:45 | Record, three takes at most | Plays the local | If no take is better, submit the 1:30 backup |
+| 10:45–11:15 | Hand over the file | Trim to under 2:00, upload | |
+| **11:15** | | Post in `#submissions` | Hard stop 11:30 |
 
 Order of cuts when time runs out: itinerary edits by voice, then live
-speaker labels (push-to-talk instead), then the environment panel (one line
-of text), then map tiles (pins only). Trip setup, recommendations and the
-time control are never cut; they are the demo.
+speaker labels (step down the turn-taking ladder; diarization stays), then
+the environment panel (one line of text), then map tiles (pins only). Trip
+setup, recommendations, the time control and Argmax diarization are never
+cut; they are the demo.
 
 ## Repository and git
 

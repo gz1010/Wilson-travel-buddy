@@ -35,11 +35,15 @@ else
 fi
 
 echo -n "Waiting for Bonsai-2"
-for _ in $(seq 1 120); do
-  curl -s --max-time 1 http://127.0.0.1:8080/health | grep -q '"ok"' && break
+for _ in $(seq 1 180); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://127.0.0.1:8080/health)" = "200" ] && break
   echo -n "."; sleep 1
 done
 echo
+# One short request so the first real reply is not slowed by a cold start.
+curl -s --max-time 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"Hi"}],"max_tokens":4,"chat_template_kwargs":{"enable_thinking":false}}' >/dev/null || true
+echo "Bonsai-2 is warm."
 
 if [ "${1:-}" = "--app" ] && [ -n "${2:-}" ]; then
   open "$2"
