@@ -20,7 +20,8 @@ export const WEIGHTS = {
 
 const MEAL_CATEGORIES = new Set(['restaurant', 'tapas-bar']);
 const EVENING_CATEGORIES = new Set(['bar', 'flamenco']);
-const RAIN_THRESHOLD = 50;
+/** Chance of rain, in percent, from which plans should change. */
+export const RAIN_THRESHOLD = 50;
 
 export interface ScoreOptions {
   /** Ignore places further than this many minutes' walk. */

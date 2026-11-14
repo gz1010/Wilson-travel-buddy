@@ -56,6 +56,19 @@ describe('sunTimes', () => {
     expect(sunTimes('2026-12-21', { lat: 78, lon: 15 }, 60)).toEqual({});
   });
 
-  // TODO(done-when for feature 6): compare against a published sunrise for
-  // Seville on the demo date and tighten to ±2 minutes.
+  // PLAN.md feature 6 "done when": sunrise within two minutes of a published
+  // value. Published times (CET) from weather2travel.com (1, 15, 30 Nov),
+  // time.is (6 Nov) and solarwatch.app (8 Nov), looked up 2026-11-14.
+  test.each([
+    ['2026-11-01', '07:49', '18:26'],
+    ['2026-11-06', '07:53', '18:20'],
+    ['2026-11-08', '07:56', '18:21'],
+    ['2026-11-15', '08:03', '18:14'],
+    ['2026-11-30', '08:18', '18:07'],
+  ])('Seville %s: sunrise %s, sunset %s, within two minutes', (date, rise, set) => {
+    const { sunrise, sunset } = sunTimes(date, seville, 60);
+    const min = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3));
+    expect(Math.abs(sunrise! - min(rise))).toBeLessThanOrEqual(2);
+    expect(Math.abs(sunset! - min(set))).toBeLessThanOrEqual(2);
+  });
 });
