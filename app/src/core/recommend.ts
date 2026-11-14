@@ -47,8 +47,27 @@ export class Recommender {
       .map(c => ({ placeId: c.place.id, reason: templateReason(c), candidate: c, fromModel: false }));
   }
 
-  /** The model picks three of the top eight and explains them. Falls back to quick() on any failure. */
-  async refine(trip: Trip | undefined, sit: Situation): Promise<Recommendation[]> {
+  private inflight?: { key: string; p: Promise<Recommendation[]> };
+
+  /**
+   * The model picks three of the top eight and explains them. Falls back to quick() on any failure.
+   * Callers asking with the same inputs share one model call (the home list's refresh and
+   * "What should I do now?" otherwise race and double the wait).
+   */
+  refine(trip: Trip | undefined, sit: Situation): Promise<Recommendation[]> {
+    const key = JSON.stringify([trip ?? null, sit]);
+    if (this.inflight?.key === key) return this.inflight.p;
+    const p = this.refineUncached(trip, sit);
+    const entry = { key, p };
+    this.inflight = entry;
+    // Keep a model answer for reuse, but not a fallback: the next ask should try the model again.
+    p.then(recs => {
+      if (this.inflight === entry && !recs.some(r => r.fromModel)) this.inflight = undefined;
+    });
+    return p;
+  }
+
+  private async refineUncached(trip: Trip | undefined, sit: Situation): Promise<Recommendation[]> {
     const candidates = this.candidates(trip, sit);
     if (candidates.length === 0) return [];
     const fallback = () => candidates.slice(0, 3).map(c => ({ placeId: c.place.id, reason: templateReason(c), candidate: c, fromModel: false }));

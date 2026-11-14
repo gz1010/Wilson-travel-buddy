@@ -59,9 +59,10 @@ html, body, #map { margin: 0; height: 100%; background: #efe9df; font-family: -a
   if (TILES) {
     layers.push(
       { id: 'earth', type: 'fill', source: src, 'source-layer': 'earth', paint: { 'fill-color': '#f3efe7' } },
-      { id: 'parks', type: 'fill', source: src, 'source-layer': 'landuse', filter: ['in', ['get', 'kind'], ['literal', ['park', 'garden', 'grass', 'forest', 'wood', 'cemetery', 'pitch', 'playground']]], paint: { 'fill-color': '#d3e6c4' } },
-      { id: 'water', type: 'fill', source: src, 'source-layer': 'water', paint: { 'fill-color': '#a8cbe0' } },
-      { id: 'buildings', type: 'fill', source: src, 'source-layer': 'buildings', minzoom: 14, paint: { 'fill-color': '#e2dbcf', 'fill-outline-color': '#d4ccbe' } },
+      { id: 'parks', type: 'fill', source: src, 'source-layer': 'landuse', filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['in', ['get', 'kind'], ['literal', ['park', 'garden', 'grass', 'forest', 'wood', 'cemetery', 'pitch', 'playground']]]], paint: { 'fill-color': '#d3e6c4' } },
+      { id: 'water', type: 'fill', source: src, 'source-layer': 'water', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#a8cbe0' } },
+      { id: 'waterways', type: 'line', source: src, 'source-layer': 'water', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#a8cbe0', 'line-width': 2 } },
+      { id: 'buildings', type: 'fill', source: src, 'source-layer': 'buildings', minzoom: 14, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#e2dbcf', 'fill-outline-color': '#d4ccbe' } },
       { id: 'roads-casing', type: 'line', source: src, 'source-layer': 'roads', paint: { 'line-color': '#d8d0c2', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 9] } },
       { id: 'roads', type: 'line', source: src, 'source-layer': 'roads', paint: { 'line-color': ['match', ['get', 'kind'], 'highway', '#f6d38a', 'major_road', '#fbe7b5', '#ffffff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 16, 7] } }
     );
@@ -70,7 +71,7 @@ html, body, #map { margin: 0; height: 100%; background: #efe9df; font-family: -a
   if (TILES) style.sources[src] = { type: 'vector', tiles: ['buddy://{z}/{x}/{y}'], minzoom: CONFIG.minzoom, maxzoom: CONFIG.maxzoom, attribution: '© OpenStreetMap contributors' };
 
   const b = CONFIG.bounds;
-  const map = new maplibregl.Map({ container: 'map', style, bounds: [[b[0], b[1]], [b[2], b[3]]], maxBounds: [[b[0] - 0.05, b[1] - 0.05], [b[2] + 0.05, b[3] + 0.05]], attributionControl: { compact: true } });
+  const map = new maplibregl.Map({ container: 'map', style, bounds: [[b[0], b[1]], [b[2], b[3]]], maxBounds: [[b[0] - 0.005, b[1] - 0.005], [b[2] + 0.005, b[3] + 0.005]], attributionControl: { compact: true } });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
   if (!CONFIG.hasTiles) {
     const note = document.createElement('div');

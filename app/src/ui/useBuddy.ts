@@ -5,7 +5,7 @@ import type { PackIndex } from '../core/pack';
 import { SentenceChunker } from '../core/sentences';
 import { parseHHMM, shiftClock, formatHHMM } from '../core/time';
 import { sortStops, tripDay } from '../core/trip';
-import type { Clock, GeoPoint, Recommendation, Situation, Trip } from '../core/types';
+import type { Clock, GeoPoint, Lang, Recommendation, Situation, Trip } from '../core/types';
 import type { Runtime } from '../services/runtime';
 import * as storage from '../services/storage';
 
@@ -85,18 +85,22 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
   }, []);
 
   // --- Voice output: one sentence at a time, microphone muted while speaking.
+  // speechGen goes up on every stop, so sentences queued before a stop are dropped.
   const speechQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingSpeech = useRef(0);
+  const speechGen = useRef(0);
   const say = useCallback(
-    (text: string) => {
+    (text: string, lang: Lang = 'en') => {
       if (!text.trim()) return;
+      const gen = speechGen.current;
       pendingSpeech.current++;
       setSpeaking(true);
       rt.audio.setMuted(true);
       speechQueue.current = speechQueue.current
-        .then(() => rt.audio.speak(text, 'en'))
+        .then(() => (gen === speechGen.current ? rt.audio.speak(text, lang) : undefined))
         .catch(() => {})
         .finally(() => {
+          if (gen !== speechGen.current) return; // cancelled by stopSpeaking
           if (--pendingSpeech.current === 0) {
             setSpeaking(false);
             rt.audio.setMuted(false);
@@ -106,7 +110,11 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     [rt.audio],
   );
   const stopSpeaking = useCallback(() => {
+    speechGen.current++;
+    pendingSpeech.current = 0;
     rt.audio.stopSpeaking();
+    rt.audio.setMuted(false); // sent before talk()'s listen.start
+    setSpeaking(false);
   }, [rt.audio]);
 
   // --- Sending text (typed, or heard by the microphone) to the companion.
@@ -119,6 +127,11 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
       setBusy(true);
       const chunker = new SentenceChunker();
       let streamed = '';
+      // If the user stops the voice mid-reply, the rest of this reply stays silent.
+      const replyGen = speechGen.current;
+      const speak = (s: string, lang?: Lang) => {
+        if (replyGen === speechGen.current) say(s, lang);
+      };
       const update = (patch: Partial<ChatLine>) => setChat(c => c.map(l => (l.id === replyId ? { ...l, ...patch } : l)));
       await companion.handle(t, ev => {
         switch (ev.type) {
@@ -128,11 +141,11 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
           case 'token':
             streamed += ev.text;
             update({ text: streamed });
-            chunker.push(ev.text).forEach(say);
+            chunker.push(ev.text).forEach(s => speak(s, ev.lang));
             break;
           case 'done':
-            if (streamed) chunker.flush().forEach(say);
-            else say(ev.text);
+            if (streamed) chunker.flush().forEach(s => speak(s, ev.lang));
+            else speak(ev.text, ev.lang);
             update({ text: ev.text || streamed, pending: false });
             break;
           case 'recommendations':

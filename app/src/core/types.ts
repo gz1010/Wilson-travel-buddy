@@ -93,6 +93,8 @@ export interface Place {
   name: string;
   /** Name in the local language, if different. */
   localName?: string;
+  /** Other names people use for it ("old town"). Used to match what the traveller says. */
+  aliases?: string[];
   category: PlaceCategory;
   point: GeoPoint;
   neighborhood?: string;
@@ -290,8 +292,9 @@ export interface AudioClient {
 
 export type CompanionEvent =
   | { type: 'status'; text: string }
-  | { type: 'token'; text: string }
-  | { type: 'done'; text: string }
+  /** lang: the language to speak this in, when it isn't English (phrase answers). */
+  | { type: 'token'; text: string; lang?: Lang }
+  | { type: 'done'; text: string; lang?: Lang }
   | { type: 'focus'; placeId: string }
   | { type: 'recommendations'; items: Recommendation[] }
   | { type: 'trip'; trip: Trip }

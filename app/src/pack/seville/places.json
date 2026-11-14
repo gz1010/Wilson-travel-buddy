@@ -221,7 +221,13 @@
   "summary": "The old Jewish quarter: narrow whitewashed lanes, orange trees and small plazas next to the Alcázar.",
   "localName": "Barrio de Santa Cruz",
   "neighborhood": "Santa Cruz",
-  "price": 0
+  "price": 0,
+  "aliases": [
+   "Santa Cruz",
+   "old town",
+   "casco antiguo",
+   "old Jewish quarter"
+  ]
  },
  {
   "id": "casa-pilatos",

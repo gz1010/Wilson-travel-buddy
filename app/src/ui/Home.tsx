@@ -32,13 +32,14 @@ export function Home({ b }: { b: Buddy }) {
           <Suggestions b={b} />
           <Itinerary b={b} />
         </ScrollView>
-        {b.mode === 'translator' ? (
+        {/* The map stays mounted while the translator is open: reloading it costs seconds. */}
+        {b.mode === 'translator' && (
           <View style={styles.center}>
             <TranslatorScreen b={b} />
           </View>
-        ) : (
-          <>
-            <View style={styles.center}>
+        )}
+        <>
+            <View style={[styles.center, b.mode === 'translator' && styles.hidden]}>
               <MapView
                 bounds={b.index.destination.bounds}
                 pins={pins}
@@ -49,11 +50,10 @@ export function Home({ b }: { b: Buddy }) {
               />
               <SituationBar b={b} />
             </View>
-            <View style={styles.right}>
+            <View style={[styles.right, b.mode === 'translator' && styles.hidden]}>
               <Conversation b={b} />
             </View>
-          </>
-        )}
+        </>
       </View>
     </View>
   );
@@ -65,4 +65,5 @@ const styles = StyleSheet.create({
   left: { width: 340, flexGrow: 0 },
   center: { flex: 1, gap: 12 },
   right: { width: 360 },
+  hidden: { display: 'none' },
 });

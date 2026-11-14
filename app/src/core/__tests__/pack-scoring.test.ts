@@ -64,7 +64,7 @@ describe('routeIntent', () => {
     ['Move the museum to tomorrow', true, 'trip.edit'],
     ["I'm here three days, staying near the old town", false, 'trip.setup'],
     ['When was the cathedral built?', true, 'guide'],
-    ['When was the cathedral built?', false, 'trip.setup'],
+    ['When was the cathedral built?', false, 'guide'],
   ] as const)('%s (trip: %s) → %s', (text, hasTrip, intent) => {
     expect(routeIntent(text, hasTrip)).toBe(intent);
   });

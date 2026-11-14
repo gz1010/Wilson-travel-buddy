@@ -57,7 +57,15 @@ export class SideAssigner {
       language === this.home ? 'traveler' : language === this.local ? 'local' : undefined;
     if (speaker === undefined) return byLanguage ?? 'traveler';
     const known = this.sides.get(speaker);
-    if (known) return known;
+    if (known) {
+      // With only two voice prints, both can land on one side. If this speaker's language says
+      // the other side and nobody holds it yet, the map is wrong: move them.
+      if (byLanguage && byLanguage !== known && ![...this.sides.values()].includes(byLanguage)) {
+        this.sides.set(speaker, byLanguage);
+        return byLanguage;
+      }
+      return known;
+    }
     // A new speaker: language first, otherwise whichever side is still free.
     const taken = new Set(this.sides.values());
     const side = byLanguage ?? (taken.has('traveler') ? 'local' : 'traveler');

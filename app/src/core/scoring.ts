@@ -92,7 +92,8 @@ export function scoreCandidates(index: PackIndex, trip: Trip | undefined, sit: S
         timeScore += 0.8;
         notes.push(`sunset ${formatHHMM(sun.sunset)}`);
       }
-      if (!place.indoor && toSunset < -20 && !EVENING_CATEGORIES.has(place.category) && place.category !== 'neighborhood') {
+      const dark = toSunset < -20 || (sun.sunrise !== undefined && arrival < sun.sunrise);
+      if (!place.indoor && dark && !EVENING_CATEGORIES.has(place.category) && place.category !== 'neighborhood') {
         timeScore -= 0.6;
         notes.push('after dark');
       }

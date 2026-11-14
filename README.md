@@ -17,7 +17,7 @@ If either helper is not running, the app still opens: typed input replaces the m
 
 ## Set up (once, online)
 
-Needs macOS 15, Xcode 16, Node 20+, CocoaPods.
+Needs macOS 15, Xcode 16.1 or newer (full Xcode, not just the Command Line Tools: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`), Node 20.19.4 or newer, CocoaPods.
 
 ```bash
 cd app && npm install && cd macos && pod install && cd ../..
@@ -45,9 +45,9 @@ node scripts/fetch-forecast.mjs
 scripts/start.sh
 ```
 
-It starts `llama-server` and `buddy-audio`, waits for the model, then builds and opens the app. Logs go to `~/Library/Application Support/TravelBuddy/logs/`. The first time, macOS asks for microphone access for the terminal running `buddy-audio`.
+It starts `llama-server`, `buddy-audio` and Metro (React Native's JavaScript server), waits for the model, then builds and opens the app. Logs go to `~/Library/Application Support/TravelBuddy/logs/`. The first time, macOS asks for microphone access for the terminal running `buddy-audio`.
 
-To work on the app without the helpers: `cd app && npm run macos`.
+To work on the app without the helpers: `cd app && npm start` in one terminal and `cd app && npm run macos` in another.
 
 ## Develop
 

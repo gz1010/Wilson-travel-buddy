@@ -9,11 +9,14 @@ const QUICK = ['What should I do now?', "What's near my hotel?", 'Tell me about 
 export function Conversation({ b }: { b: Buddy }) {
   const [text, setText] = useState('');
   const scroll = useRef<ScrollView>(null);
+  const input = useRef<TextInput>(null);
   const hasMic = b.runtime.audio.info.hasMicrophone;
   const submit = () => {
     if (!text.trim() || b.busy) return;
     b.send(text);
     setText('');
+    // On macOS, Enter takes focus away from the field; give it back so follow-ups can be typed.
+    setTimeout(() => input.current?.focus(), 0);
   };
 
   return (
@@ -49,6 +52,7 @@ export function Conversation({ b }: { b: Buddy }) {
           </Pressable>
         )}
         <TextInput
+          ref={input}
           style={styles.input}
           placeholder={hasMic ? 'Or type here…' : 'Type here (no microphone: the audio helper is not running)'}
           value={text}

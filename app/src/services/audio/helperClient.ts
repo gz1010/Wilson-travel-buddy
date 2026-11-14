@@ -41,7 +41,10 @@ export class HelperAudioClient implements AudioClient {
           finish(false);
         }
       }, timeoutMs);
-      const readyTimer = setTimeout(() => finish(false), readyTimeoutMs);
+      const readyTimer = setTimeout(() => {
+        ws.close();
+        finish(false);
+      }, readyTimeoutMs);
       ws.onopen = () => {
         clearTimeout(openTimer);
         this.send({ type: 'hello', version: PROTOCOL_VERSION });
@@ -51,6 +54,12 @@ export class HelperAudioClient implements AudioClient {
         clearTimeout(openTimer);
         clearTimeout(readyTimer);
         finish(false);
+        // Release everything waiting on the helper, so the mic button and the voice queue never hang.
+        this.listener?.({ type: 'error', message: 'Audio helper disconnected' });
+        this.listener = undefined;
+        for (const done of this.speakWaiters.values()) done();
+        this.speakWaiters.clear();
+        this.conversationHandler = undefined;
         this.onDisconnect?.();
       };
       ws.onmessage = ev => {
@@ -61,6 +70,12 @@ export class HelperAudioClient implements AudioClient {
           return;
         }
         this.dispatch(m);
+        if (m.type === 'error' && !settled) {
+          // The helper could not load its models: give up now instead of waiting for the timeout.
+          clearTimeout(readyTimer);
+          ws.close();
+          finish(false);
+        }
         if (m.type === 'ready') {
           clearTimeout(readyTimer);
           this.info = { hasMicrophone: true, models: m.models, liveSpeakers: m.liveSpeakers };
@@ -130,6 +145,7 @@ export class HelperAudioClient implements AudioClient {
   }
 
   speak(text: string, language: Lang): Promise<void> {
+    if (this.ws?.readyState !== WebSocket.OPEN) return Promise.resolve();
     const id = `s${++this.counter}`;
     return new Promise(resolve => {
       this.speakWaiters.set(id, resolve);

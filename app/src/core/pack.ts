@@ -90,7 +90,7 @@ export class PackIndex {
     this.search.addAll(docs);
 
     this.nameIndex = pack.places.map(place => {
-      const names = [place.name, place.localName]
+      const names = [place.name, place.localName, ...(place.aliases ?? [])]
         .filter((n): n is string => !!n)
         .flatMap(n => {
           const f = fold(n);
@@ -143,8 +143,11 @@ export class PackIndex {
       }
     }
     if (best) return best.place;
-    const hit = this.query(text, 1, ['place'])[0];
-    return hit && hit.score > 8 ? this.place(hit.id) : undefined;
+    // Fall back to titles only, and only when one place clearly wins: matching on summaries
+    // sent "the old town" to a park whose summary mentions the old town.
+    const hits = this.search.search(text, { fields: ['title'], fuzzy: false, prefix: false, filter: r => r.kind === 'place' });
+    if (hits.length === 1 || (hits[0] && hits[0].score > 1.5 * hits[1].score)) return this.place(hits[0].id);
+    return undefined;
   }
 
   /** Places whose names appear in a piece of text, in order of appearance. */

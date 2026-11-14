@@ -69,8 +69,9 @@ export class DefaultCompanion implements Companion {
         }
         case 'phrase': {
           const what = text.replace(/.*how (do|would) (i|you) say\s*/i, '').replace(/\s+in spanish\??$/i, '').replace(/[?"]/g, '').trim();
-          const out = await this.translator.translate(what, 'en', this.index.destination.language, t => emit({ type: 'token', text: t }));
-          emit({ type: 'done', text: out });
+          const lang = this.index.destination.language;
+          const out = await this.translator.translate(what, 'en', lang, t => emit({ type: 'token', text: t, lang }));
+          emit({ type: 'done', text: out, lang });
           return;
         }
         case 'guide':

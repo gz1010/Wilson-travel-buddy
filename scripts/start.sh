@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts the two local helpers, then the app. This is what runs on camera.
-#   scripts/start.sh                # helpers, then Metro and the app in debug
+#   scripts/start.sh                # helpers, then Metro and the app in debug (Metro must be running for a debug build)
 #   scripts/start.sh --app PATH     # helpers, then a built TravelBuddy.app
 # Ctrl-C stops the helpers.
 set -euo pipefail
@@ -21,8 +21,10 @@ if curl -s --max-time 1 http://127.0.0.1:8080/health >/dev/null; then
   echo "llama-server already running on :8080"
 else
   echo "Starting Bonsai-2 $BONSAI_MODEL (log: $LOGS/llama-server.log)"
-  ( cd "$DEMO" && BONSAI_FAMILY=bonsai2 BONSAI_THINKING=0 PORT=8080 ./scripts/start_llama_server.sh ) >"$LOGS/llama-server.log" 2>&1 &
-  pids+=($!)
+  # exec, so the PID we keep is llama-server itself and Ctrl-C really stops it.
+  ( cd "$DEMO" && BONSAI_FAMILY=bonsai2 BONSAI_THINKING=0 PORT=8080 exec ./scripts/start_llama_server.sh ) >"$LOGS/llama-server.log" 2>&1 &
+  LLAMA_PID=$!
+  pids+=($LLAMA_PID)
 fi
 
 HELPER="$ROOT/audio-helper/.build/release/BuddyAudio"
@@ -35,21 +37,42 @@ else
 fi
 
 echo -n "Waiting for Bonsai-2"
+llm_ok=0
 for _ in $(seq 1 180); do
-  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://127.0.0.1:8080/health)" = "200" ] && break
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://127.0.0.1:8080/health)" = "200" ]; then llm_ok=1; break; fi
+  if [ -n "${LLAMA_PID:-}" ] && ! kill -0 "$LLAMA_PID" 2>/dev/null; then
+    echo; echo "llama-server exited:"; tail -n 20 "$LOGS/llama-server.log"; break
+  fi
   echo -n "."; sleep 1
 done
 echo
-# One short request so the first real reply is not slowed by a cold start.
-curl -s --max-time 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' \
-  -d '{"messages":[{"role":"user","content":"Hi"}],"max_tokens":4,"chat_template_kwargs":{"enable_thinking":false}}' >/dev/null || true
-echo "Bonsai-2 is warm."
+if [ "$llm_ok" = 1 ]; then
+  # One short request so the first real reply is not slowed by a cold start.
+  curl -s --max-time 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' \
+    -d '{"messages":[{"role":"user","content":"Hi"}],"max_tokens":4,"chat_template_kwargs":{"enable_thinking":false}}' >/dev/null || true
+  echo "Bonsai-2 is warm."
+else
+  echo "Bonsai-2 is not available; the app will use recorded answers."
+fi
 
 if [ "${1:-}" = "--app" ] && [ -n "${2:-}" ]; then
   open "$2"
   echo "App opened. Press Ctrl-C here to stop the helpers when done."
   wait
 else
+  # run-macos only builds and opens the app; a debug build needs Metro for its JavaScript.
+  if curl -s --max-time 1 http://127.0.0.1:8081/status | grep -q packager-status:running; then
+    echo "Metro already running on :8081"
+  else
+    echo "Starting Metro (log: $LOGS/metro.log)"
+    ( cd "$ROOT/app" && exec ./node_modules/.bin/react-native start --port 8081 ) >"$LOGS/metro.log" 2>&1 &
+    pids+=($!)
+    for _ in $(seq 1 60); do
+      curl -s --max-time 1 http://127.0.0.1:8081/status | grep -q packager-status:running && break
+      sleep 1
+    done
+  fi
   cd "$ROOT/app" && npm run macos
+  echo "App opened. Press Ctrl-C here to stop Metro and the helpers when done."
   wait
 fi
