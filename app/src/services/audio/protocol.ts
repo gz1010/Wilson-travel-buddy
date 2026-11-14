@@ -13,7 +13,10 @@ export type AppToHelper =
   | { type: 'listen.start'; language?: Lang }
   | { type: 'listen.stop' }
   /** Translator: listen continuously and label speakers. */
-  | { type: 'conversation.start'; languages: Lang[] }
+  | { type: 'conversation.start'; languages: Lang[]; pushToTalk?: boolean }
+  /** Push-to-talk only: someone pressed / released their button. */
+  | { type: 'turn.start' }
+  | { type: 'turn.end' }
   | { type: 'conversation.stop' }
   /** Drop microphone audio while the app's own voice is playing. */
   | { type: 'mute'; muted: boolean }
@@ -34,5 +37,7 @@ export type HelperToApp =
   | { type: 'partial'; text: string; speaker?: number }
   | { type: 'final'; text: string; language?: Lang; speaker?: number }
   | { type: 'listen.done' }
+  /** The first audio of this request is ready to play (for latency measurement). */
+  | { type: 'speak.started'; id: string }
   | { type: 'speak.done'; id: string }
   | { type: 'error'; message: string };

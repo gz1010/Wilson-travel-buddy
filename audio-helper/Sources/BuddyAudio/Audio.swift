@@ -115,6 +115,9 @@ actor AudioService {
     private var listenStarted = Date()
     private var lastLevelSent = Date.distantPast
     private var startGeneration = 0
+    /// Translator fallback: record only between turn.start and turn.end (one button per person).
+    private var pushToTalk = false
+    private var pttActive = false
 
     private var speech: Task<Void, Never> = Task {}
     private var speechGeneration = 0
@@ -140,7 +143,22 @@ actor AudioService {
         case "conversation.start":
             prints.reset()
             session = []
+            pushToTalk = m.pushToTalk ?? false
+            pttActive = false
             await start(.conversation, languages: m.languages ?? ["en", "es"], listenLanguage: nil)
+        case "turn.start":
+            guard mode == .conversation, pushToTalk else { break }
+            utterance = []
+            heardSpeech = false
+            endpointer.reset()
+            pttActive = true
+        case "turn.end":
+            guard mode == .conversation, pushToTalk, pttActive else { break }
+            pttActive = false
+            if utterance.count > sampleRate * 3 / 10 { finishTurnNow() } else {
+                utterance = []
+                send(.final(text: "", language: nil, speaker: nil)) // the app pairs every release with a final
+            }
         case "conversation.stop":
             startGeneration += 1
             stopMic()
@@ -212,12 +230,14 @@ actor AudioService {
 
     private func onChunk(_ chunk: [Float]) async {
         guard mode != .idle, !muted else { return }
+        // Push-to-talk: nothing is recorded until someone holds their button.
+        if mode == .conversation, pushToTalk, !pttActive { return }
         let (level, ended) = endpointer.feed(chunk)
         if Date().timeIntervalSince(lastLevelSent) > 0.1 {
             send(.level(level))
             lastLevelSent = Date()
         }
-        if endpointer.inSpeech { heardSpeech = true }
+        if endpointer.inSpeech || (pushToTalk && pttActive) { heardSpeech = true }
         // Keep a little audio before speech starts so the first word is not clipped.
         utterance.append(contentsOf: chunk)
         if mode == .conversation {
@@ -231,20 +251,28 @@ actor AudioService {
             let waited = Date().timeIntervalSince(listenStarted)
             if ended || (heardSpeech && waited > 20) || (!heardSpeech && waited > 8) { await endListen() }
         case .conversation:
-            if ended || (heardSpeech && utterance.count > 15 * sampleRate) {
-                endpointer.reset()
-                let audio = utterance
-                utterance = []
-                heardSpeech = false
-                let previous = finals
-                let snapshot = session
-                let range = max(0, snapshot.count - audio.count) ..< snapshot.count
-                finals = Task { [weak self] in
-                    await previous.value
-                    await self?.finishConversationTurn(audio, session: snapshot, range: range)
-                }
+            if pushToTalk {
+                // The button ends the turn; cap it in case it is never released.
+                if utterance.count > 30 * sampleRate { pttActive = false; finishTurnNow() }
+            } else if ended || (heardSpeech && utterance.count > 15 * sampleRate) {
+                finishTurnNow()
             }
         case .idle: break
+        }
+    }
+
+    /// Hands the current sentence to the translator pipeline (transcribe, label the speaker), in order.
+    private func finishTurnNow() {
+        endpointer.reset()
+        let audio = utterance
+        utterance = []
+        heardSpeech = false
+        let previous = finals
+        let snapshot = session
+        let range = max(0, snapshot.count - audio.count) ..< snapshot.count
+        finals = Task { [weak self] in
+            await previous.value
+            await self?.finishConversationTurn(audio, session: snapshot, range: range)
         }
     }
 
@@ -280,7 +308,11 @@ actor AudioService {
             lang = languages.contains(detected.language) ? detected.language : languages.first
         }
         let (text, _) = await transcribe(audio, language: lang, confirmedSpeech: true)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty else {
+            // In push-to-talk the app pairs each button release with one final, so always send one.
+            if pushToTalk { send(.final(text: "", language: lang, speaker: nil)) }
+            return
+        }
         // Diarizing the whole conversation is far more reliable than one short sentence alone;
         // the per-sentence voice print is the fallback.
         var speaker = await sessionSpeaker(session, sentence: range)
@@ -366,6 +398,8 @@ actor AudioService {
         let tts = models.tts
         let flag = cancelSpeech
         let voice = voices[language] ?? voices["default"] ?? .aiden
+        let sendStarted = send
+        let started = Flag()
         speech = Task { [weak self] in
             await previous.value
             let current = await self?.speechGeneration ?? -1
@@ -373,7 +407,12 @@ actor AudioService {
                 flag.value = false
                 do {
                     _ = try await tts.play(text: text, speaker: voice, language: ttsLanguage(language), playbackStrategy: .auto) { _ in
-                        flag.value ? false : nil
+                        // First audio is ready: the app measures "heard → first audio" from this.
+                        if !started.value {
+                            started.value = true
+                            sendStarted(.speakStarted(id: id))
+                        }
+                        return flag.value ? false : nil
                     }
                 } catch {
                     log("Speech failed: \(error)")

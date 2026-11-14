@@ -278,11 +278,17 @@ export interface AudioClient {
   listen(onPartial: (text: string) => void, language?: Lang): Promise<Heard>;
   /** Ends the current listen early; the pending listen resolves with what was heard. */
   stopListening(): void;
-  /** Speaks and resolves when finished. */
-  speak(text: string, language: Lang): Promise<void>;
+  /** Speaks and resolves when finished. onStart fires when its first audio is ready. */
+  speak(text: string, language: Lang, onStart?: () => void): Promise<void>;
   stopSpeaking(): void;
-  /** Translator mode: continuous listening with speaker labels. Returns stop(). */
-  conversation(languages: Lang[], onEvent: (e: TurnEvent) => void): () => void;
+  /**
+   * Translator mode: listening with speaker labels. Returns stop(). With pushToTalk, nothing is
+   * recorded except between turnStart() and turnEnd() (one button per person); Argmax still labels
+   * the speaker of every sentence.
+   */
+  conversation(languages: Lang[], onEvent: (e: TurnEvent) => void, options?: { pushToTalk?: boolean }): () => void;
+  turnStart(): void;
+  turnEnd(): void;
   /** Ignore the microphone while our own voice is playing. */
   setMuted(muted: boolean): void;
 }

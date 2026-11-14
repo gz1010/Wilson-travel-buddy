@@ -12,22 +12,34 @@ interface Turn {
   translation: string;
   from: Lang;
   to: Lang;
+  /** Argmax's speaker label for this sentence, when diarization produced one. */
+  speaker?: number;
 }
 
+type Mode = 'auto' | 'push';
+
 /**
- * Translator mode (A owns this). Argmax hears both people and labels who is
- * speaking; each finished sentence is translated by Bonsai-2 and spoken in
- * the other language. No buttons between turns.
+ * Translator mode. Argmax hears both people and labels who is speaking; each
+ * finished sentence is translated by Bonsai-2 and spoken in the other language.
+ *
+ * - Automatic: no buttons; the detected language picks the column.
+ * - Push-to-talk (fallback): each person holds their own button while speaking;
+ *   the button picks the column, and Argmax still labels the speaker of every sentence.
  */
 export function TranslatorScreen({ b }: { b: Buddy }) {
   const home: Lang = 'en';
   const local = b.index.destination.language;
   const sides = useMemo(() => new SideAssigner(home, local), [local]);
+  const [mode, setMode] = useState<Mode>('auto');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [live, setLive] = useState<{ side: Side; text: string } | undefined>();
   const [running, setRunning] = useState(false);
+  const [holding, setHolding] = useState<Side | undefined>();
   const stopRef = useRef<(() => void) | undefined>(undefined);
+  const holdingRef = useRef<Side | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  /** Push-to-talk: the side of each released button, in order, waiting for its sentence. */
+  const pendingSides = useRef<Side[]>([]);
   const counter = useRef(0);
   const scroll = useRef<ScrollView>(null);
   const { audio } = b.runtime;
@@ -35,12 +47,21 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
 
   const onFinal = useCallback(
     (text: string, language: Lang | undefined, speaker: number | undefined) => {
-      if (!text.trim()) return;
-      const side = sides.assign(speaker, language);
-      const { from, to } = sides.direction(side, language);
+      // In push-to-talk every button release gets exactly one final, even an empty one.
+      const pressed = pendingSides.current.shift();
+      if (!text.trim()) {
+        setLive(undefined);
+        return;
+      }
+      const side = pressed ?? sides.assign(speaker, language);
+      const { from, to } = pressed
+        ? pressed === 'traveler'
+          ? { from: home, to: local }
+          : { from: local, to: home }
+        : sides.direction(side, language);
       const id = ++counter.current;
       setLive(undefined);
-      setTurns(t => [...t, { id, side, original: text, translation: '', from, to }]);
+      setTurns(t => [...t, { id, side, original: text, translation: '', from, to, speaker }]);
       // Translate and speak in order, one turn at a time; mute the microphone while speaking.
       queue.current = queue.current.then(async () => {
         let out = '';
@@ -58,54 +79,105 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
         audio.setMuted(false);
       });
     },
-    [audio, sides, translator],
+    [audio, local, sides, translator],
   );
 
   const start = useCallback(() => {
     sides.reset();
+    pendingSides.current = [];
     setTurns([]);
     setRunning(true);
-    stopRef.current = audio.conversation([home, local], e => {
-      if (e.type === 'partial') setLive({ side: e.speaker !== undefined ? sides.assign(e.speaker, undefined) : 'traveler', text: e.text });
-      else if (e.type === 'final') onFinal(e.text, e.language, e.speaker);
-    });
-  }, [audio, local, onFinal, sides]);
+    stopRef.current = audio.conversation(
+      [home, local],
+      e => {
+        if (e.type === 'partial') setLive({ side: holdingRef.current ?? 'traveler', text: e.text });
+        else if (e.type === 'final') onFinal(e.text, e.language, e.speaker);
+      },
+      { pushToTalk: mode === 'push' },
+    );
+  }, [audio, local, mode, onFinal, sides]);
 
   const stop = useCallback(() => {
     stopRef.current?.();
     stopRef.current = undefined;
     setRunning(false);
     setLive(undefined);
+    setHolding(undefined);
   }, []);
 
   useEffect(() => stop, [stop]);
 
-  const column = (side: Side) => (
-    <View style={styles.col}>
-      <Text style={ui.h2}>{side === 'traveler' ? `You · ${LANG_NAMES[home]}` : `Local · ${LANG_NAMES[local]}`}</Text>
-    </View>
+  // Switching mode restarts listening in the new mode.
+  const switchMode = (next: Mode) => {
+    if (next === mode) return;
+    stop();
+    setMode(next);
+  };
+
+  const press = (side: Side) => {
+    holdingRef.current = side;
+    setHolding(side);
+    audio.turnStart();
+  };
+  const release = (side: Side) => {
+    if (holdingRef.current !== side) return;
+    holdingRef.current = undefined;
+    setHolding(undefined);
+    pendingSides.current.push(side);
+    audio.turnEnd();
+  };
+
+  const subtitle =
+    mode === 'push'
+      ? 'Hold your button while you speak. Argmax still labels each speaker.'
+      : audio.info.liveSpeakers
+        ? 'Speakers are told apart live by Argmax.'
+        : audio.info.hasMicrophone
+          ? 'Language picks the column; Argmax labels each speaker.'
+          : 'Replaying a scripted conversation (no audio helper).';
+
+  const talkButton = (side: Side) => (
+    <Pressable
+      disabled={!running}
+      onPressIn={() => press(side)}
+      onPressOut={() => release(side)}
+      style={[styles.talk, side === 'traveler' ? styles.talkLeft : styles.talkRight, holding === side && styles.talkOn, !running && { opacity: 0.4 }]}>
+      <Text style={styles.talkText}>
+        {holding === side ? 'Listening… release when done' : side === 'traveler' ? `Hold to speak ${LANG_NAMES[home]}` : `Mantenga para hablar ${LANG_NAMES[local].toLowerCase() === 'spanish' ? 'español' : LANG_NAMES[local]}`}
+      </Text>
+    </Pressable>
   );
 
   return (
     <View style={[ui.panel, styles.wrap]}>
       <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 8 }]}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>Conversation translator</Text>
-          <Text style={ui.small}>
-            {audio.info.liveSpeakers ? 'Speakers are told apart live by Argmax.' : audio.info.hasMicrophone ? 'Speakers are told apart after each sentence.' : 'Replaying a scripted conversation (no audio helper).'}
-          </Text>
+          <Text style={ui.small}>{subtitle}</Text>
+        </View>
+        <View style={[ui.row, { marginRight: 10 }]}>
+          {(['auto', 'push'] as Mode[]).map(m => (
+            <Pressable key={m} onPress={() => switchMode(m)} style={[ui.chip, mode === m && { backgroundColor: colors.ink }]}>
+              <Text style={[ui.chipText, mode === m && { color: '#fff' }]}>{m === 'auto' ? 'Automatic' : 'Push-to-talk'}</Text>
+            </Pressable>
+          ))}
         </View>
         <Pressable style={[ui.button, running && { backgroundColor: colors.danger }]} onPress={running ? stop : start}>
           <Text style={ui.buttonText}>{running ? 'Stop' : 'Start listening'}</Text>
         </Pressable>
       </View>
       <View style={ui.row}>
-        {column('traveler')}
-        {column('local')}
+        <View style={styles.col}>
+          <Text style={ui.h2}>You · {LANG_NAMES[home]}</Text>
+        </View>
+        <View style={styles.col}>
+          <Text style={[ui.h2, { textAlign: 'right' }]}>Local · {LANG_NAMES[local]}</Text>
+        </View>
       </View>
       <ScrollView ref={scroll} style={{ flex: 1 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
         {turns.map(t => (
           <View key={t.id} style={[styles.turn, t.side === 'traveler' ? styles.left : styles.right]}>
+            {t.speaker !== undefined && <Text style={styles.speaker}>Argmax · speaker {t.speaker + 1}</Text>}
             <Text style={styles.original}>{t.original}</Text>
             <Text style={styles.translation}>{t.translation || '…'}</Text>
           </View>
@@ -116,6 +188,12 @@ export function TranslatorScreen({ b }: { b: Buddy }) {
           </View>
         )}
       </ScrollView>
+      {mode === 'push' && (
+        <View style={[ui.row, { gap: 12, marginTop: 8 }]}>
+          {talkButton('traveler')}
+          {talkButton('local')}
+        </View>
+      )}
     </View>
   );
 }
@@ -127,6 +205,12 @@ const styles = StyleSheet.create({
   turn: { width: '48%', padding: 12, borderRadius: 12, marginBottom: 8 },
   left: { alignSelf: 'flex-start', backgroundColor: '#eef4ff' },
   right: { alignSelf: 'flex-end', backgroundColor: '#fff1e8' },
+  speaker: { fontSize: 10, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   original: { fontSize: 13, color: colors.muted, marginBottom: 4 },
   translation: { fontSize: 17, fontWeight: '600', color: colors.ink },
+  talk: { flex: 1, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  talkLeft: { backgroundColor: '#dbe7ff' },
+  talkRight: { backgroundColor: '#ffe2d1' },
+  talkOn: { backgroundColor: colors.accent },
+  talkText: { fontSize: 14, fontWeight: '700', color: colors.ink },
 });

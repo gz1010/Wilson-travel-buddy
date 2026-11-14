@@ -63,6 +63,11 @@ export function Conversation({ b }: { b: Buddy }) {
           <Text style={ui.buttonText}>Send</Text>
         </Pressable>
       </View>
+      {!!b.latency && (
+        <Text style={[ui.small, { marginTop: 6 }, b.latency.ms > 2500 && { color: colors.danger }]}>
+          {b.latency.voice ? 'End of speech' : 'Send'} → first audio: {(b.latency.ms / 1000).toFixed(1)} s{b.latency.voice ? ' (includes the 1 s silence wait)' : ''}
+        </Text>
+      )}
       {b.speaking && (
         <Pressable onPress={b.stopSpeaking}>
           <Text style={[ui.small, { marginTop: 6 }]}>Speaking… click to stop</Text>

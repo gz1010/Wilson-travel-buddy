@@ -10,6 +10,7 @@ struct Incoming: Decodable {
     var language: String?
     var languages: [String]?
     var muted: Bool?
+    var pushToTalk: Bool?
     var id: String?
     var text: String?
 }
@@ -21,6 +22,7 @@ enum Outgoing {
     case partial(text: String, speaker: Int?)
     case final(text: String, language: String?, speaker: Int?)
     case listenDone
+    case speakStarted(id: String)
     case speakDone(id: String)
     case error(String)
 
@@ -36,6 +38,7 @@ enum Outgoing {
             if let l { d["language"] = l }
             if let s { d["speaker"] = s }
         case .listenDone: d = ["type": "listen.done"]
+        case let .speakStarted(id): d = ["type": "speak.started", "id": id]
         case let .speakDone(id): d = ["type": "speak.done", "id": id]
         case let .error(m): d = ["type": "error", "message": m]
         }

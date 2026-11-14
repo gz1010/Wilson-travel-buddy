@@ -22,7 +22,13 @@ export class TypedAudio implements AudioClient {
 
   stopListening() {}
 
-  async speak(): Promise<void> {}
+  async speak(_text: string, _language: Lang, onStart?: () => void): Promise<void> {
+    onStart?.();
+  }
+
+  turnStart() {}
+
+  turnEnd() {}
 
   stopSpeaking() {}
 
