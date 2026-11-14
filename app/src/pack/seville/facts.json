@@ -1,0 +1,248 @@
+[
+ {
+  "id": "giralda-ramps",
+  "placeId": "catedral",
+  "title": "The Giralda has ramps, not stairs",
+  "body": "The Giralda bell tower was a minaret before it became the Cathedral's tower. Inside there are 35 ramps instead of stairs, wide enough for a man on horseback to ride up for the call to prayer.",
+  "tags": [
+   "history",
+   "architecture",
+   "religion"
+  ]
+ },
+ {
+  "id": "columbus-tomb",
+  "placeId": "catedral",
+  "title": "Columbus is buried in the Cathedral",
+  "body": "Christopher Columbus's tomb is carried by four statues representing the old kingdoms of Spain. DNA tests in the 2000s supported that the remains are his.",
+  "tags": [
+   "history"
+  ]
+ },
+ {
+  "id": "cathedral-dress",
+  "placeId": "catedral",
+  "title": "What to wear in the Cathedral",
+  "body": "The Cathedral is a working church: shoulders and knees should be covered, and hats come off. Book ahead to skip the queue; the line can be long late morning.",
+  "tags": [
+   "religion"
+  ]
+ },
+ {
+  "id": "alcazar-thrones",
+  "placeId": "alcazar",
+  "title": "The Alcázar is still a royal palace",
+  "body": "The upper floors of the Real Alcázar are still used by the Spanish royal family when they visit Seville, which makes it the oldest royal palace in Europe still in use.",
+  "tags": [
+   "history",
+   "architecture"
+  ]
+ },
+ {
+  "id": "alcazar-tickets",
+  "placeId": "alcazar",
+  "title": "Alcázar tickets",
+  "body": "Tickets for the Alcázar sell out at busy times; arriving at opening is the easiest way in. Leave time for the gardens, which take as long as the palace.",
+  "tags": [
+   "history"
+  ]
+ },
+ {
+  "id": "plaza-espana-provinces",
+  "placeId": "plaza-espana",
+  "title": "The tiled province alcoves",
+  "body": "Around Plaza de España are 48 tiled alcoves, one for each Spanish province, each showing a map and a scene from its history. Spanish visitors often look for their own.",
+  "tags": [
+   "architecture",
+   "history"
+  ]
+ },
+ {
+  "id": "plaza-espana-film",
+  "placeId": "plaza-espana",
+  "title": "Plaza de España in films",
+  "body": "Plaza de España appeared as the city of Naboo in Star Wars: Attack of the Clones, and in Lawrence of Arabia.",
+  "tags": [
+   "history"
+  ]
+ },
+ {
+  "id": "setas-wood",
+  "placeId": "setas",
+  "title": "Las Setas is made of wood",
+  "body": "Metropol Parasol, opened in 2011, is often called the largest wooden structure in the world. Roman ruins found while building it are shown in a museum underneath.",
+  "tags": [
+   "architecture",
+   "history"
+  ]
+ },
+ {
+  "id": "triana-castle",
+  "placeId": "mercado-triana",
+  "title": "A market on a castle",
+  "body": "Triana Market stands on the site of the Castle of San Jorge, seat of the Inquisition in Seville. Its remains can be visited beneath the market.",
+  "tags": [
+   "history",
+   "markets"
+  ]
+ },
+ {
+  "id": "triana-potters",
+  "placeId": "triana-ceramics",
+  "title": "Triana's tiles",
+  "body": "Triana has made glazed tiles, azulejos, for 500 years. Many tiles in the Alcázar and Plaza de España were made across the river here.",
+  "tags": [
+   "art",
+   "history"
+  ]
+ },
+ {
+  "id": "triana-flamenco",
+  "placeId": "calle-betis",
+  "title": "Triana and flamenco",
+  "body": "Triana is one of the cradles of flamenco; many of Seville's best-known singers and dancers came from its old Roma community.",
+  "tags": [
+   "flamenco",
+   "music",
+   "history"
+  ]
+ },
+ {
+  "id": "rinconcillo-chalk",
+  "placeId": "rinconcillo",
+  "title": "Tabs in chalk",
+  "body": "At El Rinconcillo the waiter chalks your bill on the wooden bar top in front of you. Try the spinach with chickpeas, espinacas con garbanzos.",
+  "tags": [
+   "food",
+   "tapas"
+  ]
+ },
+ {
+  "id": "tapas-times",
+  "placeId": "bodega-santa-cruz",
+  "title": "When Seville eats",
+  "body": "Sevillanos eat lunch around 14:00 to 16:00 and dinner from 21:00. Many kitchens close between 16:30 and 20:00, so tapas bars are the best bet in between.",
+  "tags": [
+   "food",
+   "tapas",
+   "local-life"
+  ]
+ },
+ {
+  "id": "tapas-order",
+  "placeId": "bodega-santa-cruz",
+  "title": "How to order tapas",
+  "body": "Ordering is done at the bar: ask for una tapa de… and say how many. Standing at the counter is normal and often quicker than a table.",
+  "tags": [
+   "food",
+   "tapas"
+  ]
+ },
+ {
+  "id": "siesta-hours",
+  "placeId": "santa-cruz",
+  "title": "Afternoon closing",
+  "body": "Many small shops close from about 14:00 to 17:30. Big sights and chain stores stay open.",
+  "tags": [
+   "local-life",
+   "shopping"
+  ]
+ },
+ {
+  "id": "orange-trees",
+  "placeId": "santa-cruz",
+  "title": "The orange trees",
+  "body": "Seville has around 40,000 bitter orange trees. The oranges are too sour to eat and most are shipped to Britain for marmalade.",
+  "tags": [
+   "nature",
+   "local-life"
+  ]
+ },
+ {
+  "id": "bellas-artes-murillo",
+  "placeId": "bellas-artes",
+  "title": "Murillo's city",
+  "body": "Bartolomé Esteban Murillo was born in Seville in 1617; the Museum of Fine Arts holds the best collection of his work, in the old convent church.",
+  "tags": [
+   "art",
+   "museums"
+  ]
+ },
+ {
+  "id": "archivo-free",
+  "placeId": "archivo-indias",
+  "title": "The Archive is free",
+  "body": "Entry to the Archive of the Indies is free. Its documents include letters from Columbus and Cervantes.",
+  "tags": [
+   "history",
+   "museums"
+  ]
+ },
+ {
+  "id": "maestranza-tour",
+  "placeId": "maestranza",
+  "title": "Visiting the bullring",
+  "body": "The Maestranza is visited on a guided tour of the ring, the chapel and the museum; no bullfight needs to be on.",
+  "tags": [
+   "history"
+  ]
+ },
+ {
+  "id": "duenas-machado",
+  "placeId": "palacio-duenas",
+  "title": "Machado's lemon tree",
+  "body": "The poet Antonio Machado was born at the Palacio de las Dueñas in 1875 and remembered its patio with a lemon tree in his best-known poem.",
+  "tags": [
+   "history",
+   "art"
+  ]
+ },
+ {
+  "id": "alameda-evening",
+  "placeId": "alameda",
+  "title": "The Alameda at night",
+  "body": "The Alameda de Hércules fills up after 21:00 with locals on bar terraces. It is the least touristy place in the centre for a drink.",
+  "tags": [
+   "nightlife",
+   "local-life"
+  ]
+ },
+ {
+  "id": "flamenco-etiquette",
+  "placeId": "casa-memoria",
+  "title": "Watching flamenco",
+  "body": "At a small flamenco show, stay quiet during the singing and don't film. Clapping, palmas, is part of the music, so wait to applaud until the dancer finishes.",
+  "tags": [
+   "flamenco",
+   "music"
+  ]
+ },
+ {
+  "id": "salvador-square",
+  "placeId": "salvador",
+  "title": "Plaza del Salvador",
+  "body": "The square in front of El Salvador is where locals meet for a drink at midday and after work, standing outside the small bars.",
+  "tags": [
+   "local-life",
+   "food"
+  ]
+ },
+ {
+  "id": "torre-oro-name",
+  "placeId": "torre-oro",
+  "title": "Why the Golden Tower",
+  "body": "The Torre del Oro may be named after the golden shine of its original tiles reflected in the river, not after gold stored inside.",
+  "tags": [
+   "history"
+  ]
+ },
+ {
+  "id": "rain-seville",
+  "placeId": "santa-cruz",
+  "title": "Rain in Seville",
+  "body": "When it rains in Seville, locals head indoors to markets, churches and tapas bars; outdoor plazas empty quickly and the cobbles get slippery.",
+  "tags": [
+   "local-life"
+  ]
+ }
+]

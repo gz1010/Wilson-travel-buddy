@@ -1,0 +1,620 @@
+[
+ {
+  "id": "catedral",
+  "name": "Seville Cathedral",
+  "category": "church",
+  "point": {
+   "lat": 37.3858,
+   "lon": -5.993
+  },
+  "tags": [
+   "architecture",
+   "history",
+   "religion",
+   "views"
+  ],
+  "indoor": true,
+  "visitMinutes": 90,
+  "hours": {
+   "mon": "11:00-15:30",
+   "tue": "11:00-17:00",
+   "wed": "11:00-17:00",
+   "thu": "11:00-17:00",
+   "fri": "11:00-17:00",
+   "sat": "11:00-17:00",
+   "sun": "14:30-18:00"
+  },
+  "summary": "The largest Gothic cathedral in the world, with Columbus's tomb and the Giralda bell tower, climbed by ramps instead of stairs.",
+  "localName": "Catedral de Sevilla",
+  "neighborhood": "Santa Cruz",
+  "price": 2
+ },
+ {
+  "id": "alcazar",
+  "name": "Real Alcázar",
+  "category": "landmark",
+  "point": {
+   "lat": 37.3831,
+   "lon": -5.9902
+  },
+  "tags": [
+   "architecture",
+   "history",
+   "nature"
+  ],
+  "indoor": false,
+  "visitMinutes": 120,
+  "hours": {
+   "daily": "09:30-17:00"
+  },
+  "summary": "A royal palace still used by the Spanish royal family, with Mudéjar courtyards, tiled halls and large gardens.",
+  "localName": "Real Alcázar de Sevilla",
+  "neighborhood": "Santa Cruz",
+  "price": 2
+ },
+ {
+  "id": "plaza-espana",
+  "name": "Plaza de España",
+  "category": "landmark",
+  "point": {
+   "lat": 37.3772,
+   "lon": -5.9869
+  },
+  "tags": [
+   "architecture",
+   "views",
+   "history"
+  ],
+  "indoor": false,
+  "visitMinutes": 45,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "A huge semicircular plaza built for the 1929 Ibero-American Exposition, with a canal, bridges and tiled alcoves for each Spanish province.",
+  "neighborhood": "Parque de María Luisa",
+  "price": 0
+ },
+ {
+  "id": "parque-maria-luisa",
+  "name": "María Luisa Park",
+  "category": "park",
+  "point": {
+   "lat": 37.376,
+   "lon": -5.989
+  },
+  "tags": [
+   "nature",
+   "quiet",
+   "family"
+  ],
+  "indoor": false,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "08:00-22:00"
+  },
+  "summary": "Seville's main park: shaded paths, fountains, ponds and tiled benches between the old town and Plaza de España.",
+  "localName": "Parque de María Luisa",
+  "neighborhood": "Parque de María Luisa",
+  "price": 0
+ },
+ {
+  "id": "setas",
+  "name": "Las Setas (Metropol Parasol)",
+  "category": "viewpoint",
+  "point": {
+   "lat": 37.3934,
+   "lon": -5.9917
+  },
+  "tags": [
+   "architecture",
+   "views"
+  ],
+  "indoor": false,
+  "visitMinutes": 45,
+  "hours": {
+   "daily": "09:30-23:30"
+  },
+  "summary": "A giant wooden canopy over Plaza de la Encarnación with a rooftop walkway and one of the best sunset views of the city.",
+  "localName": "Metropol Parasol",
+  "neighborhood": "Encarnación",
+  "price": 1
+ },
+ {
+  "id": "mercado-triana",
+  "name": "Triana Market",
+  "category": "market",
+  "point": {
+   "lat": 37.3858,
+   "lon": -6.0029
+  },
+  "tags": [
+   "food",
+   "markets",
+   "local-life",
+   "tapas"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "mon": "09:00-15:00",
+   "tue": "09:00-15:00",
+   "wed": "09:00-15:00",
+   "thu": "09:00-15:00",
+   "fri": "09:00-15:00",
+   "sat": "09:00-15:00",
+   "sun": "closed"
+  },
+  "summary": "A covered food market built over the ruins of a medieval castle, with fish, ham and produce stalls and small tapas counters.",
+  "localName": "Mercado de Triana",
+  "neighborhood": "Triana",
+  "price": 1
+ },
+ {
+  "id": "puente-triana",
+  "name": "Triana Bridge",
+  "category": "landmark",
+  "point": {
+   "lat": 37.3862,
+   "lon": -6.0016
+  },
+  "tags": [
+   "views",
+   "history"
+  ],
+  "indoor": false,
+  "visitMinutes": 20,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "Seville's oldest standing iron bridge, linking the centre to Triana across the Guadalquivir.",
+  "localName": "Puente de Isabel II",
+  "neighborhood": "Triana",
+  "price": 0
+ },
+ {
+  "id": "torre-oro",
+  "name": "Torre del Oro",
+  "category": "museum",
+  "point": {
+   "lat": 37.3824,
+   "lon": -5.9964
+  },
+  "tags": [
+   "history",
+   "views",
+   "museums"
+  ],
+  "indoor": true,
+  "visitMinutes": 40,
+  "hours": {
+   "mon": "09:30-18:45",
+   "tue": "09:30-18:45",
+   "wed": "09:30-18:45",
+   "thu": "09:30-18:45",
+   "fri": "09:30-18:45",
+   "sat": "10:30-18:45",
+   "sun": "10:30-18:45"
+  },
+  "summary": "A 13th-century watchtower on the river with a small naval museum and a rooftop view.",
+  "neighborhood": "Arenal",
+  "price": 1
+ },
+ {
+  "id": "santa-cruz",
+  "name": "Santa Cruz quarter",
+  "category": "neighborhood",
+  "point": {
+   "lat": 37.3858,
+   "lon": -5.988
+  },
+  "tags": [
+   "architecture",
+   "history",
+   "local-life",
+   "quiet"
+  ],
+  "indoor": false,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "The old Jewish quarter: narrow whitewashed lanes, orange trees and small plazas next to the Alcázar.",
+  "localName": "Barrio de Santa Cruz",
+  "neighborhood": "Santa Cruz",
+  "price": 0
+ },
+ {
+  "id": "casa-pilatos",
+  "name": "Casa de Pilatos",
+  "category": "museum",
+  "point": {
+   "lat": 37.3901,
+   "lon": -5.9867
+  },
+  "tags": [
+   "architecture",
+   "art",
+   "history",
+   "museums"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "09:00-18:00"
+  },
+  "summary": "A 16th-century Andalusian palace mixing Mudéjar and Renaissance styles, with tiled patios and gardens.",
+  "neighborhood": "San Bartolomé",
+  "price": 2
+ },
+ {
+  "id": "bellas-artes",
+  "name": "Museum of Fine Arts",
+  "category": "museum",
+  "point": {
+   "lat": 37.3936,
+   "lon": -6.0001
+  },
+  "tags": [
+   "art",
+   "museums",
+   "history"
+  ],
+  "indoor": true,
+  "visitMinutes": 90,
+  "hours": {
+   "mon": "closed",
+   "tue": "09:00-21:00",
+   "wed": "09:00-21:00",
+   "thu": "09:00-21:00",
+   "fri": "09:00-21:00",
+   "sat": "09:00-21:00",
+   "sun": "09:00-15:00"
+  },
+  "summary": "One of Spain's best painting collections, strong on Murillo and Zurbarán, in a former convent.",
+  "localName": "Museo de Bellas Artes",
+  "neighborhood": "Museo",
+  "price": 1
+ },
+ {
+  "id": "archivo-indias",
+  "name": "Archive of the Indies",
+  "category": "museum",
+  "point": {
+   "lat": 37.3846,
+   "lon": -5.9935
+  },
+  "tags": [
+   "history",
+   "museums",
+   "architecture"
+  ],
+  "indoor": true,
+  "visitMinutes": 40,
+  "hours": {
+   "mon": "closed",
+   "tue": "09:30-17:00",
+   "wed": "09:30-17:00",
+   "thu": "09:30-17:00",
+   "fri": "09:30-17:00",
+   "sat": "09:30-17:00",
+   "sun": "10:00-14:00"
+  },
+  "summary": "The archive of Spain's American empire, in a Renaissance merchants' exchange; free to enter.",
+  "localName": "Archivo General de Indias",
+  "neighborhood": "Santa Cruz",
+  "price": 0
+ },
+ {
+  "id": "maestranza",
+  "name": "Real Maestranza bullring",
+  "category": "landmark",
+  "point": {
+   "lat": 37.3866,
+   "lon": -5.9987
+  },
+  "tags": [
+   "history",
+   "architecture"
+  ],
+  "indoor": false,
+  "visitMinutes": 50,
+  "hours": {
+   "daily": "09:30-19:00"
+  },
+  "summary": "An 18th-century baroque bullring by the river, visited on guided tours with a small museum.",
+  "localName": "Plaza de Toros de la Real Maestranza",
+  "neighborhood": "Arenal",
+  "price": 2
+ },
+ {
+  "id": "palacio-duenas",
+  "name": "Palacio de las Dueñas",
+  "category": "museum",
+  "point": {
+   "lat": 37.3956,
+   "lon": -5.9886
+  },
+  "tags": [
+   "architecture",
+   "art",
+   "nature",
+   "history"
+  ],
+  "indoor": false,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "10:00-18:00"
+  },
+  "summary": "The Duchess of Alba's palace, with patios, gardens and the lemon tree courtyard the poet Machado wrote about.",
+  "neighborhood": "San Pedro",
+  "price": 2
+ },
+ {
+  "id": "alameda",
+  "name": "Alameda de Hércules",
+  "category": "neighborhood",
+  "point": {
+   "lat": 37.399,
+   "lon": -5.994
+  },
+  "tags": [
+   "nightlife",
+   "local-life",
+   "food"
+  ],
+  "indoor": false,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "A long tree-lined square full of bars and terraces; quiet by day, the centre of local nightlife after dark.",
+  "neighborhood": "Alameda",
+  "price": 1
+ },
+ {
+  "id": "mercado-feria",
+  "name": "Feria Market",
+  "category": "market",
+  "point": {
+   "lat": 37.399,
+   "lon": -5.9904
+  },
+  "tags": [
+   "food",
+   "markets",
+   "tapas",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "mon": "closed",
+   "tue": "09:00-15:00",
+   "wed": "09:00-15:00",
+   "thu": "09:00-15:00",
+   "fri": "09:00-15:00",
+   "sat": "09:00-15:00",
+   "sun": "closed"
+  },
+  "summary": "Seville's oldest market, where locals shop; the tapas counters at the back are busy at lunchtime.",
+  "localName": "Mercado de Feria",
+  "neighborhood": "Feria",
+  "price": 1
+ },
+ {
+  "id": "rinconcillo",
+  "name": "El Rinconcillo",
+  "category": "tapas-bar",
+  "point": {
+   "lat": 37.3953,
+   "lon": -5.9897
+  },
+  "tags": [
+   "food",
+   "tapas",
+   "history"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "13:00-01:30"
+  },
+  "summary": "Seville's oldest bar, open since 1670; tabs are still chalked on the wooden counter.",
+  "neighborhood": "Santa Catalina",
+  "price": 1
+ },
+ {
+  "id": "bodega-santa-cruz",
+  "name": "Bodega Santa Cruz",
+  "category": "tapas-bar",
+  "point": {
+   "lat": 37.3861,
+   "lon": -5.9917
+  },
+  "tags": [
+   "food",
+   "tapas",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 45,
+  "hours": {
+   "daily": "11:30-00:00"
+  },
+  "summary": "A standing-room tapas bar near the Cathedral, cheap and always crowded, known locally as Las Columnas.",
+  "neighborhood": "Santa Cruz",
+  "price": 1
+ },
+ {
+  "id": "casa-memoria",
+  "name": "Casa de la Memoria",
+  "category": "flamenco",
+  "point": {
+   "lat": 37.3923,
+   "lon": -5.9921
+  },
+  "tags": [
+   "flamenco",
+   "music",
+   "art",
+   "nightlife"
+  ],
+  "indoor": true,
+  "visitMinutes": 75,
+  "hours": {
+   "daily": "19:00-22:30"
+  },
+  "summary": "An intimate flamenco show in a 15th-century courtyard house, with performances every evening.",
+  "neighborhood": "Centro",
+  "price": 2
+ },
+ {
+  "id": "jardines-murillo",
+  "name": "Murillo Gardens",
+  "category": "park",
+  "point": {
+   "lat": 37.3835,
+   "lon": -5.9878
+  },
+  "tags": [
+   "nature",
+   "quiet"
+  ],
+  "indoor": false,
+  "visitMinutes": 30,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "Shady gardens along the old city wall beside Santa Cruz, with the Columbus monument.",
+  "localName": "Jardines de Murillo",
+  "neighborhood": "Santa Cruz",
+  "price": 0
+ },
+ {
+  "id": "la-campana",
+  "name": "Confitería La Campana",
+  "category": "cafe",
+  "point": {
+   "lat": 37.3929,
+   "lon": -5.9946
+  },
+  "tags": [
+   "food",
+   "local-life",
+   "history"
+  ],
+  "indoor": true,
+  "visitMinutes": 30,
+  "hours": {
+   "daily": "08:00-21:30"
+  },
+  "summary": "A pastry shop from 1885 on Seville's main shopping street, good for coffee and yemas.",
+  "neighborhood": "Centro",
+  "price": 1
+ },
+ {
+  "id": "calle-betis",
+  "name": "Calle Betis",
+  "category": "neighborhood",
+  "point": {
+   "lat": 37.3837,
+   "lon": -6.0005
+  },
+  "tags": [
+   "views",
+   "nightlife",
+   "food",
+   "local-life"
+  ],
+  "indoor": false,
+  "visitMinutes": 45,
+  "hours": {
+   "daily": "24h"
+  },
+  "summary": "Triana's riverside street of colourful houses and bars, facing the Torre del Oro across the water.",
+  "neighborhood": "Triana",
+  "price": 0
+ },
+ {
+  "id": "salvador",
+  "name": "Church of El Salvador",
+  "category": "church",
+  "point": {
+   "lat": 37.3899,
+   "lon": -5.9924
+  },
+  "tags": [
+   "architecture",
+   "religion",
+   "art"
+  ],
+  "indoor": true,
+  "visitMinutes": 40,
+  "hours": {
+   "mon": "11:00-18:00",
+   "tue": "11:00-18:00",
+   "wed": "11:00-18:00",
+   "thu": "11:00-18:00",
+   "fri": "11:00-18:00",
+   "sat": "11:00-18:00",
+   "sun": "15:00-19:00"
+  },
+  "summary": "A huge baroque church on the site of the old main mosque, with gilded altarpieces; the square outside fills up at aperitivo time.",
+  "localName": "Iglesia del Salvador",
+  "neighborhood": "Centro",
+  "price": 1
+ },
+ {
+  "id": "museo-flamenco",
+  "name": "Flamenco Dance Museum",
+  "category": "museum",
+  "point": {
+   "lat": 37.3891,
+   "lon": -5.991
+  },
+  "tags": [
+   "flamenco",
+   "music",
+   "museums"
+  ],
+  "indoor": true,
+  "visitMinutes": 60,
+  "hours": {
+   "daily": "10:00-19:00"
+  },
+  "summary": "A museum about flamenco's history with costumes and video, plus evening shows.",
+  "localName": "Museo del Baile Flamenco",
+  "neighborhood": "Santa Cruz",
+  "price": 2
+ },
+ {
+  "id": "triana-ceramics",
+  "name": "Triana Ceramics Centre",
+  "category": "museum",
+  "point": {
+   "lat": 37.384,
+   "lon": -6.004
+  },
+  "tags": [
+   "art",
+   "history",
+   "museums",
+   "local-life"
+  ],
+  "indoor": true,
+  "visitMinutes": 45,
+  "hours": {
+   "mon": "closed",
+   "tue": "10:00-18:00",
+   "wed": "10:00-18:00",
+   "thu": "10:00-18:00",
+   "fri": "10:00-18:00",
+   "sat": "10:00-18:00",
+   "sun": "10:00-15:00"
+  },
+  "summary": "A museum in an old tile factory telling the story of Triana's potters, whose tiles cover the city.",
+  "localName": "Centro Cerámica Triana",
+  "neighborhood": "Triana",
+  "price": 1
+ }
+]

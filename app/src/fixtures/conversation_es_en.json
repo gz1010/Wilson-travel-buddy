@@ -1,0 +1,8 @@
+[
+  { "speaker": 0, "language": "en", "text": "Hi, could you tell me how to get to the cathedral?" },
+  { "speaker": 1, "language": "es", "text": "Claro, está a cinco minutos, todo recto por esta calle." },
+  { "speaker": 0, "language": "en", "text": "Is it open now?" },
+  { "speaker": 1, "language": "es", "text": "Sí, hasta las cinco. Pero hay mucha cola por la mañana." },
+  { "speaker": 0, "language": "en", "text": "Thank you! Is there a good tapas bar nearby?" },
+  { "speaker": 1, "language": "es", "text": "Bodega Santa Cruz, justo al lado. Pida las espinacas con garbanzos." }
+]

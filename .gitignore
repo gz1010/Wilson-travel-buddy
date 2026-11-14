@@ -9,7 +9,7 @@ models/
 bin/
 
 # Built map tiles: made by scripts/build-tiles.mjs
-app/src/map/generated/tiles.*
+app/src/map/generated/
 
 # Node / React Native
 node_modules/

@@ -1,0 +1,142 @@
+[
+ {
+  "id": "hello",
+  "en": "Hello",
+  "local": "Hola",
+  "pronunciation": "OH-lah",
+  "category": "basics"
+ },
+ {
+  "id": "thanks",
+  "en": "Thank you",
+  "local": "Gracias",
+  "pronunciation": "GRAH-syahs",
+  "category": "basics"
+ },
+ {
+  "id": "please",
+  "en": "Please",
+  "local": "Por favor",
+  "pronunciation": "por fah-VOR",
+  "category": "basics"
+ },
+ {
+  "id": "excuse",
+  "en": "Excuse me",
+  "local": "Perdone",
+  "pronunciation": "pehr-DOH-neh",
+  "category": "basics"
+ },
+ {
+  "id": "sorry-speak",
+  "en": "Sorry, I don't speak Spanish",
+  "local": "Lo siento, no hablo español",
+  "pronunciation": "loh SYEN-toh, noh AH-bloh es-pah-NYOL",
+  "category": "basics"
+ },
+ {
+  "id": "bill",
+  "en": "The bill, please",
+  "local": "La cuenta, por favor",
+  "pronunciation": "lah KWEN-tah, por fah-VOR",
+  "category": "food"
+ },
+ {
+  "id": "tapa",
+  "en": "A tapa of this, please",
+  "local": "Una tapa de esto, por favor",
+  "pronunciation": "OO-nah TAH-pah deh ES-toh",
+  "category": "food"
+ },
+ {
+  "id": "table",
+  "en": "A table for two",
+  "local": "Una mesa para dos",
+  "pronunciation": "OO-nah MEH-sah PAH-rah dohs",
+  "category": "food"
+ },
+ {
+  "id": "water",
+  "en": "Still water, please",
+  "local": "Agua sin gas, por favor",
+  "pronunciation": "AH-gwah seen gahs",
+  "category": "food"
+ },
+ {
+  "id": "vegetarian",
+  "en": "I'm vegetarian",
+  "local": "Soy vegetariano",
+  "pronunciation": "soy veh-heh-tah-RYAH-noh",
+  "category": "food"
+ },
+ {
+  "id": "allergy",
+  "en": "I'm allergic to nuts",
+  "local": "Soy alérgico a los frutos secos",
+  "pronunciation": "soy ah-LEHR-hee-koh",
+  "category": "food"
+ },
+ {
+  "id": "where",
+  "en": "Where is the cathedral?",
+  "local": "¿Dónde está la catedral?",
+  "pronunciation": "DOHN-deh es-TAH lah kah-teh-DRAHL",
+  "category": "directions"
+ },
+ {
+  "id": "far",
+  "en": "Is it far?",
+  "local": "¿Está lejos?",
+  "pronunciation": "es-TAH LEH-hohs",
+  "category": "directions"
+ },
+ {
+  "id": "toilet",
+  "en": "Where is the toilet?",
+  "local": "¿Dónde está el baño?",
+  "pronunciation": "DOHN-deh es-TAH el BAH-nyoh",
+  "category": "basics"
+ },
+ {
+  "id": "how-much",
+  "en": "How much is it?",
+  "local": "¿Cuánto cuesta?",
+  "pronunciation": "KWAN-toh KWES-tah",
+  "category": "shopping"
+ },
+ {
+  "id": "open",
+  "en": "What time do you open?",
+  "local": "¿A qué hora abren?",
+  "pronunciation": "ah keh OH-rah AH-bren",
+  "category": "basics"
+ },
+ {
+  "id": "close",
+  "en": "What time do you close?",
+  "local": "¿A qué hora cierran?",
+  "pronunciation": "ah keh OH-rah SYEH-rran",
+  "category": "basics"
+ },
+ {
+  "id": "help",
+  "en": "Can you help me?",
+  "local": "¿Me puede ayudar?",
+  "pronunciation": "meh PWEH-deh ah-yoo-DAR",
+  "category": "basics"
+ },
+ {
+  "id": "taxi",
+  "en": "Can you call me a taxi?",
+  "local": "¿Me puede llamar un taxi?",
+  "pronunciation": "meh PWEH-deh yah-MAR oon TAHK-see",
+  "category": "directions"
+ },
+ {
+  "id": "delicious",
+  "en": "It was delicious",
+  "local": "Estaba buenísimo",
+  "pronunciation": "es-TAH-bah bweh-NEE-see-moh",
+  "category": "food"
+ }
+]

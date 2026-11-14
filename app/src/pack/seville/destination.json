@@ -1,0 +1,17 @@
+{
+ "id": "seville",
+ "name": "Seville",
+ "country": "Spain",
+ "language": "es",
+ "center": {
+  "lat": 37.3891,
+  "lon": -5.9925
+ },
+ "utcOffsetMinutes": 60,
+ "bounds": [
+  -6.015,
+  37.37,
+  -5.975,
+  37.405
+ ]
+}
