@@ -27,7 +27,7 @@ export class FixtureLLM implements LLMClient {
   async stream(req: ChatRequest, onToken: (t: string) => void): Promise<string> {
     const text = this.answer(req);
     for (const word of text.match(/\S+\s*/g) ?? []) {
-      if (this.delayMs) await new Promise(r => setTimeout(r, this.delayMs));
+      if (this.delayMs) await new Promise<void>(r => setTimeout(r, this.delayMs));
       onToken(word);
     }
     return text;
