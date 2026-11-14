@@ -3,7 +3,8 @@
 Who builds what, and by when, is in [PLAN.md](PLAN.md). Where the two files
 differ, PLAN.md wins.
 
-Build a macOS app called Travel Buddy for a hackathon. Submissions close at
+Build a macOS app called Travel Buddy for a hackathon, in React Native
+(react-native-macos) and TypeScript. Submissions close at
 noon on Sunday 11/15, so scope is fixed by the clock: a small app that works
 flawlessly beats a large one that stutters.
 
@@ -77,10 +78,12 @@ translation as a mode you switch into.
    Mac. Argmax transcribes and uses diarization to tell the two speakers
    apart automatically, so nobody presses a button to take turns. Bonsai-2
    translates each utterance and Argmax speaks it. The screen shows a
-   two-sided transcript with original and translation. The open-source
-   Argmax SDK only diarizes finished audio, so the speaker is labelled after
-   each sentence ends rather than live. If that proves unreliable, fall back
-   to a push-to-talk button per speaker and say so.
+   two-sided transcript with original and translation. We have an Argmax
+   Pro SDK key, whose streaming diarization labels speakers live, while
+   they talk. If the Pro licence does not work with Wi-Fi off, use the
+   open-source SDK, which labels each sentence after it ends by comparing
+   voice prints. If that proves unreliable too, fall back to a push-to-talk
+   button per speaker and say so.
 
 5. **Offline map.** A bundled map of the destination with itinerary stops
    and recommended places marked. When the companion mentions a place, the
@@ -110,20 +113,34 @@ architecture, nature, nightlife, and so on); recommendations are only as
 good as this data. Aim for 60 to 100 places with good coverage across
 categories. Pick a destination whose language Bonsai-2 translates well and
 Argmax can both transcribe and speak; verify that before building content.
-Store everything in SQLite with full-text search.
+Ship it as JSON inside the app and search it in memory with MiniSearch;
+at this size (100 places, a few hundred facts) no database is needed.
 
 ## Stack
 
-- Swift and SwiftUI, native macOS.
-- Bonsai-2 on-device, served by PrismML's `llama-server` on localhost and
-  started by the app. Benchmark the 2B, 4B, and 9B variants on this Mac
-  early and report the numbers. Translation needs the fastest variant that
-  is accurate; itinerary extraction and recommendation reasons need reliable
-  structured output, which may favor a larger one.
-- The open-source Argmax SDK: WhisperKit for speech-to-text, TTSKit for
-  text-to-speech, SpeakerKit for diarization.
-- MapLibre GL JS in a web view, with vector tiles from OpenStreetMap,
-  bundled.
+The app is three local processes that talk over 127.0.0.1, which works with
+Wi-Fi off:
+
+- **The app:** React Native for macOS (react-native-macos 0.81) in
+  TypeScript. All screens and all logic live here: trip extraction,
+  scoring, recommendations, the guide, translation prompts.
+- **Bonsai-2:** PrismML's `llama-server` with the GGUF model, called over
+  its OpenAI-compatible HTTP API with streaming. Benchmark the 2B, 4B, and
+  9B variants on the Apple Silicon Mac early and report the numbers.
+  Translation needs the fastest variant that is accurate; itinerary
+  extraction and recommendation reasons need reliable structured output,
+  which may favor a larger one.
+- **Argmax audio helper:** a small Swift program that runs Argmax and
+  exposes speech-to-text, text-to-speech, and diarization to the app over a
+  local WebSocket. Argmax has no React Native SDK (only Swift and Kotlin),
+  so this helper is how the app uses it. Speech-to-text and diarization use
+  the Argmax Pro SDK if its licence works offline, otherwise the
+  open-source WhisperKit and SpeakerKit; the voice is TTSKit.
+- **Map:** MapLibre GL JS inside `react-native-webview`, with OpenStreetMap
+  vector tiles bundled into the app.
+
+The Argmax Pro key never goes in the repository. The helper reads it from
+the `ARGMAX_API_KEY` environment variable or from `~/.travelbuddy/argmax-key`.
 
 Read the current Bonsai-2 and Argmax documentation before writing
 integration code; do not guess their APIs. If either cannot do something
@@ -147,7 +164,8 @@ than at 11am.
 ## Order of work
 
 1. Bonsai-2 and Argmax each running in a bare Mac app; benchmarks reported.
-2. Voice loop end to end: speak, transcribe, model answers, spoken reply.
+2. Voice loop end to end: speak, transcribe in the audio helper, the app's
+   model answers, spoken reply.
 3. Destination pack built, and the voice guide answering from it.
 4. Trip setup by voice, producing a confirmed itinerary.
 5. Recommendations: scoring in code, reasons from the model, home screen.

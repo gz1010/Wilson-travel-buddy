@@ -1,14 +1,28 @@
-# Models and runtimes: downloaded by Scripts/fetch-models.sh, never committed
-*.gguf
-*.mlmodelc/
-*.mlpackage/
-Models/
-bin/llama-server
+# Secrets: the Argmax key and provisioning token live outside the repo
+.env
+*.key
+argmax-key
 
-# Build output
-.build/
-DerivedData/
-*.xcuserstate
-xcuserdata/
-.swiftpm/
+# Models and runtimes: downloaded by scripts/fetch-models.sh
+*.gguf
+models/
+bin/
+
+# Built map tiles: made by scripts/build-tiles.mjs
+app/src/map/generated/tiles.*
+
+# Node / React Native
+node_modules/
 .DS_Store
+*.log
+
+# Xcode / CocoaPods
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+app/macos/Pods/
+
+# Swift
+.build/
+.swiftpm/
