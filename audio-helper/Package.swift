@@ -33,7 +33,7 @@ let proProducts: [Target.Dependency] = [.product(name: "Argmax", package: "argma
 
 let package = Package(
     name: "buddy-audio",
-    platforms: [.macOS(.v15)], // TTSKit needs macOS 15
+    platforms: [.macOS("15.0")], // TTSKit needs macOS 15 (string form: .v15 needs tools 6.0)
     dependencies: usePro ? proDeps + ossDeps : ossDeps,
     targets: [
         .executableTarget(
