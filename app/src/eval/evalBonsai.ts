@@ -64,12 +64,14 @@ class NodeLlama implements LLMClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildBody(req, schema)),
     });
-    if (!res.ok || !res.body) throw new Error(`llama-server ${res.status}: ${await res.text()}`);
+    // Node's fetch streams the body; React Native's types don't know that, hence the casts.
+    const body = (res as any).body as AsyncIterable<Uint8Array> | undefined;
+    if (!res.ok || !body) throw new Error(`llama-server ${res.status}: ${await res.text()}`);
     const parser = new SSEParser();
-    const decoder = new TextDecoder();
+    const decoder = new (globalThis as any).TextDecoder();
     let raw = '';
     let text = '';
-    for await (const chunk of res.body as any) {
+    for await (const chunk of body) {
       raw += decoder.decode(chunk, { stream: true });
       for (const d of parser.feed(raw)) {
         if (first === undefined) first = Date.now() - t0;
@@ -160,9 +162,10 @@ async function run(llm: NodeLlama) {
   await check('edit: "move the museum to Monday"', async () => {
     trip = undefined;
     await say(SPEC_SENTENCE);
-    const before = trip?.stops.find(s => /museum|fine arts/i.test(s.title))?.day;
+    const museumDay = () => (trip as Trip | undefined)?.stops.find(s => /museum|fine arts/i.test(s.title))?.day;
+    const before = museumDay();
     const r = await say('Move the museum to Monday');
-    const after = trip?.stops.find(s => /museum|fine arts/i.test(s.title))?.day;
+    const after = museumDay();
     return { pass: !r.error && after === 2, detail: `day ${before} → ${after}` };
   });
 
