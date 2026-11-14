@@ -38,7 +38,7 @@ export async function connectRuntime(onStatus: (s: string) => void): Promise<Run
 async function waitFor(check: () => Promise<boolean>, tries: number): Promise<boolean> {
   for (let i = 0; i < tries; i++) {
     if (await check()) return true;
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise<void>(r => setTimeout(r, 1000));
   }
   return false;
 }
