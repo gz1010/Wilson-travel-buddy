@@ -5,6 +5,16 @@ An offline travel companion for the Mac that knows your trip, suggests what to d
 - What we are building: [SPEC.md](SPEC.md)
 - Who builds what, and when: [PLAN.md](PLAN.md)
 
+<!-- TODO before submitting: team member names and the demo video link. -->
+
+## What it does
+
+1. **Trip setup by voice.** "I'm here three days, staying near the old town, I love street food and architecture, Tuesday afternoon I have a museum ticket." Bonsai-2 turns that into an itinerary to confirm or correct.
+2. **What to do now.** Code ranks the city's places by distance, opening hours, weather, time of day, interests and the next booking; Bonsai-2 picks three and says why. Move the clock or your location and the suggestions change.
+3. **Voice guide.** Answers come only from the bundled guide, and it says so when the guide has no answer.
+4. **Translator.** Talk with a local across the Mac; each sentence is labelled with its speaker, translated and spoken.
+5. **Offline map** with stops and suggestions, and an **environment panel**: the saved forecast with its age, and sunrise and sunset computed on-device.
+
 ## How it fits together
 
 | Process | What | Where |
@@ -56,6 +66,8 @@ cd app && npm test && npm run typecheck
 ```
 
 All logic in `app/src/core` is plain TypeScript with no React Native imports, tested in Node.
+
+Pack data is in `app/src/pack/seville/`. To add a place, look it up in OpenStreetMap with `node scripts/fetch-places.mjs --compact "Place name"`. [docs/PACK-CHECKLIST.md](docs/PACK-CHECKLIST.md) lists what still needs checking.
 
 ## Credits
 

@@ -1,32 +1,63 @@
 #!/usr/bin/env node
-// Saves a real hourly forecast for the destination into its pack, from
-// Open-Meteo (no key needed). Run while online, close to the demo:
-//   node scripts/fetch-forecast.mjs [seville]
+// Saves a real hourly forecast for the destination into the pack, from
+// Open-Meteo (free, no key). Run once while online, shortly before the demo;
+// the app shows the forecast's age, so it stays honest offline.
+//
+//   node scripts/fetch-forecast.mjs                    # writes app/src/pack/seville/forecast.json
+//   node scripts/fetch-forecast.mjs seville            # the same, naming the destination
+//   node scripts/fetch-forecast.mjs --days 5 --out /tmp/forecast.json
+//
+// Weather data by Open-Meteo.com (CC BY 4.0).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const dest = process.argv[2] ?? 'seville';
-const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'app/src/pack', dest);
-const d = JSON.parse(readFileSync(join(dir, 'destination.json'), 'utf8'));
-const url = `https://api.open-meteo.com/v1/forecast?latitude=${d.center.lat}&longitude=${d.center.lon}&hourly=temperature_2m,precipitation_probability,weather_code&forecast_days=7&timezone=auto`;
-const res = await fetch(url);
-if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
-const j = await res.json();
-const hours = j.hourly.time.map((t, i) => ({
-  time: t, // already local "YYYY-MM-DDTHH:00"
-  temperatureC: j.hourly.temperature_2m[i],
-  precipitationChance: j.hourly.precipitation_probability[i] ?? 0,
-  code: j.hourly.weather_code[i],
+const app = join(dirname(fileURLToPath(import.meta.url)), '..', 'app');
+const argv = process.argv.slice(2);
+const opt = (name, fallback) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 ? argv[i + 1] : fallback;
+};
+const destId = opt('dest', argv[0] && !argv[0].startsWith('--') ? argv[0] : 'seville');
+const days = Number(opt('days', 7));
+const out = opt('out', join(app, `src/pack/${destId}/forecast.json`));
+const timezone = opt('timezone', 'auto'); // the destination's own zone
+
+const dest = JSON.parse(readFileSync(join(app, `src/pack/${destId}/destination.json`), 'utf8'));
+const url = new URL('https://api.open-meteo.com/v1/forecast');
+url.search = new URLSearchParams({
+  latitude: String(dest.center.lat),
+  longitude: String(dest.center.lon),
+  hourly: 'temperature_2m,precipitation_probability,weather_code',
+  timezone,
+  forecast_days: String(days),
+}).toString();
+
+const res = await fetch(url, { headers: { 'User-Agent': 'travel-buddy-pack-builder' } });
+if (!res.ok) {
+  console.error(`Open-Meteo returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  process.exit(1);
+}
+const data = await res.json();
+const h = data.hourly;
+const hours = h.time.map((time, i) => ({
+  time, // already destination local time, "YYYY-MM-DDTHH:00"
+  temperatureC: Math.round(h.temperature_2m[i] * 10) / 10,
+  precipitationChance: h.precipitation_probability[i] ?? 0,
+  code: h.weather_code[i] ?? undefined,
 }));
-const offset = j.utc_offset_seconds / 60;
-const sign = offset >= 0 ? '+' : '-';
-const hh = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
-const mm = String(Math.abs(offset) % 60).padStart(2, '0');
-const now = new Date(Date.now() + offset * 60_000).toISOString().slice(0, 19);
-writeFileSync(
-  join(dir, 'forecast.json'),
-  JSON.stringify({ savedAt: `${now}${sign}${hh}:${mm}`, source: 'Open-Meteo (open-meteo.com), CC BY 4.0', hours }, null, 1),
-);
-if (offset !== d.utcOffsetMinutes) console.warn(`Note: destination.json has utcOffsetMinutes ${d.utcOffsetMinutes}, Open-Meteo says ${offset}.`);
-console.log(`Saved ${hours.length} hours, ${hours[0].time} to ${hours.at(-1).time}. The app's clock starts at the first day.`);
+
+// savedAt in destination time with its offset, e.g. "2026-11-14T21:05:00+01:00".
+const offsetMin = data.utc_offset_seconds / 60;
+if (offsetMin !== dest.utcOffsetMinutes) {
+  console.warn(`Note: the destination is UTC${offsetMin >= 0 ? '+' : ''}${offsetMin / 60} now, but destination.json says ${dest.utcOffsetMinutes} min.`);
+}
+const local = new Date(Date.now() + offsetMin * 60_000).toISOString().slice(0, 19);
+const sign = offsetMin >= 0 ? '+' : '-';
+const abs = Math.abs(offsetMin);
+const savedAt = `${local}${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+
+const forecast = { savedAt, source: 'Open-Meteo.com (CC BY 4.0)', hours };
+writeFileSync(out, JSON.stringify(forecast, null, 1));
+const rainy = hours.filter(x => x.precipitationChance >= 50).length;
+console.log(`Saved ${hours.length} hours (${hours[0].time} to ${hours.at(-1).time}), ${rainy} with rain ≥50%, to ${out}`);

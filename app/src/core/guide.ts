@@ -5,23 +5,36 @@ import { formatClock } from './time';
 import { summarizeTrip } from './trip';
 import type { LLMClient, Place, Situation, Trip } from './types';
 
-const NEARBY = /\b(near|nearby|around here|close by|close to|walking distance|cerca)\b/i;
+/** Search hits below this are noise; findPlace uses the same bar. */
+const MIN_SOURCE_SCORE = 8;
+
+const NEARBY =/\b(near|nearby|around here|close by|close to|walking distance|cerca)\b/i;
 
 /** Answers questions from the pack, streaming the reply. */
 export class Guide {
   constructor(private llm: LLMClient, private index: PackIndex) {}
 
   sources(question: string, sit: Situation, trip?: Trip): SearchHit[] {
-    const hits = this.index.query(question, 5, ['place', 'fact']);
-    if (NEARBY.test(question)) {
-      // "near my hotel" means the hotel, not the current location.
-      const anchor = /hotel|staying/i.test(question) && trip?.base?.point ? trip.base.point : sit.location;
-      for (const { place, meters } of this.index.nearest(anchor, 6)) {
-        if (place.category === 'hotel' || hits.some(h => h.id === place.id)) continue;
-        hits.push({ kind: 'place', id: place.id, title: place.name, text: `${place.summary} (${formatDistance(meters)} away)`, placeId: place.id, score: 0 });
-      }
-    }
-    return hits.slice(0, 8);
+    // Fuzzy search always finds something; weak matches ("sushi in Tokyo" →
+    // a tapas fact) only tempt a small model to answer anyway.
+    const hits = this.index.query(question, 5, ['place', 'fact']).filter(h => h.score >= MIN_SOURCE_SCORE);
+    if (!NEARBY.test(question)) return hits;
+    // "near my hotel" means the hotel, not the current location. Nearby
+    // places go first: for these questions they are the answer.
+    const anchor = /hotel|staying/i.test(question) && trip?.base?.point ? trip.base.point : sit.location;
+    const nearby: SearchHit[] = this.index
+      .nearest(anchor, 7)
+      .filter(({ place, meters }) => place.category !== 'hotel' && meters > 0)
+      .slice(0, 5)
+      .map(({ place, meters }) => ({
+        kind: 'place',
+        id: place.id,
+        title: place.name,
+        text: `${place.summary} (${formatDistance(meters)} away)`,
+        placeId: place.id,
+        score: 0,
+      }));
+    return [...nearby, ...hits.filter(h => !nearby.some(n => n.id === h.id))].slice(0, 8);
   }
 
   async answer(question: string, sit: Situation, trip: Trip | undefined, onToken: (t: string) => void): Promise<{ text: string; places: Place[] }> {

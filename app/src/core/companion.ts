@@ -4,8 +4,9 @@ import type { PackIndex } from './pack';
 import { NOT_IN_GUIDE } from './prompts';
 import { Recommender, spokenSummary } from './recommend';
 import { Translator } from './translate';
-import { TripPlanner, summarizeTrip } from './trip';
-import type { Companion, CompanionEvent, LLMClient, Situation, Trip } from './types';
+import { addDays, weekday, WEEKDAY_NAMES } from './time';
+import { TripPlanner } from './trip';
+import type { Companion, CompanionEvent, LLMClient, Situation, Stop, Trip } from './types';
 
 export interface CompanionContext {
   trip(): Trip | undefined;
@@ -55,7 +56,7 @@ export class DefaultCompanion implements Companion {
           const next = await this.planner.revise(trip!, text, sit.clock.date);
           await this.ctx.saveTrip(next);
           emit({ type: 'trip', trip: next });
-          emit({ type: 'done', text: 'Done. ' + summarizeTrip(next, this.index).split('\n').slice(-2).join(' ') });
+          emit({ type: 'done', text: describeChanges(trip!, next) });
           return;
         }
         case 'recommend': {
@@ -86,6 +87,26 @@ export class DefaultCompanion implements Companion {
       emit({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     }
   }
+}
+
+/** What an edit changed, said aloud: "Moved Museum ticket to Monday at 15:00." */
+export function describeChanges(before: Trip, after: Trip): string {
+  const when = (trip: Trip, s: Stop) => {
+    const date = addDays(trip.startDate, s.day - 1);
+    return `${WEEKDAY_NAMES[weekday(date)]}${s.start ? ` at ${s.start}` : ''}`;
+  };
+  const key = (s: Stop) => s.placeId ?? s.title.toLowerCase();
+  const out: string[] = [];
+  for (const s of after.stops) {
+    const old = before.stops.find(b => key(b) === key(s));
+    if (!old) out.push(`Added ${s.title} on ${when(after, s)}.`);
+    else if (old.day !== s.day || old.start !== s.start) out.push(`Moved ${s.title} to ${when(after, s)}.`);
+  }
+  for (const b of before.stops) {
+    if (!after.stops.some(s => key(s) === key(b))) out.push(`Removed ${b.title}.`);
+  }
+  if (after.days !== before.days) out.push(`Your trip is now ${after.days} day${after.days > 1 ? 's' : ''}.`);
+  return out.length ? out.slice(0, 3).join(' ') : 'Nothing changed in your plan. Tell me again what to change?';
 }
 
 function confirmTrip(trip: Trip): string {
