@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -21,11 +21,12 @@ import { tripDay } from '../../core/trip';
 import type { Fact, Trip } from '../../core/types';
 import { axPress, Glass, OfflineChip, onGlass } from '../dusk/Glass';
 import { ArrowIcon } from '../dusk/Icons';
+import { fileDropProps, ImportIcon, ImportSheet, type DroppedFile } from '../dusk/ImportSheet';
 import { LiquidBackground, moodColor, type Mood } from '../dusk/LiquidBackground';
 import { modelLine } from '../dusk/modelNames';
 import { useReduceMotion } from '../dusk/motion';
 import { useScreenSize } from '../dusk/Screen';
-import { dusk, font, white } from '../dusk/tokens';
+import { dusk, font, ground, white } from '../dusk/tokens';
 import { useMicLevel, VoiceMic } from '../dusk/VoiceMic';
 import type { ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
@@ -37,6 +38,8 @@ import type { ScreenProps } from './types';
 // while it listens, thinks or speaks. "Your trip" above the conversation is a compact summary of
 // the days that opens to show them; it updates (and says so) when the trip changes, e.g. after
 // "I'm staying two more days". Facts the answer was built from (b.cited) show under the answer.
+// Import (by the Offline chip, or a file dropped on the screen) brings in an itinerary: a calendar
+// file or text, previewed in a sheet (dusk/ImportSheet.tsx) before it becomes the trip.
 // DuskRoot draws the tab bar over the bottom TAB_BAR_RESERVE.
 
 /** Room at the bottom for the floating tab bar: 26 from the bottom, the bar, then a gap. */
@@ -49,6 +52,8 @@ const SEND_SIZE = 36;
 // react-native-macos draws a rectangular focus ring around a focused field, which looks broken
 // inside a pill; the iOS typings don't know the prop that turns it off.
 const NO_FOCUS_RING: object = { enableFocusRing: false };
+// A hover tooltip on the Import button (NSView toolTip; also unknown to the iOS typings).
+const IMPORT_TOOLTIP: object = { tooltip: 'Import an itinerary (.ics or text)' };
 // Narrow no-break space: pads a highlighted word without letting the line break around it.
 const THIN_SPACE = ' ';
 /** The trip strip shows at most this many days (the longest trip the planner makes). */
@@ -244,6 +249,14 @@ export function SetupScreen({ b, nav }: ScreenProps) {
   };
   const onMic = () => (hasMic ? b.talk() : input.current?.focus());
 
+  // Import an itinerary: the sheet, opened by the Import button or by a file dropped on the screen
+  // (keyed, so each drop starts afresh). While a file is dragged over, the screen says it can take it.
+  const [importing, setImporting] = useState<{ key: number; dropped?: DroppedFile }>();
+  const [dropping, setDropping] = useState(false);
+  const importKey = useRef(0);
+  const openImport = useCallback((dropped?: DroppedFile) => setImporting({ key: ++importKey.current, dropped }), []);
+  const drop = useMemo(() => fileDropProps(file => file && openImport(file), setDropping), [openImport]);
+
   // The conversation keeps its end in view while new words arrive, unless you scrolled up to read.
   const scroll = useRef<ScrollView>(null);
   const atEnd = useRef(true);
@@ -297,7 +310,7 @@ export function SetupScreen({ b, nav }: ScreenProps) {
     : ["I'm here three days and love food and history", 'What should I do right now?', 'How do I say thank you?'];
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} {...drop}>
       <LiquidBackground mood={hasMic ? mood : b.busy ? 'thinking' : 'idle'} subscribeLevel={mic.subscribe} />
 
       {/* The models get the full width under the title: with the Argmax helper they are four long names. */}
@@ -306,7 +319,10 @@ export function SetupScreen({ b, nav }: ScreenProps) {
           <Text style={styles.title} accessibilityRole="header">
             Chat
           </Text>
-          <OfflineChip />
+          <View style={styles.headerRight}>
+            <ImportButton onPress={() => openImport()} />
+            <OfflineChip />
+          </View>
         </View>
         <Text style={styles.models} numberOfLines={3}>
           {`Voice mode · ${models}`}
@@ -413,7 +429,48 @@ export function SetupScreen({ b, nav }: ScreenProps) {
           </Pressable>
         </Glass>
       </View>
+
+      {dropping && !importing ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dropZone, { paddingBottom: TAB_BAR_RESERVE }]}>
+          <Glass kind="prominent" radius={dusk.radius.card} style={styles.dropCard}>
+            <ImportIcon size={28} strokeWidth={2} />
+            <Text style={[onGlass, styles.dropTitle]}>Drop to import your itinerary</Text>
+            <Text style={styles.dropSub}>A calendar file (.ics) or a text file</Text>
+          </Glass>
+        </View>
+      ) : null}
+      {importing ? (
+        <ImportSheet
+          key={importing.key}
+          b={b}
+          dropped={importing.dropped}
+          onClose={() => setImporting(undefined)}
+          top={Math.max(28, f.top - 12)}
+          bottom={TAB_BAR_RESERVE}
+          side={12 * sx}
+        />
+      ) : null}
     </View>
+  );
+}
+
+/** Import an itinerary: a small clear-glass pill by the Offline chip. */
+function ImportButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Import an itinerary"
+      accessibilityHint="Paste one, or open a calendar file (.ics) or a text file"
+      onPress={onPress}
+      {...axPress(onPress)}
+      {...IMPORT_TOOLTIP}
+      hitSlop={8}
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+      <Glass kind="clear" radius={dusk.radius.pill} style={styles.importButton}>
+        <ImportIcon size={14} strokeWidth={2.4} />
+        <Text style={[onGlass, styles.importText]}>Import</Text>
+      </Glass>
+    </Pressable>
   );
 }
 
@@ -711,6 +768,13 @@ function Pill({ label }: { label: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: dusk.color.ground },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  importButton: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 30, paddingHorizontal: 12 },
+  importText: { ...font('700'), fontSize: 12.5 },
+  dropZone: { alignItems: 'center', justifyContent: 'center', backgroundColor: ground(0.5), paddingHorizontal: 24 },
+  dropCard: { alignItems: 'center', gap: 8, paddingVertical: 24, paddingHorizontal: 28, maxWidth: 340 },
+  dropTitle: { ...font('700'), fontSize: 17, lineHeight: 22, textAlign: 'center' },
+  dropSub: { ...font('500'), fontSize: 13, lineHeight: 18, color: dusk.color.textSoft, textAlign: 'center' },
   title: { ...font('700'), flexShrink: 1, fontSize: 30, lineHeight: 36, letterSpacing: -0.5, color: dusk.color.text },
   models: { ...font('500'), fontSize: 11.5, lineHeight: 15, color: dusk.color.textSoft, marginTop: 1 },
 

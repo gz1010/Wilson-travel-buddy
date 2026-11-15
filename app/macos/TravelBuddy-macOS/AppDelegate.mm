@@ -1,5 +1,6 @@
 #import "AppDelegate.h"
 
+#import <React/RCTBridgeModule.h>
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTConvert.h>
 #import <React/RCTView.h>
@@ -111,6 +112,185 @@ RCT_CUSTOM_VIEW_PROPERTY(tintColor, UIColor, NSView)
   } else if ([view isKindOfClass:[BuddyBlurView class]]) {
     ((BuddyBlurView *)view).buddyTint = color;
   }
+}
+@end
+
+// BuddyFiles: an itinerary from a file, for Chat's Import (src/ui/dusk/ImportSheet.tsx). React
+// Native for macOS has no file picker, so "Open a file" is AppKit's NSOpenPanel, and a file dropped
+// on Chat comes here too. The file is read here and only its text goes to JS. No network.
+// The app is not sandboxed today: TravelBuddy.entitlements is in the project, but no build setting
+// (CODE_SIGN_ENTITLEMENTS) applies it. If it is ever applied, its
+// com.apple.security.files.user-selected.read-only covers both ways in: a file picked in the panel
+// or dropped on the window.
+
+/** An itinerary is a few kilobytes; a file over this is not one. */
+static const unsigned long long kBuddyFilesMaxBytes = 2 * 1024 * 1024;
+
+/** The extensions JS allows (["ics", "txt"]), lower case, without dots. */
+static NSSet<NSString *> *BuddyFileExtensions(NSArray *types)
+{
+  NSMutableSet<NSString *> *set = [NSMutableSet set];
+  NSCharacterSet *trim = [NSCharacterSet characterSetWithCharactersInString:@". "];
+  for (id t in types) {
+    if (![t isKindOfClass:[NSString class]]) {
+      continue;
+    }
+    NSString *ext = [[(NSString *)t lowercaseString] stringByTrimmingCharactersInSet:trim];
+    if (ext.length > 0) {
+      [set addObject:ext];
+    }
+  }
+  return set;
+}
+
+static BOOL BuddyFileAllowed(NSURL *url, NSSet<NSString *> *extensions)
+{
+  return extensions.count == 0 || [extensions containsObject:url.pathExtension.lowercaseString ?: @""];
+}
+
+/** The file's text: UTF-8, else an encoding Foundation recognises (a UTF-16 BOM), else Windows Latin 1. */
+static NSString *BuddyReadTextFile(NSURL *url, NSString **problem)
+{
+  NSNumber *size = nil;
+  [url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+  if (size != nil && size.unsignedLongLongValue > kBuddyFilesMaxBytes) {
+    *problem = @"That file is too big for an itinerary (over 2 MB).";
+    return nil;
+  }
+  NSError *error = nil;
+  NSData *data = [NSData dataWithContentsOfURL:url options:0 error:&error];
+  if (data == nil) {
+    *problem = error.localizedDescription ?: @"The file could not be read.";
+    return nil;
+  }
+  if (data.length > kBuddyFilesMaxBytes) {
+    *problem = @"That file is too big for an itinerary (over 2 MB).";
+    return nil;
+  }
+  NSString *text = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+  if (text == nil) {
+    NSStringEncoding used = 0;
+    text = [NSString stringWithContentsOfURL:url usedEncoding:&used error:nil];
+  }
+  // A NUL byte outside UTF-16 means a binary file, not text.
+  if (text == nil && memchr(data.bytes, 0, data.length) == NULL) {
+    text = [[NSString alloc] initWithData:data encoding:NSWindowsCP1252StringEncoding];
+  }
+  if (text == nil) {
+    *problem = @"That file isn't text: open a calendar file (.ics) or a text file.";
+    return nil;
+  }
+  // A byte order mark (U+FEFF) left at the start is not part of the itinerary.
+  if (text.length > 0 && [text characterAtIndex:0] == 0xFEFF) {
+    text = [text substringFromIndex:1];
+  }
+  return text;
+}
+
+/** Reads off the main thread, then resolves { name, text } or rejects with a sentence to show. */
+static void BuddyResolveTextFile(NSURL *url, RCTPromiseResolveBlock resolve, RCTPromiseRejectBlock reject)
+{
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSString *problem = nil;
+    NSString *text = BuddyReadTextFile(url, &problem);
+    if (text == nil) {
+      reject(@"read_failed", problem ?: @"The file could not be read.", nil);
+    } else {
+      resolve(@{@"name" : url.lastPathComponent ?: @"", @"text" : text});
+    }
+  });
+}
+
+// Greys out files of other kinds in the panel; folders stay enabled so the person can browse.
+@interface BuddyOpenPanelFilter : NSObject <NSOpenSavePanelDelegate>
+@property (nonatomic, copy) NSSet<NSString *> *extensions;
+@end
+
+@implementation BuddyOpenPanelFilter
+- (BOOL)panel:(id)sender shouldEnableURL:(NSURL *)url
+{
+  NSNumber *isDirectory = nil;
+  NSNumber *isPackage = nil;
+  [url getResourceValue:&isDirectory forKey:NSURLIsDirectoryKey error:nil];
+  [url getResourceValue:&isPackage forKey:NSURLIsPackageKey error:nil];
+  if (isDirectory.boolValue) {
+    return !isPackage.boolValue;
+  }
+  return BuddyFileAllowed(url, self.extensions);
+}
+@end
+
+@interface BuddyFiles : NSObject <RCTBridgeModule>
+@end
+
+@implementation BuddyFiles {
+  BOOL _picking;
+}
+RCT_EXPORT_MODULE(BuddyFiles)
+
++ (BOOL)requiresMainQueueSetup
+{
+  return NO;
+}
+
+// NSOpenPanel is AppKit UI: the methods run on the main thread (the reading itself does not).
+- (dispatch_queue_t)methodQueue
+{
+  return dispatch_get_main_queue();
+}
+
+// pickText(["ics", "txt"]): the open panel, as a sheet on the app's window. Resolves
+// { name, text } for the file picked, or null when the person cancels.
+RCT_EXPORT_METHOD(pickText : (NSArray *)types resolve : (RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject)
+{
+  if (_picking) {
+    reject(@"busy", @"The file panel is already open.", nil);
+    return;
+  }
+  NSOpenPanel *panel = [NSOpenPanel openPanel];
+  panel.canChooseFiles = YES;
+  panel.canChooseDirectories = NO;
+  panel.allowsMultipleSelection = NO;
+  panel.resolvesAliases = YES;
+  panel.prompt = @"Import";
+  panel.message = @"Choose an itinerary: a calendar file (.ics) or a text file.";
+  BuddyOpenPanelFilter *filter = [BuddyOpenPanelFilter new];
+  filter.extensions = BuddyFileExtensions(types);
+  panel.delegate = filter; // weak: the block below keeps the filter alive until the panel closes
+  _picking = YES;
+  __weak BuddyFiles *weakSelf = self;
+  void (^finish)(NSModalResponse) = ^(NSModalResponse response) {
+    BuddyFiles *strongSelf = weakSelf;
+    if (strongSelf != nil) {
+      strongSelf->_picking = NO;
+    }
+    panel.delegate = nil;
+    (void)filter;
+    NSURL *url = response == NSModalResponseOK ? panel.URL : nil;
+    if (url == nil) {
+      resolve([NSNull null]);
+      return;
+    }
+    BuddyResolveTextFile(url, resolve, reject);
+  };
+  NSWindow *window = NSApp.keyWindow ?: NSApp.mainWindow;
+  if (window != nil) {
+    [panel beginSheetModalForWindow:window completionHandler:finish];
+  } else {
+    finish([panel runModal]);
+  }
+}
+
+// readText(path, ["ics", "txt"]): a file dropped on Chat (the path from the drop event), read the
+// same way. Only the kinds pickText offers.
+RCT_EXPORT_METHOD(readText : (NSString *)path types : (NSArray *)types resolve : (RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject)
+{
+  NSURL *url = [path hasPrefix:@"file://"] ? [NSURL URLWithString:path] : (path.length > 0 ? [NSURL fileURLWithPath:path] : nil);
+  if (url == nil || !url.isFileURL || !BuddyFileAllowed(url, BuddyFileExtensions(types))) {
+    reject(@"unsupported", @"Drop a calendar file (.ics) or a text file (.txt).", nil);
+    return;
+  }
+  BuddyResolveTextFile(url, resolve, reject);
 }
 @end
 

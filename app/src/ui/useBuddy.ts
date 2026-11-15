@@ -332,6 +332,14 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     setSituation(s => ({ ...s, visited: [] }));
     storage.saveVisited([]).catch(() => {});
   }, [setTrip]);
+  /** An imported itinerary (Chat's Import) becomes the trip: saved, and new like one the planner made. */
+  const importTrip = useCallback(
+    async (next: Trip) => {
+      await setTrip(next);
+      setTripIsNew(true);
+    },
+    [setTrip],
+  );
 
   /** Distance from "you" to a place, for the cards. */
   const metersTo = useCallback((point: GeoPoint) => distanceMeters(situation.location, point), [situation.location]);
@@ -378,6 +386,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     removeStop,
     markVisited,
     clearTrip,
+    importTrip,
     metersTo,
     parseHHMM,
   };

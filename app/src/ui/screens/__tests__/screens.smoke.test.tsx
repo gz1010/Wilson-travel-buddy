@@ -280,6 +280,119 @@ describe('Dusk screens render', () => {
   }
 });
 
+describe('Chat: import an itinerary', () => {
+  // A small Google Calendar export: a booked visit (TZID, an escaped, folded location) and a dinner
+  // at a place the guide doesn't have (UTC: 19:00Z is 20:00 in Seville in December).
+  const ICS = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Google Inc//Google Calendar 70.9054//EN',
+    'BEGIN:VEVENT',
+    'DTSTART;TZID=Europe/Madrid:20261203T100000',
+    'DTEND;TZID=Europe/Madrid:20261203T113000',
+    'SUMMARY:Real Alcázar tickets',
+    'LOCATION:Real Alcázar de Sevilla\\, Patio de Banderas\\, ',
+    ' Sevilla',
+    'END:VEVENT',
+    'BEGIN:VEVENT',
+    'DTSTART:20261204T190000Z',
+    'DTEND:20261204T210000Z',
+    'SUMMARY:Dinner at Hotel Alfonso XIII',
+    'LOCATION:Hotel Alfonso XIII\\, Sevilla',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  it('pastes a calendar, previews it and applies it; opens and drops files through BuddyFiles (mocked)', async () => {
+    const { NativeModules } = require('react-native') as typeof import('react-native');
+    const pickText = jest.fn(async (_types: string[]) => ({ name: 'seville.ics', text: ICS }));
+    const readText = jest.fn(async (path: string, _types: string[]) => ({ name: path.split('/').pop(), text: ICS }));
+    NativeModules.BuddyFiles = { pickText, readText };
+    const settle = async () => {
+      for (let i = 0; i < 4; i++) {
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(50);
+        });
+      }
+    };
+    try {
+      let r: renderer.ReactTestRenderer | undefined;
+      await act(async () => {
+        r = renderer.create(<Harness screen="setup" />);
+      });
+      const json = () => JSON.stringify(r!.toJSON());
+      const press = (label: string) => r!.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function');
+
+      // The Import button on Chat opens the sheet; a pasted calendar is read in plain code.
+      await act(async () => press('Import an itinerary')[0].props.onPress());
+      const field = r!.root.findAll(n => n.props.accessibilityLabel === 'Itinerary text' && typeof n.props.onChangeText === 'function')[0];
+      expect(field.props.multiline).toBe(true);
+      await act(async () => field.props.onChangeText(ICS));
+      expect(json()).toContain('A calendar: read on this Mac');
+      await act(async () => press('Import')[0].props.onPress());
+      await settle();
+
+      // The preview: the days, their stops, the name the guide lacks and how to add it.
+      for (const s of ['Your imported trip', '2 days · Thu 3 – Fri 4 Dec', 'DAY 1 · THU 3 DEC', 'DAY 2 · FRI 4 DEC', 'Real Alcázar tickets', '10:00', 'NOT IN YOUR SEVILLE GUIDE YET', 'Hotel Alfonso XIII']) {
+        expect(json()).toContain(s);
+      }
+      expect(json()).toContain('Add them while online: node scripts/prepare-pack.mjs --itinerary <file>');
+
+      // Apply: it becomes the trip (booked stops at local times), and "Your trip" shows it.
+      await act(async () => press('Apply the imported trip')[0].props.onPress());
+      expect(json()).not.toContain('Your imported trip');
+      const trip = latest!.trip!;
+      expect(trip).toMatchObject({ startDate: '2026-12-03', days: 2 });
+      expect(trip.stops.find(s => s.placeId === 'alcazar')).toMatchObject({ day: 1, start: '10:00', fixed: true });
+      expect(latest!.tripIsNew).toBe(true);
+      expect(json()).toContain('2 days · Thu 3 – Fri 4 Dec');
+
+      // Open a file: the native panel (mocked) hands back the text, which is imported straight away;
+      // the preview says where it came from and that it replaces the trip.
+      await act(async () => press('Import an itinerary')[0].props.onPress());
+      await act(async () => press('Open a file')[0].props.onPress());
+      await settle();
+      expect(pickText).toHaveBeenCalledWith(expect.arrayContaining(['ics', 'txt']));
+      expect(json()).toContain('From seville.ics');
+      expect(json()).toContain('Apply replaces your current trip');
+      await act(async () => press('Close import')[0].props.onPress());
+      expect(json()).not.toContain('Your imported trip');
+
+      // Pasted text goes through the trip planner (the recorded model here), a day at a time.
+      await act(async () => press('Import an itinerary')[0].props.onPress());
+      const textField = r!.root.findAll(n => n.props.accessibilityLabel === 'Itinerary text' && typeof n.props.onChangeText === 'function')[0];
+      await act(async () => textField.props.onChangeText('Day 1: Real Alcázar at 10:00, then tapas in Santa Cruz\nDay 2: Plaza de España in the morning'));
+      expect(json()).toContain(`Text: ${runtime.llm.name} reads it a day at a time`);
+      await act(async () => press('Import')[0].props.onPress());
+      await settle();
+      expect(json()).toContain('Your imported trip');
+      expect(json()).toContain('From your pasted itinerary');
+      await act(async () => press('Close import')[0].props.onPress());
+
+      // A file dragged over Chat: the screen says it can take it; dropped, it is read natively and imported.
+      const target = r!.root.findAll(n => Array.isArray(n.props.draggedTypes) && typeof n.props.onDrop === 'function')[0];
+      await act(async () => target.props.onDragEnter({}));
+      expect(json()).toContain('Drop to import your itinerary');
+      const drop = { nativeEvent: { dataTransfer: { files: [{ name: 'photo.jpg', uri: '/Users/me/photo.jpg' }, { name: 'trip.ics', uri: '/Users/me/trip.ics' }] } } };
+      await act(async () => target.props.onDrop(drop));
+      await settle();
+      expect(json()).not.toContain('Drop to import your itinerary');
+      expect(readText).toHaveBeenCalledWith('/Users/me/trip.ics', expect.arrayContaining(['ics']));
+      expect(json()).toContain('From trip.ics');
+
+      // A file of another kind (a PDF itinerary) opens the sheet saying why, rather than doing nothing.
+      await act(async () => press('Close import')[0].props.onPress());
+      await act(async () => target.props.onDrop({ nativeEvent: { dataTransfer: { files: [{ name: 'booking.pdf', uri: '/Users/me/booking.pdf' }] } } }));
+      await settle();
+      expect(json()).toContain("Can't import booking.pdf");
+      expect(readText).toHaveBeenCalledTimes(1);
+      act(() => r!.unmount());
+    } finally {
+      delete (NativeModules as { BuddyFiles?: unknown }).BuddyFiles;
+    }
+  });
+});
+
 describe('Scan (look)', () => {
   it('shows the sharp snap after the shutter, not the preview frame', async () => {
     const audio = runtime.audio;
