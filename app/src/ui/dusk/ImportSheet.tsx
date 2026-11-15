@@ -354,7 +354,7 @@ export function ImportSheet({ b, dropped, onClose, top, bottom, side }: ImportSh
         kind="clear"
         radius={dusk.radius.sheet}
         // Darker than the map's cards: Chat's own words sit right behind the sheet's text.
-        wash={ground(0.72)}
+        wash={ground(0.9)}
         style={[styles.sheet, { top, bottom, left: (width - sheetWidth) / 2, width: sheetWidth }]}>
         <View style={styles.head}>
           <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>
@@ -558,7 +558,8 @@ function Preview({
 const sheetPad = 18;
 
 const styles = StyleSheet.create({
-  scrim: { backgroundColor: ground(0.55) },
+  // Dark enough that the conversation behind doesn't read through the paste box (seen on the Mac).
+  scrim: { backgroundColor: ground(0.7) },
   sheet: { position: 'absolute', paddingHorizontal: sheetPad, paddingTop: 14, paddingBottom: sheetPad, gap: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: dusk.size.touch },
   title: { ...font('700'), flexShrink: 1, fontSize: 20, lineHeight: 25, letterSpacing: -0.3, color: dusk.color.text },
