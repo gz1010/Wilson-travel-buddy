@@ -113,7 +113,14 @@ html, body, #map { margin: 0; height: 100%; background: #efe9df; font-family: -a
     }
     if (state.flyTo) map.flyTo({ center: [state.flyTo.lon, state.flyTo.lat], zoom: Math.max(map.getZoom(), 15.5), speed: 1.4 });
   };
-  map.on('load', () => post({ type: 'ready' }));
+  // The web view can start at zero size while React Native lays out; MapLibre
+  // then keeps its 400x300 fallback canvas (seen in a browser test). Resize
+  // whenever the container changes.
+  if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
+  // Pins, "you" and flyTo all work before the first frame is drawn, so say
+  // ready now rather than on 'load', which never fires while the view is
+  // hidden or has no size.
+  post({ type: 'ready' });
 })();
 </script>
 </body></html>`;
