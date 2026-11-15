@@ -15,6 +15,7 @@ export class HelperAudioClient implements AudioClient {
   private ws?: WebSocket;
   private listener?: (m: HelperToApp) => void;
   private speakWaiters = new Map<string, () => void>();
+  private startWaiters = new Map<string, () => void>();
   private conversationHandler?: (e: TurnEvent) => void;
   private counter = 0;
 
@@ -98,9 +99,16 @@ export class HelperAudioClient implements AudioClient {
         this.onLevel?.(m.value);
         this.conversationHandler?.({ type: 'level', value: m.value });
         break;
+      case 'speak.started': {
+        const started = this.startWaiters.get(m.id);
+        this.startWaiters.delete(m.id);
+        started?.();
+        break;
+      }
       case 'speak.done': {
         const done = this.speakWaiters.get(m.id);
         this.speakWaiters.delete(m.id);
+        this.startWaiters.delete(m.id);
         done?.();
         break;
       }
@@ -110,7 +118,7 @@ export class HelperAudioClient implements AudioClient {
           this.conversationHandler(
             m.type === 'partial'
               ? { type: 'partial', text: m.text, speaker: m.speaker }
-              : { type: 'final', text: m.text, language: m.language, speaker: m.speaker },
+              : { type: 'final', text: m.text, language: m.language, speaker: m.speaker, turn: m.turn },
           );
         }
         break;
@@ -130,7 +138,7 @@ export class HelperAudioClient implements AudioClient {
         else if (m.type === 'final') heard = { text: m.text, language: m.language };
         else if (m.type === 'listen.done') {
           this.listener = undefined;
-          resolve(heard);
+          resolve(m.sinceEndMs != null ? { ...heard, endedAt: Date.now() - m.sinceEndMs } : heard);
         } else if (m.type === 'error') {
           this.listener = undefined;
           reject(new Error(m.message));
@@ -144,11 +152,12 @@ export class HelperAudioClient implements AudioClient {
     this.send({ type: 'listen.stop' });
   }
 
-  speak(text: string, language: Lang): Promise<void> {
+  speak(text: string, language: Lang, onStart?: () => void): Promise<void> {
     if (this.ws?.readyState !== WebSocket.OPEN) return Promise.resolve();
     const id = `s${++this.counter}`;
     return new Promise(resolve => {
       this.speakWaiters.set(id, resolve);
+      if (onStart) this.startWaiters.set(id, onStart);
       this.send({ type: 'speak', id, text, language });
     });
   }
@@ -157,15 +166,24 @@ export class HelperAudioClient implements AudioClient {
     this.send({ type: 'speak.stop' });
     for (const done of this.speakWaiters.values()) done();
     this.speakWaiters.clear();
+    this.startWaiters.clear();
   }
 
-  conversation(languages: Lang[], onEvent: (e: TurnEvent) => void): () => void {
+  conversation(languages: Lang[], onEvent: (e: TurnEvent) => void, options?: { pushToTalk?: boolean }): () => void {
     this.conversationHandler = onEvent;
-    this.send({ type: 'conversation.start', languages });
+    this.send({ type: 'conversation.start', languages, pushToTalk: options?.pushToTalk });
     return () => {
       this.conversationHandler = undefined;
       this.send({ type: 'conversation.stop' });
     };
+  }
+
+  turnStart(turn: string, language?: Lang) {
+    this.send({ type: 'turn.start', turn, language });
+  }
+
+  turnEnd(turn: string) {
+    this.send({ type: 'turn.end', turn });
   }
 
   setMuted(muted: boolean) {

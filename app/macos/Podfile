@@ -28,5 +28,18 @@ target 'TravelBuddy-macOS' do
 
   post_install do |installer|
     react_native_post_install(installer)
+    # Some pods (e.g. AsyncStorage's resource bundle) declare macOS 10.14; current Xcode
+    # only accepts 12.0+. Raise every pod, and the Pods project itself, to the app's minimum.
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
+    end
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        current = config.build_settings['MACOSX_DEPLOYMENT_TARGET']
+        if current.nil? || current.to_f < 14.0
+          config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
+        end
+      end
+    end
   end
 end

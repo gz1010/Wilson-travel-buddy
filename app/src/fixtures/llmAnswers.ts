@@ -1,4 +1,6 @@
 import type { FixtureAnswer } from '../services/llm/fixtureLLM';
+// Real Bonsai-2 answers saved by `npm run eval`; used in place of the hand-written ones below.
+import recorded from './recorded.json';
 
 // Recorded model answers for the dev app when no llama-server is running.
 // These are real Bonsai-2 4B outputs (14 Nov 2026, `npm run test:live` on
@@ -15,9 +17,9 @@ const REASONS: Record<string, string> = {
   'palacio-lebrija': 'You can explore this museum\'s architecture, but be aware it closes at 18:00.',
 };
 
-export const llmAnswers: Record<string, FixtureAnswer> = {
-  // The spec sentence. The model counted Tuesday as day 2; the weekday field
-  // lets code put it on day 3, as the real app does.
+// The spec sentence. The model counted Tuesday as day 2; the weekday field
+// lets code put it on day 3, as the real app does.
+const handWritten: Record<string, FixtureAnswer> = {
   'trip.extract': JSON.stringify({
     days: 3,
     base_area: 'near the old town',
@@ -41,3 +43,8 @@ export const llmAnswers: Record<string, FixtureAnswer> = {
   'translate.es-en': "It's five minutes away, walking straight down this street.",
   'translate*': '(translation)',
 };
+
+// Recorded answers win for fixed-text requests. Recommendations stay hand-written: their
+// allowed place IDs change with the clock, so a recorded pick could name a closed place.
+const replayable = Object.entries(recorded as Record<string, string>).filter(([tag]) => tag !== 'recommend' && tag !== 'trip.revise');
+export const llmAnswers: Record<string, FixtureAnswer> = { ...handWritten, ...Object.fromEntries(replayable) };

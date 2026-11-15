@@ -254,13 +254,15 @@ export interface LLMClient {
 export interface Heard {
   text: string;
   language?: Lang;
+  /** Date.now() when the person stopped speaking, if the helper reported it. */
+  endedAt?: number;
 }
 
 export type Side = 'traveler' | 'local';
 
 export type TurnEvent =
   | { type: 'partial'; text: string; speaker?: number }
-  | { type: 'final'; text: string; language?: Lang; speaker?: number }
+  | { type: 'final'; text: string; language?: Lang; speaker?: number; turn?: string }
   | { type: 'level'; value: number };
 
 export interface AudioInfo {
@@ -278,11 +280,18 @@ export interface AudioClient {
   listen(onPartial: (text: string) => void, language?: Lang): Promise<Heard>;
   /** Ends the current listen early; the pending listen resolves with what was heard. */
   stopListening(): void;
-  /** Speaks and resolves when finished. */
-  speak(text: string, language: Lang): Promise<void>;
+  /** Speaks and resolves when finished. onStart fires when its first audio is ready. */
+  speak(text: string, language: Lang, onStart?: () => void): Promise<void>;
   stopSpeaking(): void;
-  /** Translator mode: continuous listening with speaker labels. Returns stop(). */
-  conversation(languages: Lang[], onEvent: (e: TurnEvent) => void): () => void;
+  /**
+   * Translator mode: listening with speaker labels. Returns stop(). With pushToTalk, nothing is
+   * recorded except between turnStart() and turnEnd() (one button per person); Argmax still labels
+   * the speaker of every sentence.
+   */
+  conversation(languages: Lang[], onEvent: (e: TurnEvent) => void, options?: { pushToTalk?: boolean }): () => void;
+  /** Push-to-talk: a button was pressed. turn is echoed on its final; language is the button's. */
+  turnStart(turn: string, language?: Lang): void;
+  turnEnd(turn: string): void;
   /** Ignore the microphone while our own voice is playing. */
   setMuted(muted: boolean): void;
 }
