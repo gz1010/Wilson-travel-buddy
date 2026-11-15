@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { bearingDegrees, formatDistance, walkingMinutes } from '../../core/geo';
 import type { Place } from '../../core/types';
 import { MapView, type MapPin } from '../../map/MapView';
+import { directions } from '../dusk/format';
 import { Glass, GlassButton, OfflineChip } from '../dusk/Glass';
 import { ArrowIcon, SearchIcon } from '../dusk/Icons';
 import { PhotoFade, PlacePhoto } from '../dusk/Photos';
@@ -18,10 +18,6 @@ const SEARCH_HEIGHT = 46;
 const CARD_BOTTOM = 104;
 const HEADER_HEIGHT = 92;
 const NAME_SIZE = 44;
-
-/** Compass words for the eight points, as the card reads them ("350 m north"). */
-const COMPASS_WORDS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-const compassWord = (bearing: number) => COMPASS_WORDS[Math.round(bearing / 45) % 8];
 
 export function MapScreen({ b, nav }: ScreenProps) {
   const { width } = useWindowDimensions();
@@ -155,15 +151,12 @@ export function MapScreen({ b, nav }: ScreenProps) {
 
 /** Arrow to the place, distance with a compass word, and walking time. */
 function PlaceDirections({ from, place, meters }: { from: Place['point']; place: Place; meters: number }) {
-  const bearing = bearingDegrees(from, place.point);
-  const here = meters < 20;
-  const dir = compassWord(bearing);
-  const walk = walkingMinutes(meters);
+  const { here, bearing, distance, word: dir, walk } = directions(from, place.point, meters);
   return (
-    <View style={styles.row} accessible accessibilityLabel={here ? 'You are here' : `${formatDistance(meters)} ${dir}, ${walk} minute walk`}>
+    <View style={styles.row} accessible accessibilityLabel={here ? 'You are here' : `${distance} ${dir}, ${walk} minute walk`}>
       {!here && <ArrowIcon size={30} bearing={bearing} />}
       <Text>
-        <Text style={[font('300'), styles.big]}>{here ? 'Here' : formatDistance(meters)}</Text>
+        <Text style={[font('300'), styles.big]}>{here ? 'Here' : distance}</Text>
         {!here && <Text style={[font('500'), styles.small]}>{` ${dir}`}</Text>}
       </Text>
       {!here && (

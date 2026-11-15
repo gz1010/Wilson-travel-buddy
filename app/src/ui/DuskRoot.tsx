@@ -36,7 +36,14 @@ export function DuskRoot({ index }: { index: PackIndex }) {
     return (
       <View style={{ flex: 1, backgroundColor: dusk.color.ground }}>
         <StatusBar barStyle="light-content" />
-        <WelcomeScreen city={index.destination.name} steps={steps} status={status} ready={!!runtime} onStart={() => setStarted(true)} />
+        <WelcomeScreen
+          city={index.destination.name}
+          steps={steps}
+          status={status}
+          models={runtime ? [runtime.llm.name, ...runtime.audio.info.models] : undefined}
+          ready={!!runtime}
+          onStart={() => setStarted(true)}
+        />
       </View>
     );
   }
@@ -51,15 +58,12 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
   const [placeId, setPlaceId] = useState<string>();
   const [decided, setDecided] = useState(false);
 
-  // First screen: the plan if there is no saved trip yet, otherwise Now.
+  // First screen, once the saved trip has been read: the plan if there is none, otherwise Now.
   useEffect(() => {
-    if (decided) return;
-    const t = setTimeout(() => {
-      setScreen(b.trip ? 'now' : 'setup');
-      setDecided(true);
-    }, 150);
-    return () => clearTimeout(t);
-  }, [b.trip, decided]);
+    if (decided || !b.tripLoaded) return;
+    setScreen(b.trip ? 'now' : 'setup');
+    setDecided(true);
+  }, [b.trip, b.tripLoaded, decided]);
 
   // "Translate for me" by voice opens Talk.
   useEffect(() => {

@@ -13,6 +13,8 @@ export interface WelcomeProps {
   steps: { label: string; state: 'ready' | 'loading' | 'off' }[];
   /** The latest status line from connecting to the helpers. */
   status: string;
+  /** The on-device model names once connected (Bonsai-2 and the Argmax models), shown once ready. */
+  models?: string[];
   ready: boolean;
   onStart: () => void;
 }

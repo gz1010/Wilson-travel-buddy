@@ -10,6 +10,8 @@ export const dusk = {
     textSoft: '#E4DCD2',
     pending: '#6E6A70',
     you: '#8FB8FF',
+    /** The cool white of distance and direction lines (AntPlace). */
+    direction: '#DCE6F5',
     white: '#FFFFFF',
   },
   map: {

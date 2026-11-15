@@ -1,13 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { bearingDegrees, compassPoint, formatDistance, walkingMinutes } from '../../core/geo';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { formatHHMM, openState } from '../../core/time';
-import type { Place, PlaceCategory } from '../../core/types';
-import { Glass, GlassButton, onGlass } from '../dusk/Glass';
+import type { Place } from '../../core/types';
+import { CATEGORY_LABEL, directions } from '../dusk/format';
+import { Glass, GlassButton, GlassIconButton, OfflineChip, onGlass } from '../dusk/Glass';
 import { CloseIcon, MapIcon, WaveIcon } from '../dusk/Icons';
 import { MicOrb } from '../dusk/Nav';
 import { PhotoFade, PlacePhoto } from '../dusk/Photos';
-import { dusk, font } from '../dusk/tokens';
+import { dusk, font, ground } from '../dusk/tokens';
 import type { ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
 
@@ -21,35 +21,8 @@ const CONTENT_TOP = 366;
 const BOTTOM = 34;
 const BTN = dusk.size.button; // 54
 const CLOSE = 42;
-const ADDED_MS = 1600;
-
-const COMPASS_WORD: Record<string, string> = {
-  N: 'north',
-  NE: 'northeast',
-  E: 'east',
-  SE: 'southeast',
-  S: 'south',
-  SW: 'southwest',
-  W: 'west',
-  NW: 'northwest',
-};
-
-const CATEGORY_LABEL: Record<PlaceCategory, string> = {
-  landmark: 'Landmark',
-  museum: 'Museum',
-  church: 'Church',
-  park: 'Park',
-  viewpoint: 'Viewpoint',
-  market: 'Market',
-  restaurant: 'Restaurant',
-  'tapas-bar': 'Tapas bar',
-  cafe: 'Café',
-  bar: 'Bar',
-  flamenco: 'Flamenco',
-  shop: 'Shop',
-  neighborhood: 'Neighbourhood',
-  hotel: 'Hotel',
-};
+/** About the Offline chip's width, so the pill never runs under it. */
+const OFFLINE_W = 80;
 
 const norm = (s: string) =>
   s
@@ -87,11 +60,6 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
 
   // The chat length when the user asked from this screen: anything from there on is about this place.
   const [askedFrom, setAskedFrom] = useState<number>();
-  const [added, setAdded] = useState(false);
-  const addedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => {
-    if (addedTimer.current) clearTimeout(addedTimer.current);
-  }, []);
 
   if (!place) return <View style={styles.root} />;
 
@@ -103,8 +71,8 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
   const pill = rank >= 0 ? `Suggested for ${formatHHMM(clock.minute)} · #${rank + 1}` : CATEGORY_LABEL[place.category] ?? place.category;
 
   // "350 m north · 4 min walk · outdoor · open until 20:00"
-  const meters = b.metersTo(place.point);
-  const compass = compassPoint(bearingDegrees(location, place.point));
+  const dir = directions(location, place.point, b.metersTo(place.point));
+  const inDay = !!b.trip?.stops.some(s => s.placeId === place.id);
   const open = openState(place.hours, clock);
   const openText = open.open
     ? open.closesAt
@@ -116,8 +84,8 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
       ? `closed · opens ${open.opensAt}`
       : 'closed';
   const distanceLine = [
-    meters < 30 ? 'You are here' : `${formatDistance(meters)} ${COMPASS_WORD[compass] ?? compass}`,
-    `${walkingMinutes(meters)} min walk`,
+    dir.here ? 'You are here' : `${dir.distance} ${dir.word}`,
+    `${dir.walk} min walk`,
     place.indoor ? 'indoor' : 'outdoor',
     openText,
   ].join(' · ');
@@ -141,12 +109,6 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
     else if (!b.busy) b.send(`Tell me about ${place.name}`);
   };
 
-  const addToDay = async () => {
-    await b.addToTrip(place.id);
-    setAdded(true);
-    if (addedTimer.current) clearTimeout(addedTimer.current);
-    addedTimer.current = setTimeout(() => setAdded(false), ADDED_MS);
-  };
 
   const showMap = () => {
     b.setFocusId(place.id);
@@ -227,28 +189,31 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
       </ScrollView>
 
       {/* Top row: what this place is to you, and the close orb back to Now. */}
-      <Glass kind="clear" radius={999} style={[styles.pill, { left: 18 * sx, maxWidth: width - 18 * sx * 2 - CLOSE - 12 }]}>
+      <Glass kind="clear" radius={999} style={[styles.pill, { left: 18 * sx, maxWidth: width - 18 * sx * 2 - CLOSE - OFFLINE_W - 16 }]}>
         <Text style={[onGlass, font('700'), { fontSize: 12 }]} numberOfLines={1}>
           {pill}
         </Text>
       </Glass>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => nav.go('now')} hitSlop={6} style={[styles.close, { right: 18 * sx }]}>
-        <Glass kind="orb" radius={CLOSE / 2} style={{ width: CLOSE, height: CLOSE, alignItems: 'center', justifyContent: 'center' }}>
-          <CloseIcon size={14} />
-        </Glass>
-      </Pressable>
+      <OfflineChip style={[styles.offline, { right: 18 * sx + CLOSE + 8 }]} />
+      <GlassIconButton accessibilityLabel="Close" onPress={() => nav.go('now')} size={CLOSE} style={[styles.close, { right: 18 * sx }]}>
+        <CloseIcon size={14} />
+      </GlassIconButton>
 
       {/* Bottom row over a fade so the card scrolls away under it. */}
       <View style={styles.bottomFade} pointerEvents="none">
         <PhotoFade stops={[[0, 0], [0.45, 0.85], [1, 1]]} />
       </View>
       <View style={[styles.actions, { left: 22 * sx, right: 22 * sx }]}>
-        <GlassButton label={added ? 'Added' : 'Add to day'} accessibilityLabel={added ? `${place.name} added to your day` : `Add ${place.name} to your day`} onPress={addToDay} style={{ flex: 1 }} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Show on map" onPress={showMap}>
-          <Glass kind="clear" radius={BTN / 2} style={{ width: BTN, height: BTN, alignItems: 'center', justifyContent: 'center' }}>
-            <MapIcon size={20} />
-          </Glass>
-        </Pressable>
+        <GlassButton
+          label={inDay ? 'In your day' : 'Add to day'}
+          disabled={inDay}
+          accessibilityLabel={inDay ? `${place.name} is in your day` : `Add ${place.name} to your day`}
+          onPress={() => b.addToTrip(place.id)}
+          style={{ flex: 1 }}
+        />
+        <GlassIconButton accessibilityLabel="Show on map" onPress={showMap} size={BTN} kind="clear">
+          <MapIcon size={20} />
+        </GlassIconButton>
         <MicOrb listening={b.listening} onPress={ask} size={BTN} />
       </View>
     </View>
@@ -263,11 +228,11 @@ const styles = StyleSheet.create({
     fontSize: 40,
     lineHeight: 42,
     letterSpacing: -1.6,
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: ground(0.5),
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 16,
   },
-  distance: { color: '#DCE6F5', fontSize: 13 },
+  distance: { color: dusk.color.direction, fontSize: 13 },
   summary: { color: dusk.color.textSoft, fontSize: 14, lineHeight: 21 },
   card: { marginTop: 28, padding: 16 },
   asked: { color: dusk.color.text2, fontSize: 13, lineHeight: 18 },
@@ -277,6 +242,8 @@ const styles = StyleSheet.create({
   label: { color: dusk.color.text2, fontSize: 11, letterSpacing: 0.66 },
   pill: { position: 'absolute', top: 61, paddingVertical: 8, paddingHorizontal: 13 },
   close: { position: 'absolute', top: 56 },
+  // The Offline chip (28 tall) centred on the 42 px close orb.
+  offline: { position: 'absolute', top: 56 + (CLOSE - 28) / 2 },
   bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: BOTTOM + BTN + 40 },
   actions: { position: 'absolute', bottom: BOTTOM, flexDirection: 'row', alignItems: 'center', gap: 10 },
 });

@@ -15,7 +15,7 @@ import {
 import { addDays, weekday, WEEKDAY_KEYS, WEEKDAY_NAMES } from '../../core/time';
 import { tripDay } from '../../core/trip';
 import type { Trip } from '../../core/types';
-import { Glass, GlassButton, onGlass } from '../dusk/Glass';
+import { Glass, GlassButton, GlassIconButton, onGlass } from '../dusk/Glass';
 import { CloseIcon } from '../dusk/Icons';
 import { MicOrb } from '../dusk/Nav';
 import { HeroPhoto, PhotoFade } from '../dusk/Photos';
@@ -176,9 +176,8 @@ export function SetupScreen({ b, nav }: ScreenProps) {
   };
   const onMic = () => (hasMic ? b.talk() : input.current?.focus());
 
-  const close = () => {
-    if (b.trip) nav.go('now');
-  };
+  // Close is always there: without a trip, Now still suggests places for today.
+  const close = () => nav.go('now');
   const confirm = () => {
     b.confirmTrip();
     nav.go('now');
@@ -197,15 +196,9 @@ export function SetupScreen({ b, nav }: ScreenProps) {
         {/* Header */}
         <View style={[styles.header, { marginHorizontal: 20 * sx }]}>
           <Text style={styles.label}>TELL ME ABOUT YOUR TRIP</Text>
-          {trip ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={styles.closeHit} hitSlop={4}>
-              <Glass kind="clear" radius={20} style={styles.close}>
-                <CloseIcon size={14} />
-              </Glass>
-            </Pressable>
-          ) : (
-            <View style={styles.closeHit} />
-          )}
+          <GlassIconButton accessibilityLabel="Close" onPress={close} size={40} kind="clear">
+            <CloseIcon size={14} />
+          </GlassIconButton>
         </View>
 
         {/* Live transcript */}
@@ -356,11 +349,11 @@ function DayTiles({ b, trip, onDay }: { b: Buddy; trip: Trip; onDay: (date: stri
 
 function Pill({ label }: { label: string }) {
   return (
-    <View style={styles.pill}>
-      <Text style={styles.pillText} numberOfLines={1}>
+    <Glass kind="clear" radius={dusk.radius.pill} blur={false} style={styles.pill}>
+      <Text style={[onGlass, styles.pillText]} numberOfLines={1}>
         {label}
       </Text>
-    </View>
+    </Glass>
   );
 }
 
@@ -418,8 +411,6 @@ const styles = StyleSheet.create({
     letterSpacing: dusk.font.label.letterSpacing,
     color: dusk.color.text2,
   },
-  closeHit: { width: dusk.size.touch, height: dusk.size.touch, alignItems: 'center', justifyContent: 'center' },
-  close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   // Header is 44 tall from 56, so the transcript starts at 112 as in the mockup.
   transcriptArea: { flex: 1, marginTop: 12, marginBottom: 16, overflow: 'hidden' },
   transcript: {
@@ -442,15 +433,7 @@ const styles = StyleSheet.create({
   tileWhat: { ...font('500'), fontSize: 12, marginTop: 4, color: dusk.color.text },
   reply: { ...font('500'), fontSize: 13, lineHeight: 19, color: dusk.color.textSoft },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
-  pill: {
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-    borderRadius: 999,
-    backgroundColor: white(0.16),
-    borderWidth: 1,
-    borderColor: white(0.26),
-    borderTopColor: white(0.5),
-  },
+  pill: { paddingVertical: 6, paddingHorizontal: 11 },
   pillText: { ...font('700'), fontSize: 12, color: dusk.color.text },
   empty: { ...font('500'), fontSize: 13, lineHeight: 19, color: dusk.color.pending },
   bottom: { alignItems: 'center', gap: 16, marginTop: 42 },

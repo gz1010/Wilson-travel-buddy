@@ -40,7 +40,8 @@ export function NowScreen({ b, nav }: ScreenProps) {
       (rain ? ` · rain from ${rain.time.slice(11, 16)}${rain.time.slice(0, 10) !== clock.date ? ' tomorrow' : ''}` : '')
     : 'No saved forecast for this day';
 
-  const models = [b.runtime.llm.name, b.runtime.audio.info.models[0]].filter(Boolean).join(' · ');
+  // Every on-device model by name (SPEC: always visible on Now).
+  const models = [b.runtime.llm.name, ...b.runtime.audio.info.models].filter(Boolean).join(' · ');
 
   const cards = b.recs.slice(0, MAX_CARDS);
 
@@ -88,7 +89,7 @@ export function NowScreen({ b, nav }: ScreenProps) {
           {formatHHMM(clock.minute)}
         </Text>
         <Text style={[styles.weather, font('700')]}>{weather}</Text>
-        <Text style={[styles.models, font('500')]} numberOfLines={1}>
+        <Text style={[styles.models, font('500')]} numberOfLines={2}>
           {models}
         </Text>
       </View>

@@ -90,6 +90,29 @@ export function GlassButton({ label, onPress, kind = 'prominent', height = dusk.
   );
 }
 
+interface IconButtonProps {
+  onPress?: () => void;
+  accessibilityLabel: string;
+  /** The visible circle; the touch target grows to at least 44 around it. */
+  size?: number;
+  kind?: GlassKind;
+  blur?: boolean;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}
+
+/** A round glass button holding an icon (close, map...). Orb glass by default. */
+export function GlassIconButton({ onPress, accessibilityLabel, size = dusk.size.orb, kind = 'orb', blur, style, children }: IconButtonProps) {
+  const slop = Math.max(0, Math.ceil((dusk.size.touch - size) / 2));
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} hitSlop={slop} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }, style]}>
+      <Glass kind={kind} radius={size / 2} blur={blur} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        {children}
+      </Glass>
+    </Pressable>
+  );
+}
+
 interface ChipProps {
   label: string;
   selected?: boolean;

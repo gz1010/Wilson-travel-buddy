@@ -15,7 +15,7 @@ const H = dusk.layout.phoneHeight;
 
 type Step = WelcomeProps['steps'][number];
 
-export function WelcomeScreen({ city, steps, status, ready, onStart }: WelcomeProps) {
+export function WelcomeScreen({ city, steps, status, models, ready, onStart }: WelcomeProps) {
   const { width, height } = useWindowDimensions();
   const sx = width / W;
   // Shift for everything below the photo's middle: positive on taller phones, negative on shorter.
@@ -62,11 +62,16 @@ export function WelcomeScreen({ city, steps, status, ready, onStart }: WelcomePr
             ))}
           </View>
         </Glass>
-        {!ready && (
+        {/* While connecting: the latest status. Once ready: every on-device model by name. */}
+        {!ready ? (
           <Text numberOfLines={2} style={styles.status} accessibilityLiveRegion="polite">
             {status}
           </Text>
-        )}
+        ) : models && models.length > 0 ? (
+          <Text numberOfLines={2} style={styles.status} accessibilityLabel={`On this phone: ${models.join(', ')}`}>
+            {models.join(' · ')}
+          </Text>
+        ) : null}
       </View>
 
       <View style={[styles.buttonRow, { bottom: 34 }]}>

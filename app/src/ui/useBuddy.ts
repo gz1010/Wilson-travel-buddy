@@ -38,6 +38,8 @@ function labelFor(index: PackIndex, point: GeoPoint): string {
 export function useBuddy(rt: Runtime, index: PackIndex) {
   const [trip, setTripState] = useState<Trip | undefined>();
   const [tripIsNew, setTripIsNew] = useState(false);
+  /** True once the saved trip (if any) has been read from storage. */
+  const [tripLoaded, setTripLoaded] = useState(false);
   const [situation, setSituation] = useState<Situation>(() => initialSituation(index));
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [recsThinking, setRecsThinking] = useState(false);
@@ -80,7 +82,11 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
 
   // Restore the saved trip and visited places.
   useEffect(() => {
-    storage.loadTrip().then(t => t && setTripState(t)).catch(() => {});
+    storage
+      .loadTrip()
+      .then(t => t && setTripState(t))
+      .catch(() => {})
+      .finally(() => setTripLoaded(true));
     storage.loadVisited().then(v => setSituation(s => ({ ...s, visited: v }))).catch(() => {});
   }, []);
 
@@ -274,6 +280,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     runtime: rt,
     companion,
     trip,
+    tripLoaded,
     tripIsNew,
     confirmTrip: () => setTripIsNew(false),
     situation,

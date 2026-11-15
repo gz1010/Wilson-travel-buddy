@@ -22,8 +22,6 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 app/macos/Pods/
-app/ios/Pods/
-app/ios/build/
 
 # Swift
 .build/
