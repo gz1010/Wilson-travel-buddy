@@ -121,7 +121,13 @@ const prepared = {
   aerial,
   forecastFrom: forecast.hours[0]?.time ?? null,
   forecastTo: forecast.hours.at(-1)?.time ?? null,
-  steps: results.map(({ name, ok, skipped, seconds }) => ({ name, ok, ...(skipped ? { skipped } : {}), seconds })),
+  // A skipped step keeps the record of its last real run (with when it ran), so a partial run
+  // (say --skip facts,photos,forecast,tiles for the aerial photos only) doesn't erase the others.
+  steps: results.map(({ name, ok, skipped, seconds }) => {
+    const before = (previous.steps ?? []).find(s => s.name === name && !s.skipped);
+    if (skipped && before) return { ...before, at: before.at ?? previous.preparedAt ?? null };
+    return { name, ok, ...(skipped ? { skipped } : {}), seconds, ...(ok ? { at: localStamp() } : {}) };
+  }),
 };
 writeFileSync(join(packDir, 'prepared.json'), JSON.stringify(prepared, null, 1) + '\n');
 
