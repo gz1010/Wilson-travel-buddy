@@ -9,8 +9,9 @@
 //   node scripts/prepare-pack.mjs --cache /tmp/wm     # reuse Wikimedia answers (and aerial tiles, in aerial/) saved there by an earlier run
 //   node scripts/prepare-pack.mjs --itinerary trip.ics   # add the places a trip names that the pack lacks (.ics or text)
 //
-// It runs fetch-facts.mjs, build-photos.mjs, fetch-forecast.mjs, build-tiles.mjs and
-// build-aerial.mjs in that order (photos use the articles the facts step matched), reports each
+// It runs fetch-facts.mjs, deepen-facts.mjs, build-photos.mjs, fetch-forecast.mjs, build-tiles.mjs,
+// build-nearby.mjs and build-aerial.mjs in that order (more facts and photos use the articles the
+// facts step matched; the nearby index is made from the tiles), reports each
 // step, carries on past a step that fails, and then writes app/src/pack/<dest>/prepared.json,
 // counted from what is actually in the pack: { preparedAt, places, facts, wikiFacts, photos,
 // heroes, tiles, aerial, forecastFrom, forecastTo, steps } (aerial: photo tiles for the map's
@@ -62,9 +63,12 @@ if (!existsSync(join(packDir, 'places.json'))) {
 const wikimedia = cache ? ['--cache', cache] : [];
 const STEPS = [
   { name: 'facts', script: 'fetch-facts.mjs', what: 'Wikipedia facts', args: wikimedia },
+  { name: 'more-facts', script: 'deepen-facts.mjs', what: 'more Wikipedia facts per place', args: wikimedia },
   { name: 'photos', script: 'build-photos.mjs', what: 'Commons photos', args: wikimedia },
   { name: 'forecast', script: 'fetch-forecast.mjs', what: 'Open-Meteo forecast' },
   { name: 'tiles', script: 'build-tiles.mjs', what: 'OpenStreetMap tiles' },
+  // Made from the tiles: every cinema, pharmacy, cash machine… on the map, for "find X near me".
+  { name: 'nearby', script: 'build-nearby.mjs', what: 'nearby places (OpenStreetMap)', args: cache ? ['--cache', join(cache, 'osm')] : [] },
   { name: 'aerial', script: 'build-aerial.mjs', what: 'IGN aerial photos', args: cache ? ['--cache', join(cache, 'aerial')] : [] },
 ];
 
@@ -257,7 +261,7 @@ const prepared = {
   preparedAt: !itinerary && anyOk ? localStamp() : previous.preparedAt ?? null,
   places: places.length,
   facts: facts.length,
-  wikiFacts: facts.filter(f => String(f.id).startsWith('wiki-')).length,
+  wikiFacts: facts.filter(f => /^wiki(more)?-/.test(String(f.id))).length,
   photos: places.filter(p => photoExists(p.photo)).length,
   heroes: Object.values(dest.heroes ?? {}).filter(photoExists).length,
   tiles,
