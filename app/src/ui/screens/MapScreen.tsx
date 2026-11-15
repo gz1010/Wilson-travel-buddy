@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Place } from '../../core/types';
 import { MapView, type MapPin } from '../../map/MapView';
 import { directions } from '../dusk/format';
@@ -44,6 +44,16 @@ export function MapScreen({ b, nav }: ScreenProps) {
   const place: Place | undefined = (b.focusId ? b.index.place(b.focusId) : undefined) ?? (b.recs[0] ? b.index.place(b.recs[0].placeId) : undefined);
   const rec = place ? b.recs.find(r => r.placeId === place.id) : undefined;
   const inDay = !!place && !!b.trip?.stops.some(s => s.placeId === place.id);
+
+  // A Mac has no GPS and can't locate itself offline, so the person says where they are: tap the
+  // map, or search a place and choose "I'm here".
+  const trimmed = query.trim();
+  const match = useMemo(() => (trimmed ? b.index.findPlace(trimmed) : undefined), [b.index, trimmed]);
+  const hotel = b.trip?.base?.point ? { name: b.trip.base.name, point: b.trip.base.point } : undefined;
+  const imHere = (p: Place) => {
+    b.setLocation(p.point, p.name);
+    b.setFocusId(p.id);
+  };
 
   const submit = () => {
     const text = query.trim();
@@ -94,15 +104,33 @@ export function MapScreen({ b, nav }: ScreenProps) {
           />
         </Glass>
         <View pointerEvents="box-none" style={styles.underSearch}>
-          {missed ? (
-            <Glass kind="clear" radius={dusk.radius.pill} style={styles.missed}>
-              <Text numberOfLines={1} style={[font('600'), styles.missedText]} accessibilityLiveRegion="polite">
-                {`No “${missed}” in the ${b.index.destination.name} guide`}
+          <View pointerEvents="box-none" style={styles.chips}>
+            {missed ? (
+              <Glass kind="clear" radius={dusk.radius.pill} style={styles.missed}>
+                <Text numberOfLines={1} style={[font('600'), styles.missedText]} accessibilityLiveRegion="polite">
+                  {`No “${missed}” in the ${b.index.destination.name} guide`}
+                </Text>
+              </Glass>
+            ) : match ? (
+              <View style={styles.chipRow}>
+                <SmallChip label="Focus" onPress={() => b.setFocusId(match.id)} accessibilityLabel={`Show ${match.name} on the map`} />
+                <SmallChip label="I'm here" prominent onPress={() => imHere(match)} accessibilityLabel={`Set my location to ${match.name}`} />
+              </View>
+            ) : null}
+            <Glass kind="clear" radius={dusk.radius.pill} style={styles.you}>
+              <Text numberOfLines={1} style={[font('700'), styles.youText]} accessibilityLiveRegion="polite">
+                {`You: ${b.situation.locationLabel}`}
+              </Text>
+              <Text numberOfLines={1} style={[font('500'), styles.youHint]}>
+                Tap the map to move
               </Text>
             </Glass>
-          ) : (
-            <View />
-          )}
+            {hotel && (
+              <View style={styles.chipRow}>
+                <SmallChip label="At my hotel" onPress={() => b.setLocation(hotel.point, hotel.name)} accessibilityLabel={`Set my location to ${hotel.name}`} />
+              </View>
+            )}
+          </View>
           <OfflineChip />
         </View>
       </View>
@@ -119,7 +147,18 @@ export function MapScreen({ b, nav }: ScreenProps) {
               </Text>
             </View>
             <View style={styles.body}>
-              <PlaceDirections from={b.situation.location} place={place} meters={b.metersTo(place.point)} />
+              <View style={styles.directionsRow}>
+                <PlaceDirections from={b.situation.location} place={place} meters={b.metersTo(place.point)} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Set my location to ${place.name}`}
+                  onPress={() => imHere(place)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                >
+                  <Text style={[font('700'), styles.hereLink]}>I'm here</Text>
+                </Pressable>
+              </View>
               {rec && <Text style={[font('500'), styles.reason]}>{rec.reason}</Text>}
               <View style={styles.buttons}>
                 <GlassButton
@@ -150,6 +189,17 @@ export function MapScreen({ b, nav }: ScreenProps) {
   );
 }
 
+/** A small clear-glass chip button (28 tall) for the row under the search bar. */
+function SmallChip({ label, onPress, prominent, accessibilityLabel }: { label: string; onPress: () => void; prominent?: boolean; accessibilityLabel?: string }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+      <Glass kind={prominent ? 'prominent' : 'clear'} radius={dusk.radius.pill} style={styles.smallChip}>
+        <Text style={[font('700'), styles.smallChipText]}>{label}</Text>
+      </Glass>
+    </Pressable>
+  );
+}
+
 /** Arrow to the place, distance with a compass word, and walking time. */
 function PlaceDirections({ from, place, meters }: { from: Place['point']; place: Place; meters: number }) {
   const { here, bearing, distance, word: dir, walk } = directions(from, place.point, meters);
@@ -176,6 +226,15 @@ const styles = StyleSheet.create({
   search: { height: SEARCH_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 },
   input: { flex: 1, height: SEARCH_HEIGHT, fontSize: 14, color: dusk.color.text, padding: 0 },
   underSearch: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  chips: { flexShrink: 1, alignItems: 'flex-start', gap: 6 },
+  chipRow: { flexDirection: 'row', gap: 6 },
+  smallChip: { height: 28, justifyContent: 'center', paddingHorizontal: 12 },
+  smallChipText: { fontSize: 12, color: dusk.color.text },
+  you: { minHeight: 28, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 5 },
+  youText: { fontSize: 12, color: dusk.color.text },
+  youHint: { fontSize: 11, color: dusk.color.text2 },
+  directionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  hereLink: { fontSize: 13, color: dusk.color.text, textDecorationLine: 'underline' },
   missed: { flexShrink: 1, height: 28, justifyContent: 'center', paddingHorizontal: 12 },
   missedText: { fontSize: 12, color: dusk.color.textSoft },
   card: { position: 'absolute', bottom: CARD_BOTTOM, shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 18 } },

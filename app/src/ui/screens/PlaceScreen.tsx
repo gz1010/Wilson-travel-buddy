@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatHHMM, openState } from '../../core/time';
-import type { Place } from '../../core/types';
+import type { Fact, Place } from '../../core/types';
 import { CATEGORY_LABEL, directions } from '../dusk/format';
-import { Glass, GlassButton, GlassIconButton, OfflineChip, onGlass } from '../dusk/Glass';
+import { Glass, GlassButton, GlassChip, GlassIconButton, OfflineChip, onGlass } from '../dusk/Glass';
 import { CloseIcon, MapIcon, WaveIcon } from '../dusk/Icons';
 import { MicOrb } from '../dusk/Nav';
 import { PhotoFade, PlacePhoto } from '../dusk/Photos';
@@ -13,8 +13,9 @@ import type { ScreenProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
 
 // AntPlace: one place. Its pack photo on top fading into the ground, the name, how far it is
-// and whether it is open, the guide card (the latest answer about it, or a fact from the pack),
-// and Add to day · Map · Ask. No tab bar here: the close orb goes back to Now.
+// and whether it is open, the guide card (the latest answer about it, then every fact the pack
+// has, or questions to ask when it has few), and Add to day · Map · Ask. No tab bar here: the
+// close orb goes back to Now.
 
 const W = dusk.layout.phoneWidth;
 const PHOTO_H = dusk.layout.placeHeroHeight; // 470
@@ -38,6 +39,22 @@ function mentions(text: string, place: Place): boolean {
 }
 
 /** The latest question and the buddy line that answers it. */
+/** Questions to offer when the guide has little to say about a place. */
+const STARTER_QUESTIONS = ["What's special here?", 'When is it quietest?', 'Is it worth it in the rain?'];
+
+/** "Wikipedia · CC BY-SA 4.0" for a fact with a source or licence; undefined for hand-written ones. */
+function attribution(f: Fact): string | undefined {
+  // Read defensively: older packs have neither field.
+  const { source, license } = f as Fact & { source?: unknown; license?: unknown };
+  let from: string | undefined;
+  if (typeof source === 'string' && source) {
+    const host = /^https?:\/\/([^/]+)/.exec(source)?.[1] ?? '';
+    from = /wikipedia\.org$/.test(host) ? 'Wikipedia' : host || source;
+  }
+  const parts = [from, typeof license === 'string' && license ? license : undefined].filter(Boolean);
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
 function lastExchange(chat: ChatLine[]): { index: number; question: ChatLine; answer?: ChatLine } | undefined {
   for (let i = chat.length - 1; i >= 0; i--) {
     if (chat[i].who === 'you') {
@@ -96,7 +113,7 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
   const askedHere = askedFrom !== undefined && ex !== undefined && ex.index >= askedFrom;
   const aboutPlace = ex !== undefined && (askedHere || mentions(ex.question.text, place) || (!!ex.answer && mentions(ex.answer.text, place)));
   const listeningHere = askedFrom !== undefined && b.listening && !askedHere;
-  const fact = b.index.facts(place.id)[0];
+  const facts = b.index.facts(place.id);
 
   const answerText = (a?: ChatLine) => (a ? a.text || (a.pending ? '…' : '') : b.busy ? '…' : '');
 
@@ -123,19 +140,23 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
     </View>
   );
 
-  let card: React.ReactNode;
+  const askAbout = (q: string) => {
+    if (b.busy) return;
+    setAskedFrom(b.chat.length);
+    b.send(`${q} (about ${place.name})`);
+  };
+
+  // Top of the card: the question asked about this place and its streamed answer.
+  let exchange: React.ReactNode = null;
   if (listeningHere) {
-    card = (
-      <>
-        <Text style={[styles.asked, font('500')]}>
-          You asked: <Text style={[styles.askedQ, font('600')]}>{b.partial ? `“${b.partial}”` : 'Listening…'}</Text>
-        </Text>
-        {label(false)}
-      </>
+    exchange = (
+      <Text style={[styles.asked, font('500')]}>
+        You asked: <Text style={[styles.askedQ, font('600')]}>{b.partial ? `“${b.partial}”` : 'Listening…'}</Text>
+      </Text>
     );
   } else if (ex && aboutPlace) {
     const text = answerText(ex.answer);
-    card = (
+    exchange = (
       <>
         <Text style={[styles.asked, font('500')]}>
           You asked: <Text style={[styles.askedQ, font('600')]}>{`“${ex.question.text}”`}</Text>
@@ -145,29 +166,46 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
             {text}
           </Text>
         )}
-        {label(b.speaking)}
-      </>
-    );
-  } else if (fact) {
-    card = (
-      <>
-        <Text style={[styles.askedQ, font('600'), { fontSize: 13 }]}>{fact.title}</Text>
-        <Text style={[styles.answer, font('500')]}>{fact.body}</Text>
-        {label(false)}
-      </>
-    );
-  } else {
-    card = (
-      <>
-        <Text style={[styles.asked, font('500')]}>{`Ask your buddy about ${place.name}: tap the mic.`}</Text>
-        {label(false)}
+        {b.speaking && (
+          <View style={styles.labelRow}>
+            <WaveIcon size={14} />
+            <Text style={[styles.label, font('700')]}>SPEAKING</Text>
+          </View>
+        )}
       </>
     );
   }
 
+  const card = (
+    <>
+      {exchange}
+      {exchange && <View style={styles.rule} />}
+      {label(false)}
+      {facts.map(f => {
+        const credit = attribution(f);
+        return (
+          <View key={f.id} style={styles.fact}>
+            <Text style={[styles.factTitle, font('700')]}>{f.title}</Text>
+            <Text style={[styles.factBody, font('500')]}>{f.body}</Text>
+            {credit && <Text style={[styles.credit, font('500')]}>{credit}</Text>}
+          </View>
+        );
+      })}
+      {facts.length === 0 && <Text style={[styles.asked, font('500')]}>{`The guide has no notes on ${place.name} yet. Ask about it:`}</Text>}
+      {facts.length < 2 && (
+        <View style={styles.questions}>
+          {STARTER_QUESTIONS.map(q => (
+            <GlassChip key={q} label={q} height={34} onPress={() => askAbout(q)} />
+          ))}
+        </View>
+      )}
+    </>
+  );
+
   return (
     <View style={styles.root}>
-      <ScrollView style={StyleSheet.absoluteFill} contentContainerStyle={{ paddingTop: CONTENT_TOP, paddingBottom: BOTTOM + BTN + 28 }} showsVerticalScrollIndicator={false}>
+      {/* Scrolls in the space above the bottom buttons, so nothing hides behind them. */}
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Top 470: the pack photo, fading into the ground (mockup gradient). */}
         <View style={styles.photo} pointerEvents="none">
           <PlacePhoto place={place} style={StyleSheet.absoluteFill} />
@@ -183,7 +221,7 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
         </View>
 
         <Glass kind="clear" radius={26} style={[styles.card, { marginHorizontal: 14 * sx }]}>
-          <View accessibilityLabel="Guide answer" style={{ gap: 8 }}>
+          <View accessibilityLabel={`From your ${b.index.destination.name} guide`} style={{ gap: 10 }}>
             {card}
           </View>
         </Glass>
@@ -223,6 +261,8 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: dusk.color.ground },
+  scroll: { position: 'absolute', left: 0, right: 0, top: 0, bottom: BOTTOM + BTN + 10 },
+  scrollContent: { flexGrow: 1, paddingTop: CONTENT_TOP, paddingBottom: 24 },
   photo: { position: 'absolute', left: 0, right: 0, top: 0, height: PHOTO_H },
   title: {
     color: dusk.color.text,
@@ -240,11 +280,17 @@ const styles = StyleSheet.create({
   askedQ: { color: dusk.color.text },
   answer: { color: dusk.color.text, fontSize: 15, lineHeight: 22 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: dusk.color.text2, opacity: 0.4, marginVertical: 2 },
+  fact: { gap: 4 },
+  factTitle: { color: dusk.color.text, fontSize: 13, lineHeight: 18 },
+  factBody: { color: dusk.color.text, fontSize: 14, lineHeight: 20 },
+  credit: { color: dusk.color.text2, fontSize: 11, lineHeight: 14 },
+  questions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   label: { color: dusk.color.text2, fontSize: 11, letterSpacing: 0.66 },
   pill: { position: 'absolute', top: 61, paddingVertical: 8, paddingHorizontal: 13 },
   close: { position: 'absolute', top: 56 },
   // The Offline chip (28 tall) centred on the 42 px close orb.
   offline: { position: 'absolute', top: 56 + (CLOSE - 28) / 2 },
-  bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: BOTTOM + BTN + 40 },
+  bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: BOTTOM + BTN + 24 },
   actions: { position: 'absolute', bottom: BOTTOM, flexDirection: 'row', alignItems: 'center', gap: 10 },
 });
