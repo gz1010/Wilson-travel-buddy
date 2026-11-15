@@ -134,6 +134,10 @@ export interface Fact {
   title: string;
   body: string;
   tags: Interest[];
+  /** Where the text came from, e.g. a Wikipedia article URL (scripts/fetch-facts.mjs). */
+  source?: string;
+  /** The text's licence, e.g. "CC BY-SA 4.0". Hand-written facts have none. */
+  license?: string;
 }
 
 export interface Phrase {
@@ -249,6 +253,8 @@ export interface Recommendation {
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /** JPEG images for Bonsai-2's vision projector: base64, or full "data:image/jpeg;base64,…" URIs. */
+  images?: string[];
 }
 
 export interface ChatRequest {
@@ -293,6 +299,8 @@ export interface AudioInfo {
   models: string[];
   /** True when speakers are labelled live (Argmax Pro). */
   liveSpeakers: boolean;
+  /** True when the helper can use the camera (the Look screen). */
+  camera?: boolean;
 }
 
 export interface AudioClient {
@@ -315,6 +323,13 @@ export interface AudioClient {
   turnEnd(turn: string): void;
   /** Ignore the microphone while our own voice is playing. */
   setMuted(muted: boolean): void;
+  /**
+   * Starts the camera preview: onFrame gets small base64 JPEG frames (no "data:" prefix).
+   * onError says why there is no camera (none, access refused, no helper). Returns stop().
+   */
+  startCamera(onFrame: (jpeg: string) => void, onError?: (message: string) => void): () => void;
+  /** One sharper still from the running camera, as base64 JPEG; undefined if there is none. */
+  snap(): Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------

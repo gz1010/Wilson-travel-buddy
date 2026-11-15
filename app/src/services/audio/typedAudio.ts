@@ -34,6 +34,15 @@ export class TypedAudio implements AudioClient {
 
   setMuted() {}
 
+  startCamera(_onFrame: (jpeg: string) => void, onError?: (message: string) => void): () => void {
+    onError?.('No camera without the audio helper');
+    return () => {};
+  }
+
+  async snap(): Promise<string | undefined> {
+    return undefined;
+  }
+
   /** Replays the script word by word, as the real helper would stream it. */
   conversation(_languages: Lang[], onEvent: (e: TurnEvent) => void): () => void {
     let stopped = false;

@@ -1,4 +1,4 @@
-import type { ChatRequest, JSONSchema, LLMClient } from '../../core/types';
+import type { ChatMessage, ChatRequest, JSONSchema, LLMClient } from '../../core/types';
 import { SSEParser } from './sse';
 
 /**
@@ -76,11 +76,26 @@ export class LlamaClient implements LLMClient {
   }
 }
 
+/**
+ * A message as llama-server takes it. With images, the content becomes OpenAI-style parts, text
+ * first, then one image_url part per JPEG as a data URI (Bonsai-2's vision projector reads them).
+ */
+function toWire(m: ChatMessage): Record<string, unknown> {
+  if (!m.images?.length) return { role: m.role, content: m.content };
+  return {
+    role: m.role,
+    content: [
+      { type: 'text', text: m.content },
+      ...m.images.map(img => ({ type: 'image_url', image_url: { url: img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}` } })),
+    ],
+  };
+}
+
 /** The request body. Exported for tests. Thinking is always off: it multiplies latency. */
 export function buildBody(req: ChatRequest, schema?: JSONSchema): Record<string, unknown> {
   return {
     model: 'bonsai',
-    messages: req.messages,
+    messages: req.messages.map(toWire),
     stream: true,
     max_tokens: req.maxTokens ?? 300,
     // Bonsai-2 small-model profile with thinking off (PrismML's SMALL-MODELS.md).

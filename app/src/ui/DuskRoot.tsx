@@ -5,14 +5,18 @@ import { connectRuntime, type Runtime } from '../services/runtime';
 import { TabBar, type Nav, type ScreenName } from './dusk/Nav';
 import { ScreenSizeProvider } from './dusk/Screen';
 import { dusk } from './dusk/tokens';
+import { LookScreen } from './screens/LookScreen';
 import { MapScreen } from './screens/MapScreen';
 import { NowScreen } from './screens/NowScreen';
 import { PlaceScreen } from './screens/PlaceScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { TalkScreen } from './screens/TalkScreen';
-import type { WelcomeProps } from './screens/types';
+import type { PreparedPack, WelcomeProps } from './screens/types';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { useBuddy } from './useBuddy';
+
+// What scripts/prepare-pack.mjs downloaded for the pack while online (Welcome shows it).
+const prepared = require('../pack/seville/prepared.json') as PreparedPack;
 
 /**
  * The Dusk · liquid glass app (iOS). Welcome connects to Bonsai-2 and the Argmax helper while it
@@ -44,6 +48,7 @@ export function DuskRoot({ index }: { index: PackIndex }) {
           models={runtime ? [runtime.llm.name, ...runtime.audio.info.models] : undefined}
           ready={!!runtime}
           onStart={() => setStarted(true)}
+          prepared={prepared}
         />
       </ScreenSizeProvider>
     );
@@ -51,7 +56,7 @@ export function DuskRoot({ index }: { index: PackIndex }) {
   return <DuskApp runtime={runtime} index={index} />;
 }
 
-const TAB_BAR_SCREENS: ScreenName[] = ['now', 'map'];
+const TAB_BAR_SCREENS: ScreenName[] = ['now', 'map', 'talk', 'look'];
 
 function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
   const b = useBuddy(runtime, index);
@@ -66,7 +71,7 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
     setDecided(true);
   }, [b.trip, b.tripLoaded, decided]);
 
-  // "Translate for me" by voice opens Talk.
+  // "Translate for me" by voice opens Translate (the talk screen).
   useEffect(() => {
     if (b.mode === 'translator') {
       setScreen('talk');
@@ -96,7 +101,9 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
       {screen === 'place' && <PlaceScreen b={b} nav={nav} />}
       {screen === 'map' && <MapScreen b={b} nav={nav} />}
       {screen === 'talk' && <TalkScreen b={b} nav={nav} />}
-      {TAB_BAR_SCREENS.includes(screen) && <TabBar nav={nav} listening={b.listening} onMic={b.talk} />}
+      {screen === 'look' && <LookScreen b={b} nav={nav} />}
+      {/* No mic orb on Translate: the conversation already has the microphone. */}
+      {TAB_BAR_SCREENS.includes(screen) && <TabBar nav={nav} listening={b.listening} onMic={b.talk} showMic={screen !== 'talk'} />}
     </ScreenSizeProvider>
   );
 }

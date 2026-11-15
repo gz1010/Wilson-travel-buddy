@@ -31,6 +31,18 @@ pids=()
 cleanup() { for p in "${pids[@]:-}"; do kill "$p" 2>/dev/null || true; done; }
 trap cleanup EXIT INT TERM
 
+# The Look screen needs Bonsai-2's vision projector (*mmproj*.gguf) next to the model. PrismML's
+# start_llama_server.sh loads any it finds there and logs "Vision: <file>".
+MODEL_DIR="$DEMO/models/bonsai2-gguf/$BONSAI_MODEL"
+MMPROJ="$(ls "$MODEL_DIR"/*mmproj*.gguf 2>/dev/null | head -n 1 || true)"
+if [ -n "$MMPROJ" ]; then
+  echo "Vision projector: $(basename "$MMPROJ") (the Look screen can see)"
+else
+  echo "WARNING: no vision projector (*mmproj*.gguf) in $MODEL_DIR."
+  echo "         The Look screen can't describe photos. While online, rerun the demo's download:"
+  echo "         ( cd \"$DEMO\" && BONSAI_FAMILY=bonsai2 BONSAI_MODEL=$BONSAI_MODEL ./scripts/download_models.sh )"
+fi
+
 if curl -s --max-time 1 http://127.0.0.1:8080/health >/dev/null; then
   echo "llama-server already running on :8080"
 else
@@ -65,6 +77,9 @@ if [ "$llm_ok" = 1 ]; then
   curl -s --max-time 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' \
     -d '{"messages":[{"role":"user","content":"Hi"}],"max_tokens":4,"chat_template_kwargs":{"enable_thinking":false}}' >/dev/null || true
   echo "Bonsai-2 is warm."
+  if [ -n "$MMPROJ" ] && [ -n "${LLAMA_PID:-}" ] && ! grep -q "Vision" "$LOGS/llama-server.log"; then
+    echo "WARNING: llama-server did not report loading the vision projector; check $LOGS/llama-server.log"
+  fi
 else
   echo "Bonsai-2 is not available; the app will use recorded answers."
 fi

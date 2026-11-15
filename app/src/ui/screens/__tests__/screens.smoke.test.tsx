@@ -17,6 +17,7 @@ import { NowScreen } from '../NowScreen';
 import { PlaceScreen } from '../PlaceScreen';
 import { MapScreen } from '../MapScreen';
 import { SetupScreen } from '../SetupScreen';
+import { LookScreen } from '../LookScreen';
 import { TalkScreen } from '../TalkScreen';
 import { WelcomeScreen } from '../WelcomeScreen';
 
@@ -40,7 +41,7 @@ const runtime: Runtime = {
   live: { llm: false, audio: false },
 };
 
-const screens = { now: NowScreen, place: PlaceScreen, map: MapScreen, setup: SetupScreen, talk: TalkScreen };
+const screens = { now: NowScreen, place: PlaceScreen, map: MapScreen, setup: SetupScreen, talk: TalkScreen, look: LookScreen };
 
 let latest: Buddy | undefined;
 function Harness({ screen }: { screen: keyof typeof screens }) {
@@ -63,6 +64,11 @@ describe('Dusk screens render', () => {
     expect(JSON.stringify(r!.toJSON())).toContain('Welcome');
     act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" models={['Bonsai-2', 'WhisperKit']} ready onStart={() => {}} />));
     expect(JSON.stringify(r!.toJSON())).toContain('Bonsai-2 · WhisperKit');
+    // The prepared-pack line: how to prepare it, then what was prepared.
+    expect(JSON.stringify(r!.toJSON())).toContain('Not prepared yet');
+    const prepared = { preparedAt: '2026-11-14T22:00:00Z', places: 60, facts: 97, photos: 52 };
+    act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" ready onStart={() => {}} prepared={prepared} />));
+    expect(JSON.stringify(r!.toJSON())).toMatch(/Seville guide prepared Nov 1[45] · 60 places · 97 facts · 52 photos/);
     act(() => r!.unmount());
   });
 
@@ -85,12 +91,14 @@ describe('Dusk screens render', () => {
       await act(async () => {
         jest.advanceTimersByTime(1000);
       });
-      // Talk: tap the status pill to start the conversation.
+      // Translate (the talk screen): tap the status pill to start.
       if (screen === 'talk') {
-        const pill = r!.root.findAll(n => n.props.accessibilityLabel === 'Start the conversation' && typeof n.props.onPress === 'function')[0];
+        const pill = r!.root.findAll(n => n.props.accessibilityLabel === 'Start translating' && typeof n.props.onPress === 'function')[0];
         await act(async () => pill.props.onPress());
         expect(JSON.stringify(r!.toJSON())).toContain('Listening');
       }
+      // Look without the helper: no camera, and it says so.
+      if (screen === 'look') expect(JSON.stringify(r!.toJSON())).toContain('No camera without the audio helper');
       expect(r!.toJSON()).toBeTruthy();
       expect(latest!.chat.some(l => l.who === 'buddy' && !l.pending)).toBe(true);
       expect(latest!.trip).toBeDefined();

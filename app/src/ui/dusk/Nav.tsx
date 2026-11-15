@@ -4,7 +4,7 @@ import { Glass, onGlass } from './Glass';
 import { MicIcon } from './Icons';
 import { dusk, font, white } from './tokens';
 
-export type ScreenName = 'welcome' | 'setup' | 'now' | 'place' | 'map' | 'talk';
+export type ScreenName = 'welcome' | 'setup' | 'now' | 'place' | 'map' | 'talk' | 'look';
 
 export interface Nav {
   screen: ScreenName;
@@ -45,11 +45,13 @@ const TABS: { screen: ScreenName; label: string }[] = [
   { screen: 'now', label: 'Now' },
   { screen: 'map', label: 'Map' },
   { screen: 'setup', label: 'Plan' },
-  { screen: 'talk', label: 'Talk' },
+  // The screen is still called talk; people see Translate.
+  { screen: 'talk', label: 'Translate' },
+  { screen: 'look', label: 'Look' },
 ];
 
-/** The floating glass tab bar: Now · Map · Plan · Talk, and the mic orb. */
-export function TabBar({ nav, listening, onMic, style }: { nav: Nav; listening: boolean; onMic: () => void; style?: StyleProp<ViewStyle> }) {
+/** The floating glass tab bar: Now · Map · Plan · Translate · Look, and the mic orb. Fits 390 px. */
+export function TabBar({ nav, listening, onMic, showMic = true, style }: { nav: Nav; listening: boolean; onMic: () => void; showMic?: boolean; style?: StyleProp<ViewStyle> }) {
   return (
     <View pointerEvents="box-none" style={[{ position: 'absolute', left: 0, right: 0, bottom: 26, alignItems: 'center' }, style]}>
       <Glass kind="clear" radius={999} style={{ flexDirection: 'row', alignItems: 'center', padding: 6, gap: 2 }}>
@@ -61,12 +63,12 @@ export function TabBar({ nav, listening, onMic, style }: { nav: Nav; listening: 
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
               onPress={() => nav.go(t.screen)}
-              style={{ minHeight: dusk.size.touch, justifyContent: 'center', paddingHorizontal: on ? 16 : 14, borderRadius: 999, backgroundColor: on ? white(0.18) : 'transparent', borderTopWidth: on ? 1 : 0, borderTopColor: white(0.55) }}>
+              style={{ minHeight: dusk.size.touch, justifyContent: 'center', paddingHorizontal: on ? 12 : 10, borderRadius: 999, backgroundColor: on ? white(0.18) : 'transparent', borderTopWidth: on ? 1 : 0, borderTopColor: white(0.55) }}>
               <Text style={[on ? onGlass : { color: dusk.color.textSoft }, font(on ? '700' : '600'), { fontSize: 13 }]}>{t.label}</Text>
             </Pressable>
           );
         })}
-        <MicOrb listening={listening} onPress={onMic} />
+        {showMic && <MicOrb listening={listening} onPress={onMic} />}
       </Glass>
     </View>
   );

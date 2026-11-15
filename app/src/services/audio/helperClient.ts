@@ -18,6 +18,9 @@ export class HelperAudioClient implements AudioClient {
   private startWaiters = new Map<string, () => void>();
   private conversationHandler?: (e: TurnEvent) => void;
   private counter = 0;
+  private cameraFrame?: (jpeg: string) => void;
+  private cameraError?: (message: string) => void;
+  private snapWaiters = new Map<string, (jpeg: string | undefined) => void>();
 
   /** Connects and waits for "ready" (the helper may still be loading models). */
   connect(url = AUDIO_HELPER_URL, timeoutMs = 2000, readyTimeoutMs = 120_000): Promise<boolean> {
@@ -60,6 +63,11 @@ export class HelperAudioClient implements AudioClient {
         this.listener = undefined;
         for (const done of this.speakWaiters.values()) done();
         this.speakWaiters.clear();
+        for (const done of this.snapWaiters.values()) done(undefined);
+        this.snapWaiters.clear();
+        this.cameraError?.('Audio helper disconnected');
+        this.cameraFrame = undefined;
+        this.cameraError = undefined;
         this.conversationHandler = undefined;
         this.onDisconnect?.();
       };
@@ -79,7 +87,7 @@ export class HelperAudioClient implements AudioClient {
         }
         if (m.type === 'ready') {
           clearTimeout(readyTimer);
-          this.info = { hasMicrophone: true, models: m.models, liveSpeakers: m.liveSpeakers };
+          this.info = { hasMicrophone: true, models: m.models, liveSpeakers: m.liveSpeakers, camera: m.camera === true };
           finish(true);
         }
       };
@@ -122,6 +130,23 @@ export class HelperAudioClient implements AudioClient {
           );
         }
         break;
+      case 'camera.frame':
+        this.cameraFrame?.(m.jpeg);
+        return; // frames are frequent and large: nobody else needs them
+      case 'camera.snapped': {
+        const done = this.snapWaiters.get(m.id);
+        this.snapWaiters.delete(m.id);
+        done?.(m.jpeg);
+        return;
+      }
+      case 'camera.error':
+        if (m.id) {
+          const done = this.snapWaiters.get(m.id);
+          this.snapWaiters.delete(m.id);
+          done?.(undefined);
+        }
+        this.cameraError?.(m.message);
+        return;
       case 'error':
         this.onStatus?.(`Audio helper: ${m.message}`);
         break;
@@ -188,5 +213,41 @@ export class HelperAudioClient implements AudioClient {
 
   setMuted(muted: boolean) {
     this.send({ type: 'mute', muted });
+  }
+
+  startCamera(onFrame: (jpeg: string) => void, onError?: (message: string) => void): () => void {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      onError?.('Audio helper not connected');
+      return () => {};
+    }
+    if (!this.info.camera) {
+      onError?.('This buddy-audio build has no camera yet: rebuild it (audio-helper/README.md)');
+      return () => {};
+    }
+    this.cameraFrame = onFrame;
+    this.cameraError = onError;
+    this.send({ type: 'camera.start' });
+    return () => {
+      if (this.cameraFrame !== onFrame) return; // a newer preview took over
+      this.cameraFrame = undefined;
+      this.cameraError = undefined;
+      this.send({ type: 'camera.stop' });
+    };
+  }
+
+  snap(timeoutMs = 5000): Promise<string | undefined> {
+    if (this.ws?.readyState !== WebSocket.OPEN || !this.info.camera) return Promise.resolve(undefined);
+    const id = `c${++this.counter}`;
+    return new Promise(resolve => {
+      const timer = setTimeout(() => {
+        this.snapWaiters.delete(id);
+        resolve(undefined);
+      }, timeoutMs);
+      this.snapWaiters.set(id, jpeg => {
+        clearTimeout(timer);
+        resolve(jpeg);
+      });
+      this.send({ type: 'camera.snap', id });
+    });
   }
 }

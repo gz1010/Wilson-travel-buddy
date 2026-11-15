@@ -41,6 +41,14 @@ Rules:
 - If the sources answer the question, answer and stop. Never add a note about what the sources lack.
 - If the sources do not answer it, reply exactly: "${NOT_IN_GUIDE}" and nothing else.`,
 
+  look: (city: string, nearby: string) =>
+    `You help a traveller in ${city} understand what their camera sees: a dish, a menu, a road sign or marking, a building, or any text.
+Rules:
+- At most 4 short sentences; it will be read aloud.
+- First say what it is. Then translate any visible text into English. Then give one practical tip.
+- If it is clearly one of these nearby places, name it exactly as written: ${nearby}.
+- Say only what you can see. If the photo is unclear, say so and suggest moving closer.`,
+
   translate: (from: string, to: string) =>
     `Translate the user's message from ${from} to ${to}. Reply with the translation only, no quotes or notes. Keep it natural and spoken.`,
 };

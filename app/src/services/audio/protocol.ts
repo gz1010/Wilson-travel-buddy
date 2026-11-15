@@ -24,7 +24,16 @@ export type AppToHelper =
   /** Drop microphone audio while the app's own voice is playing. */
   | { type: 'mute'; muted: boolean }
   | { type: 'speak'; id: string; text: string; language: Lang }
-  | { type: 'speak.stop' };
+  | { type: 'speak.stop' }
+  /**
+   * Camera (the Look screen). The helper owns the camera as it owns the microphone. camera.start
+   * begins a preview stream of camera.frame messages (~480 px wide, JPEG quality 0.5, at most
+   * 6 per second); camera.snap asks for one sharper still (~1024 px, quality 0.8), answered by
+   * camera.snapped with the same id; camera.stop ends the preview. Order follows the inbox.
+   */
+  | { type: 'camera.start' }
+  | { type: 'camera.snap'; id: string }
+  | { type: 'camera.stop' };
 
 export type HelperToApp =
   | {
@@ -34,6 +43,8 @@ export type HelperToApp =
       models: string[];
       /** True when diarization labels speakers while they talk (Pro, Sortformer). */
       liveSpeakers: boolean;
+      /** True when this helper build handles the camera.* messages. Older builds leave it out. */
+      camera?: boolean;
     }
   | { type: 'status'; message: string }
   | { type: 'level'; value: number }
@@ -45,4 +56,9 @@ export type HelperToApp =
   /** The first audio of this request is ready to play (for latency measurement). */
   | { type: 'speak.started'; id: string }
   | { type: 'speak.done'; id: string }
+  /** jpeg: base64 JPEG data, no "data:" prefix. */
+  | { type: 'camera.frame'; jpeg: string }
+  | { type: 'camera.snapped'; id: string; jpeg: string }
+  /** No camera, access refused, or a snap that failed (then with its id). */
+  | { type: 'camera.error'; message: string; id?: string }
   | { type: 'error'; message: string };
