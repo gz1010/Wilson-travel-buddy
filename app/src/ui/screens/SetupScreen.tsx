@@ -32,7 +32,8 @@ const PLACEHOLDER = "Tell me how long you're here, where you're staying and what
 const TRANSCRIPT_SIZE = dusk.font.transcript.size;
 const TRANSCRIPT_LINE = Math.round(TRANSCRIPT_SIZE * 1.32);
 const MAX_DAY_TILES = 5;
-const THIN_SPACE = '\u2009';
+// Narrow no-break space: pads a pill without letting the line break between the padding and the word.
+const THIN_SPACE = '\u202F';
 
 const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen'];
 

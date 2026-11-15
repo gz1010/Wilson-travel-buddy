@@ -49,7 +49,7 @@ export function WelcomeScreen({ city, steps, status, models, ready, onStart }: W
         </Text>
       </View>
 
-      <View style={{ position: 'absolute', left: 22 * sx, right: 22 * sx, top: 652 + dy }}>
+      <View style={{ position: 'absolute', left: 22 * sx, right: 22 * sx, top: 640 + dy }}>
         <Glass kind="clear" radius={22} style={styles.grid}>
           <View accessible accessibilityLabel={`Getting ready: ${steps.map(describe).join(', ')}`} style={styles.gridInner}>
             {steps.map(s => (
@@ -69,7 +69,9 @@ export function WelcomeScreen({ city, steps, status, models, ready, onStart }: W
           </Text>
         ) : models && models.length > 0 ? (
           <Text numberOfLines={2} style={styles.status} accessibilityLabel={`On this phone: ${models.join(', ')}`}>
-            {models.join(' · ')}
+            {/* "(Argmax)" once at the end rather than after every audio model, so the line fits. */}
+            {models.map(m => m.replace(/\s*\(Argmax\)$/, '')).join(' · ')}
+            {models.some(m => /\(Argmax\)$/.test(m)) ? ' · Argmax' : ''}
           </Text>
         ) : null}
       </View>

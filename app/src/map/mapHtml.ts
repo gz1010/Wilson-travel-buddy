@@ -102,7 +102,8 @@ ${theme === 'dusk' ? DUSK_CSS : ''}
 
   const b = CONFIG.bounds;
   const map = new maplibregl.Map({ container: 'map', style, bounds: [[b[0], b[1]], [b[2], b[3]]], maxBounds: [[b[0] - 0.005, b[1] - 0.005], [b[2] + 0.005, b[3] + 0.005]], attributionControl: { compact: true } });
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  // Dusk has its own glass search bar in that corner; zoom with the trackpad there.
+  if (CONFIG.theme !== 'dusk') map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
   if (!CONFIG.hasTiles) {
     const note = document.createElement('div');
     note.className = 'notiles';
@@ -147,7 +148,11 @@ ${theme === 'dusk' ? DUSK_CSS : ''}
         ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: state.route } }
         : { type: 'FeatureCollection', features: [] });
     }
-    if (state.flyTo) map.flyTo({ center: [state.flyTo.lon, state.flyTo.lat], zoom: Math.max(map.getZoom(), 15.5), speed: 1.4 });
+    if (state.flyTo && CONFIG.theme === 'dusk' && state.route) {
+      // Show you and the chosen place together, in the open area between the search bar and the bottom card.
+      const lons = state.route.map(p => p[0]), lats = state.route.map(p => p[1]);
+      map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: { top: 150, bottom: 380, left: 50, right: 50 }, maxZoom: 16.5, speed: 1.4 });
+    } else if (state.flyTo) map.flyTo({ center: [state.flyTo.lon, state.flyTo.lat], zoom: Math.max(map.getZoom(), 15.5), speed: 1.4 });
   };
   // The web view can start at zero size while React Native lays out; MapLibre
   // then keeps its 400x300 fallback canvas (seen in a browser test). Resize

@@ -112,7 +112,8 @@ export function describeChanges(before: Trip, after: Trip): string {
 function confirmTrip(trip: Trip): string {
   const booked = trip.stops.filter(s => s.fixed);
   const parts = [`Got it: ${trip.days} day${trip.days > 1 ? 's' : ''}`];
-  if (trip.base) parts.push(`staying near ${trip.base.name}`);
+  // The model often keeps the word "near" in the base ("near the old town"); don't say it twice.
+  if (trip.base) parts.push(`staying near ${trip.base.name.replace(/^(near|by|in|at)\s+/i, '')}`);
   if (trip.interests.length) parts.push(`into ${trip.interests.slice(0, 3).join(', ')}`);
   let s = parts.join(', ') + '.';
   if (booked.length) s += ` I'll plan around ${booked.map(b => b.title).join(' and ')}.`;
