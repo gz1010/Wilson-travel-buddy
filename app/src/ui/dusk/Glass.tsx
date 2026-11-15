@@ -103,10 +103,19 @@ interface ButtonProps {
   accessibilityLabel?: string;
 }
 
+/**
+ * VoiceOver's press (AXPress) on macOS. react-native-macos hands it only to onAccessibilityTap,
+ * which Pressable never sets, so without this no Dusk button can be pressed with VoiceOver (or by
+ * any assistive tool that presses buttons). Spread it on a Pressable next to its onPress.
+ */
+export function axPress(onPress?: () => void, disabled?: boolean): { onAccessibilityTap?: () => void } {
+  return onPress && !disabled ? { onAccessibilityTap: () => onPress() } : {};
+}
+
 /** A pill button. Primary actions use the prominent kind. */
 export function GlassButton({ label, onPress, kind = 'prominent', height = dusk.size.button, style, textStyle, disabled, accessibilityLabel }: ButtonProps) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} onPress={onPress} disabled={disabled} style={({ pressed }) => [{ opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }, style]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} onPress={onPress} {...axPress(onPress, disabled)} disabled={disabled} style={({ pressed }) => [{ opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }, style]}>
       <Glass kind={kind} radius={999} style={{ height, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
         <Text style={[onGlass, font('800'), { fontSize: 15 }, textStyle]}>{label}</Text>
       </Glass>
@@ -129,7 +138,7 @@ interface IconButtonProps {
 export function GlassIconButton({ onPress, accessibilityLabel, size = dusk.size.orb, kind = 'orb', blur, style, children }: IconButtonProps) {
   const slop = Math.max(0, Math.ceil((dusk.size.touch - size) / 2));
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} hitSlop={slop} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }, style]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} {...axPress(onPress)} hitSlop={slop} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }, style]}>
       <Glass kind={kind} radius={size / 2} blur={blur} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         {children}
       </Glass>
@@ -155,7 +164,7 @@ export function GlassChip({ label, selected, onPress, style, height = 40 }: Chip
     else Animated.timing(scale, { toValue: to, duration: dusk.motion.replan, useNativeDriver: true }).start();
   }, [selected, reduce, scale]);
   return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ selected: !!selected }} onPress={onPress} style={[{ minHeight: dusk.size.touch, justifyContent: 'center' }, style]}>
+    <Pressable accessibilityRole="radio" accessibilityState={{ selected: !!selected }} onPress={onPress} {...axPress(onPress)} style={[{ minHeight: dusk.size.touch, justifyContent: 'center' }, style]}>
       <Animated.View style={{ transform: [{ scale }] }}>
         <Glass kind={selected ? 'prominent' : 'clear'} radius={999} style={{ height, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }}>
           <Text style={[onGlass, font('700'), { fontSize: 13 }]}>{label}</Text>

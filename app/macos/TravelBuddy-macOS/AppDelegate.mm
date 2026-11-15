@@ -2,8 +2,10 @@
 
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTConvert.h>
+#import <React/RCTView.h>
 #import <React/RCTViewManager.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
+#import <objc/runtime.h>
 
 // BuddyGlassView: the glass behind the Dusk design's cards, chips and buttons.
 // On macOS 26 it is Apple's Liquid Glass (NSGlassEffectView: real refraction and edge
@@ -60,6 +62,35 @@ RCT_CUSTOM_VIEW_PROPERTY(glassStyle, NSString, NSView)
     BOOL clear = [json isKindOfClass:[NSString class]] && [json isEqualToString:@"clear"];
     [view setValue:@(clear ? 1 : 0) forKey:@"style"];
   }
+}
+@end
+
+// react-native-macos 0.81 keeps RCTView's shadowColor as an unretained CGColorRef
+// (`@property (assign) CGColorRef shadowColor`), and RCTConvert's CGColor belongs to an NSColor
+// that is released straight away. The next shadowRadius/Opacity/Offset then reads freed memory
+// in -didUpdateShadow: EXC_BAD_ACCESS in +[NSColor colorWithCGColor:] when a Dusk screen mounts
+// (seen on the Mac, 2026-11-15). Each view keeps its own retained copy of its shadow colour.
+static const void *kBuddyShadowColorKey = &kBuddyShadowColorKey;
+
+@implementation RCTView (BuddyRetainedShadowColor)
++ (void)load
+{
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    Method m = class_getInstanceMethod(self, @selector(setShadowColor:));
+    if (m == NULL) {
+      return;
+    }
+    typedef void (*SetShadowColor)(id, SEL, CGColorRef);
+    SetShadowColor original = (SetShadowColor)method_getImplementation(m);
+    method_setImplementation(m, imp_implementationWithBlock(^(RCTView *view, CGColorRef color) {
+      CGColorRef kept = color != NULL ? CGColorCreateCopy(color) : NULL;
+      // The associated object owns the copy for as long as the view points at it.
+      objc_setAssociatedObject(view, kBuddyShadowColorKey, kept != NULL ? (__bridge_transfer id)kept : nil,
+                               OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      original(view, @selector(setShadowColor:), kept);
+    }));
+  });
 }
 @end
 
