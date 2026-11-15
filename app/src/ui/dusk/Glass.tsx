@@ -1,17 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import { Blur } from './Blur';
-import { LinearGradient } from './Gradient';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { GlassBackdrop, hasLiquidGlass } from './Blur';
 import { useReduceMotion } from './motion';
-import { dusk, font, glass, white, type GlassKind } from './tokens';
+import { dusk, font, glass, type GlassKind } from './tokens';
 
-// Liquid glass, five layers back to front (see the AntGlass board):
-// 1 refraction: a native blur of what is behind
-// 2 body: a 135° white wash (an off-centre radial highlight for orbs)
-// 3 rim light: a bright 1 px line along the top edge
-// 4 chromatic edges: a faint red line on the left, blue on the right
-// 5 lift: a soft dark shadow
+// Liquid glass, after liquid-glass-react (github.com/rdev/liquid-glass-react): nearly clear, no
+// grey tint, the content behind stays readable.
+// - On macOS 26 the backdrop is Apple's own Liquid Glass (refraction and edge light built in), so
+//   only a soft shadow and, for prominent glass, a little extra light are added.
+// - Elsewhere: a light native blur, a faint body wash, a 1.5 px rim whose highlight sweeps across
+//   at 135° (transparent → bright → transparent), a 0.5 px hairline, and a soft shadow.
 // A selected or primary thing uses the "prominent" kind; it is never a colour.
 
 interface GlassProps {
@@ -23,38 +22,63 @@ interface GlassProps {
   children?: React.ReactNode;
 }
 
+/** The rim: a rounded-rect stroke with a 135° highlight sweep, like liquid-glass-react's border layers. */
+function Rim({ width, height, radius, strength }: { width: number; height: number; radius: number; strength: number }) {
+  const id = useRef(`rim${Math.random().toString(36).slice(2)}`).current;
+  if (width <= 0 || height <= 0) return null;
+  const r = Math.min(radius, height / 2, width / 2);
+  return (
+    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
+      <Defs>
+        <SvgLinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#fff" stopOpacity={0.55 * strength} />
+          <Stop offset="0.33" stopColor="#fff" stopOpacity={0.12 * strength} />
+          <Stop offset="0.66" stopColor="#fff" stopOpacity={0.4 * strength} />
+          <Stop offset="1" stopColor="#fff" stopOpacity={0.05 * strength} />
+        </SvgLinearGradient>
+      </Defs>
+      <Rect x={0.75} y={0.75} width={width - 1.5} height={height - 1.5} rx={Math.max(0, r - 0.75)} fill="none" stroke={`url(#${id})`} strokeWidth={1.5} />
+      <Rect x={0.25} y={0.25} width={width - 0.5} height={height - 0.5} rx={r} fill="none" stroke="#fff" strokeOpacity={0.22} strokeWidth={0.5} />
+    </Svg>
+  );
+}
+
 export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, style, children }: GlassProps) {
   const g = glass[kind];
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const prominent = kind === 'prominent';
+  const native = blur && hasLiquidGlass;
+  // Body light: almost nothing for clear glass; more for prominent; a top-left radial glint for orbs.
+  const body = native ? (prominent ? 0.14 : 0) : prominent ? 0.22 : 0.06;
+  // Pills pass 999: native glass needs the real radius, at most half the shorter side.
+  const r = size.width > 0 && size.height > 0 ? Math.min(radius, size.width / 2, size.height / 2) : radius;
   return (
-    <View style={[{ borderRadius: radius, shadowColor: '#000', shadowOpacity: g.shadow, shadowRadius: 16, shadowOffset: { width: 0, height: 12 } }, style]}>
+    <View
+      onLayout={e => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width !== size.width || height !== size.height) setSize({ width, height });
+      }}
+      style={[{ borderRadius: radius, shadowColor: '#000', shadowOpacity: g.shadow * 0.7, shadowRadius: 20, shadowOffset: { width: 0, height: 12 } }, style]}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
-        {blur && <Blur style={StyleSheet.absoluteFill} />}
+        {blur && <GlassBackdrop style={StyleSheet.absoluteFill} radius={r} variant={prominent ? 'regular' : 'clear'} />}
         {kind === 'orb' ? (
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
             <Defs>
               <RadialGradient id="orb" cx="32%" cy="24%" r="80%">
-                <Stop offset="0" stopColor="#fff" stopOpacity={glass.orb.stops[0]} />
-                <Stop offset="0.24" stopColor="#fff" stopOpacity={glass.orb.stops[1]} />
-                <Stop offset="0.58" stopColor="#fff" stopOpacity={glass.orb.stops[2]} />
-                <Stop offset="1" stopColor="#fff" stopOpacity={glass.orb.stops[3]} />
+                <Stop offset="0" stopColor="#fff" stopOpacity={glass.orb.stops[0] * 0.7} />
+                <Stop offset="0.24" stopColor="#fff" stopOpacity={glass.orb.stops[1] * 0.6} />
+                <Stop offset="0.58" stopColor="#fff" stopOpacity={0.02} />
+                <Stop offset="1" stopColor="#fff" stopOpacity={0.1} />
               </RadialGradient>
             </Defs>
             <Rect width="100%" height="100%" fill="url(#orb)" />
           </Svg>
-        ) : (
-          <LinearGradient
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            colors={[white((g as typeof glass.clear).from), white((g as typeof glass.clear).to)]}
-          />
-        )}
-        {/* Rim light along the top, and the chromatic left and right edges. */}
-        <View style={[styles.rimTop, { backgroundColor: white(g.highlight) }]} />
-        <View style={[styles.edgeLeft, { backgroundColor: `rgba(255,140,140,${g.red})` }]} />
-        <View style={[styles.edgeRight, { backgroundColor: `rgba(140,190,255,${g.blue})` }]} />
-        <View style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1, borderColor: white(g.border) }]} />
+        ) : body > 0 ? (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(255,255,255,${body})` }]} />
+        ) : null}
       </View>
+      {/* Apple's Liquid Glass draws its own edge light; elsewhere, draw the rim. */}
+      {!native && <Rim width={size.width} height={size.height} radius={radius} strength={prominent || kind === 'orb' ? 1.4 : 1} />}
       {children}
     </View>
   );
@@ -151,8 +175,3 @@ export function OfflineChip({ style }: { style?: StyleProp<ViewStyle> }) {
   );
 }
 
-const styles = StyleSheet.create({
-  rimTop: { position: 'absolute', left: 8, right: 8, top: 0, height: 1 },
-  edgeLeft: { position: 'absolute', left: 0, top: 6, bottom: 6, width: 1 },
-  edgeRight: { position: 'absolute', right: 0, top: 6, bottom: 6, width: 1 },
-});

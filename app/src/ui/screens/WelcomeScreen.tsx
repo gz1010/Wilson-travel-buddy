@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Glass, GlassButton, OfflineChip } from '../dusk/Glass';
 import { useReduceMotion } from '../dusk/motion';
 import { HeroPhoto, PhotoFade } from '../dusk/Photos';
 import { dusk, font, white } from '../dusk/tokens';
 import type { WelcomeProps } from './types';
+import { useScreenSize } from '../dusk/Screen';
 
 // AntWelcome: the city at dusk, a welcome, and the on-device models getting ready on clear glass.
 // Positions come from the 390 × 844 mockup: horizontal ones scale with the width, and the lower
@@ -16,7 +17,7 @@ const H = dusk.layout.phoneHeight;
 type Step = WelcomeProps['steps'][number];
 
 export function WelcomeScreen({ city, steps, status, models, ready, onStart }: WelcomeProps) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const sx = width / W;
   // Shift for everything below the photo's middle: positive on taller phones, negative on shorter.
   const dy = height - H;

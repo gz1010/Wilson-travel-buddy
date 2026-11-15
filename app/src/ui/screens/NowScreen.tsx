@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type TextStyle } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native';
 import { clockFor, placeNameSize, timeOfDay, TIME_OF_DAY_LABEL, TIMES_OF_DAY } from '../../core/look';
 import { formatHHMM } from '../../core/time';
 import { tripDay } from '../../core/trip';
@@ -10,6 +10,7 @@ import { useReduceMotion } from '../dusk/motion';
 import { HeroPhoto, PhotoFade, PlacePhoto } from '../dusk/Photos';
 import { dusk, font, ground, white } from '../dusk/tokens';
 import type { ScreenProps } from './types';
+import { useScreenSize } from '../dusk/Screen';
 
 // AntNow: the centrepiece. The city photo for the time of day, the clock and weather, the
 // time-of-day chips, and the three suggestions for right now. DuskRoot draws the tab bar.
@@ -22,7 +23,7 @@ const TAB_BAR_RESERVE = 26 + dusk.size.tabBar + 2;
 const MAX_CARDS = 3;
 
 export function NowScreen({ b, nav }: ScreenProps) {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const sx = width / W;
   const reduce = useReduceMotion();
   const { clock } = b.situation;

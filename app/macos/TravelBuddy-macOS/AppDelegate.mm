@@ -1,25 +1,65 @@
 #import "AppDelegate.h"
 
 #import <React/RCTBundleURLProvider.h>
+#import <React/RCTConvert.h>
 #import <React/RCTViewManager.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
 
-// BuddyBlurView: the Mac's own blur (NSVisualEffectView), for the Dusk liquid-glass design.
-// It blurs whatever is behind it inside the window. Used by src/ui/dusk/Glass.tsx; no
-// React Native blur library supports macOS.
-@interface BuddyBlurViewManager : RCTViewManager
+// BuddyGlassView: the glass behind the Dusk design's cards, chips and buttons.
+// On macOS 26 it is Apple's Liquid Glass (NSGlassEffectView: real refraction and edge
+// highlights). On older macOS it is a light blur (NSVisualEffectView at reduced opacity, so
+// the photo behind stays readable). Both are looked up by name, so this compiles with any SDK.
+// Used by src/ui/dusk/Glass.tsx; no React Native glass or blur library supports macOS.
+@interface BuddyGlassViewManager : RCTViewManager
 @end
 
-@implementation BuddyBlurViewManager
-RCT_EXPORT_MODULE(BuddyBlurView)
+@implementation BuddyGlassViewManager
+RCT_EXPORT_MODULE(BuddyGlassView)
+
++ (BOOL)requiresMainQueueSetup
+{
+  return YES;
+}
+
+- (NSDictionary *)constantsToExport
+{
+  return @{@"liquidGlass" : @(NSClassFromString(@"NSGlassEffectView") != nil)};
+}
+
 - (NSView *)view
 {
+  Class liquid = NSClassFromString(@"NSGlassEffectView");
+  if (liquid != nil) {
+    return [liquid new];
+  }
   NSVisualEffectView *view = [NSVisualEffectView new];
   view.blendingMode = NSVisualEffectBlendingModeWithinWindow;
-  view.material = NSVisualEffectMaterialHUDWindow;
+  view.material = NSVisualEffectMaterialUnderWindowBackground;
   view.state = NSVisualEffectStateActive;
   view.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+  view.alphaValue = 0.55;
   return view;
+}
+
+RCT_CUSTOM_VIEW_PROPERTY(cornerRadius, CGFloat, NSView)
+{
+  CGFloat radius = json ? [RCTConvert CGFloat:json] : 0;
+  if ([view respondsToSelector:NSSelectorFromString(@"setCornerRadius:")]) {
+    [view setValue:@(radius) forKey:@"cornerRadius"];
+  } else {
+    view.wantsLayer = YES;
+    view.layer.cornerRadius = radius;
+    view.layer.masksToBounds = YES;
+  }
+}
+
+// "clear" (most transparent: chips, tab bar, pins) or "regular" (a little more frost: cards, primary buttons).
+RCT_CUSTOM_VIEW_PROPERTY(glassStyle, NSString, NSView)
+{
+  if ([view respondsToSelector:NSSelectorFromString(@"setStyle:")]) {
+    BOOL clear = [json isKindOfClass:[NSString class]] && [json isEqualToString:@"clear"];
+    [view setValue:@(clear ? 1 : 0) forKey:@"style"];
+  }
 }
 @end
 

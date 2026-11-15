@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Place } from '../../core/types';
 import { MapView, type MapPin } from '../../map/MapView';
 import { directions } from '../dusk/format';
@@ -8,6 +8,7 @@ import { ArrowIcon, SearchIcon } from '../dusk/Icons';
 import { PhotoFade, PlacePhoto } from '../dusk/Photos';
 import { dusk, font, white } from '../dusk/tokens';
 import type { ScreenProps } from './types';
+import { useScreenSize } from '../dusk/Screen';
 
 // AntMap: the offline map full screen, a glass search bar on top, and a glass card for the
 // chosen place (or the first suggestion) above the tab bar, which DuskRoot draws.
@@ -20,7 +21,7 @@ const HEADER_HEIGHT = 92;
 const NAME_SIZE = 44;
 
 export function MapScreen({ b, nav }: ScreenProps) {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const sx = (x: number) => Math.round((x * width) / DESIGN_WIDTH);
   const [query, setQuery] = useState('');
   const [missed, setMissed] = useState<string>();

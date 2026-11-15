@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatHHMM, openState } from '../../core/time';
 import type { Place } from '../../core/types';
 import { CATEGORY_LABEL, directions } from '../dusk/format';
@@ -10,6 +10,7 @@ import { PhotoFade, PlacePhoto } from '../dusk/Photos';
 import { dusk, font, ground } from '../dusk/tokens';
 import type { ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
+import { useScreenSize } from '../dusk/Screen';
 
 // AntPlace: one place. Its pack photo on top fading into the ground, the name, how far it is
 // and whether it is open, the guide card (the latest answer about it, or a fact from the pack),
@@ -48,7 +49,7 @@ function lastExchange(chat: ChatLine[]): { index: number; question: ChatLine; an
 }
 
 export function PlaceScreen({ b, nav }: ScreenProps) {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const sx = width / W;
 
   const place: Place | undefined = (nav.placeId ? b.index.place(nav.placeId) : undefined) ?? (b.recs[0] ? b.index.place(b.recs[0].placeId) : undefined);

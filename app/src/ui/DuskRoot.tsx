@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StatusBar, View } from 'react-native';
+import { StatusBar } from 'react-native';
 import type { PackIndex } from '../core/pack';
 import { connectRuntime, type Runtime } from '../services/runtime';
 import { TabBar, type Nav, type ScreenName } from './dusk/Nav';
+import { ScreenSizeProvider } from './dusk/Screen';
 import { dusk } from './dusk/tokens';
 import { MapScreen } from './screens/MapScreen';
 import { NowScreen } from './screens/NowScreen';
@@ -34,7 +35,7 @@ export function DuskRoot({ index }: { index: PackIndex }) {
       { label: 'Voices', state: !runtime ? 'loading' : runtime.live.audio ? 'ready' : 'off' },
     ];
     return (
-      <View style={{ flex: 1, backgroundColor: dusk.color.ground }}>
+      <ScreenSizeProvider style={{ backgroundColor: dusk.color.ground }}>
         <StatusBar barStyle="light-content" />
         <WelcomeScreen
           city={index.destination.name}
@@ -44,7 +45,7 @@ export function DuskRoot({ index }: { index: PackIndex }) {
           ready={!!runtime}
           onStart={() => setStarted(true)}
         />
-      </View>
+      </ScreenSizeProvider>
     );
   }
   return <DuskApp runtime={runtime} index={index} />;
@@ -88,7 +89,7 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: dusk.color.ground }}>
+    <ScreenSizeProvider style={{ backgroundColor: dusk.color.ground }}>
       <StatusBar barStyle="light-content" />
       {screen === 'setup' && <SetupScreen b={b} nav={nav} />}
       {screen === 'now' && <NowScreen b={b} nav={nav} />}
@@ -96,6 +97,6 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
       {screen === 'map' && <MapScreen b={b} nav={nav} />}
       {screen === 'talk' && <TalkScreen b={b} nav={nav} />}
       {TAB_BAR_SCREENS.includes(screen) && <TabBar nav={nav} listening={b.listening} onMic={b.talk} />}
-    </View>
+    </ScreenSizeProvider>
   );
 }

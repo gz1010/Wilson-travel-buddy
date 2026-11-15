@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { SideAssigner } from '../../core/translate';
 import { LANG_NAMES, type Lang, type Side, type TurnEvent } from '../../core/types';
@@ -8,6 +8,7 @@ import { CloseIcon } from '../dusk/Icons';
 import { useReduceMotion } from '../dusk/motion';
 import { dusk, font, ground } from '../dusk/tokens';
 import type { ScreenProps } from './types';
+import { useScreenSize } from '../dusk/Screen';
 
 // AntTalk: the conversation translator. The phone lies flat between two people. The top half
 // is the local's, rotated 180° so it reads the right way up for them; the bottom half is the
@@ -53,7 +54,7 @@ function localCopy(local: Lang) {
 }
 
 export function TalkScreen({ b, nav }: ScreenProps) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const sx = width / PHONE_W;
   const side = Math.round(26 * sx);
   const reduce = useReduceMotion();

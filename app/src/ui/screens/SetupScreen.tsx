@@ -9,7 +9,6 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
 import { addDays, weekday, WEEKDAY_KEYS, WEEKDAY_NAMES } from '../../core/time';
@@ -23,6 +22,7 @@ import { useReduceMotion } from '../dusk/motion';
 import { dusk, font, white } from '../dusk/tokens';
 import type { Buddy } from '../useBuddy';
 import type { ScreenProps } from './types';
+import { useScreenSize } from '../dusk/Screen';
 
 // AntSetup: trip setup by voice, also the "Plan" tab. The transcript shows what the traveller
 // said, with the words the model understood in small glass pills; the "Your trip" card shows
@@ -146,7 +146,7 @@ function useKeyboardHeight(reduce: boolean): number {
 // --- The screen.
 
 export function SetupScreen({ b, nav }: ScreenProps) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const sx = width / dusk.layout.phoneWidth;
   const reduce = useReduceMotion();
   const keyboard = useKeyboardHeight(reduce);

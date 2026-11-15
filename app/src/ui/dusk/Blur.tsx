@@ -1,16 +1,20 @@
 import React from 'react';
 import { requireNativeComponent, UIManager, View, type StyleProp, type ViewStyle } from 'react-native';
-import { dusk } from './tokens';
 
-// The Mac's own blur (NSVisualEffectView), registered as BuddyBlurView in
-// app/macos/TravelBuddy-macOS/AppDelegate.mm. If the native view is missing (an older build),
-// a dark translucent fill stands in so the glass still reads.
-const hasNative = !!UIManager.getViewManagerConfig?.('BuddyBlurView');
-const NativeBlur = hasNative ? requireNativeComponent<{ style?: StyleProp<ViewStyle> }>('BuddyBlurView') : undefined;
+// BuddyGlassView (app/macos/TravelBuddy-macOS/AppDelegate.mm): Apple's Liquid Glass on macOS 26,
+// a light native blur on older macOS. Without the native view (another platform, an old build),
+// a faint translucent fill stands in.
+type NativeProps = { style?: StyleProp<ViewStyle>; cornerRadius?: number; glassStyle?: 'clear' | 'regular' };
+const config = UIManager.getViewManagerConfig?.('BuddyGlassView') as { Constants?: { liquidGlass?: boolean } } | undefined;
+const NativeGlass = config ? requireNativeComponent<NativeProps>('BuddyGlassView') : undefined;
 
-export function Blur({ style }: { style?: StyleProp<ViewStyle> }) {
-  return NativeBlur ? <NativeBlur style={style} /> : <View style={[style, { backgroundColor: 'rgba(26,27,34,0.55)' }]} />;
+/** True on macOS 26+, where the native view is Apple's Liquid Glass with its own rim and refraction. */
+export const hasLiquidGlass = !!config?.Constants?.liquidGlass;
+
+export function GlassBackdrop({ style, radius, variant }: { style?: StyleProp<ViewStyle>; radius: number; variant: 'clear' | 'regular' }) {
+  return NativeGlass ? (
+    <NativeGlass style={style} cornerRadius={radius} glassStyle={variant} />
+  ) : (
+    <View style={[style, { backgroundColor: 'rgba(26,27,34,0.35)' }]} />
+  );
 }
-
-export const blurIsNative = hasNative;
-export const blurFallbackColor = dusk.color.raised;
