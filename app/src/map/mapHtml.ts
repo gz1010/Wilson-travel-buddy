@@ -11,8 +11,34 @@ export const hasTiles = !!tileSet.tiles;
 
 const escapeScript = (s: string) => s.replace(/<\/script/gi, '<\\/script');
 
-export function buildMapHtml(bounds: [number, number, number, number]): string {
-  const config = { bounds, minzoom: tileSet.minzoom, maxzoom: tileSet.maxzoom, hasTiles };
+export type MapTheme = 'classic' | 'dusk';
+
+/** Map colours per theme. Dusk: low-contrast dark streets so glass pins glow. */
+const PALETTES = {
+  classic: { bg: '#efe9df', earth: '#f3efe7', parks: '#d3e6c4', water: '#a8cbe0', buildings: '#e2dbcf', buildingLine: '#d4ccbe', casing: '#d8d0c2', highway: '#f6d38a', major: '#fbe7b5', street: '#ffffff', route: '#ffffff' },
+  dusk: { bg: '#12141B', earth: '#12141B', parks: '#17221D', water: '#1A2632', buildings: '#1B1E27', buildingLine: '#1B1E27', casing: '#12141B', highway: '#3A3F4D', major: '#343947', street: '#2B2F3B', route: '#ffffff' },
+};
+
+// Dusk pins: plan = white ring, suggestion = clear glass, chosen = glass orb, you = blue dot.
+const DUSK_CSS = `
+html, body, #map { background: #12141B; font-family: Manrope, -apple-system, system-ui, sans-serif; }
+.dot { width: 8px; height: 8px; background: rgba(255,255,255,.32); border: 0; box-shadow: none; }
+.pin.stop .dot { width: 16px; height: 16px; background: transparent; border: 2.5px solid rgba(255,255,255,.85); box-sizing: border-box; font-size: 0; }
+.pin.rec .dot { width: 30px; height: 30px; color: #fff; font-weight: 800; font-size: 12px; text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.06)); -webkit-backdrop-filter: blur(6px) saturate(180%); backdrop-filter: blur(6px) saturate(180%);
+  border: 1px solid rgba(255,255,255,.32); box-shadow: inset 0 1px 1px rgba(255,255,255,.7), 0 4px 12px rgba(0,0,0,.3); }
+.pin.focus .dot { transform: none; width: 44px; height: 44px; font-size: 15px; color: #fff;
+  background: radial-gradient(circle at 32% 24%, rgba(255,255,255,.85) 0%, rgba(255,255,255,.3) 24%, rgba(255,255,255,.1) 58%, rgba(255,255,255,.22) 100%);
+  border: 1px solid rgba(255,255,255,.6); box-shadow: inset 0 1px 1px #fff, inset 1px 0 0 rgba(255,140,140,.3), inset -1px 0 0 rgba(140,190,255,.32), 0 0 30px 6px rgba(255,255,255,.14), 0 8px 20px rgba(0,0,0,.4); }
+.label { background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.04)); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.22); color: #F4EFE8; font-weight: 700; box-shadow: inset 0 1px 1px rgba(255,255,255,.4); border-radius: 999px; padding: 3px 8px; }
+.you { width: 18px; height: 18px; background: #8FB8FF; border: 3px solid #12141B; box-sizing: border-box; box-shadow: 0 0 0 10px rgba(143,184,255,.18); }
+.maplibregl-ctrl-group { background: rgba(255,255,255,.08); }
+.notiles { background: rgba(255,255,255,.08); color: #B9B0A6; }
+`;
+
+export function buildMapHtml(bounds: [number, number, number, number], theme: MapTheme = 'classic'): string {
+  const config = { bounds, minzoom: tileSet.minzoom, maxzoom: tileSet.maxzoom, hasTiles, palette: PALETTES[theme], theme };
   return `<!doctype html>
 <html><head>
 <meta charset="utf-8">
@@ -29,6 +55,7 @@ html, body, #map { margin: 0; height: 100%; background: #efe9df; font-family: -a
 .pin:hover .label { display: block !important; }
 .you { width: 16px; height: 16px; border-radius: 50%; background: #1d7cf2; border: 3px solid #fff; box-shadow: 0 0 0 8px rgba(29,124,242,.2); }
 .notiles { position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: #776; background: rgba(255,255,255,.8); padding: 3px 6px; border-radius: 4px; }
+${theme === 'dusk' ? DUSK_CSS : ''}
 </style>
 </head><body>
 <div id="map"></div>
@@ -55,19 +82,22 @@ html, body, #map { margin: 0; height: 100%; background: #efe9df; font-family: -a
 
   // Layer names follow the Protomaps basemap schema (earth, landuse, water, roads, buildings).
   const src = 'osm';
-  const layers = [{ id: 'bg', type: 'background', paint: { 'background-color': '#efe9df' } }];
+  const P = CONFIG.palette;
+  const layers = [{ id: 'bg', type: 'background', paint: { 'background-color': P.bg } }];
   if (TILES) {
     layers.push(
-      { id: 'earth', type: 'fill', source: src, 'source-layer': 'earth', paint: { 'fill-color': '#f3efe7' } },
-      { id: 'parks', type: 'fill', source: src, 'source-layer': 'landuse', filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['in', ['get', 'kind'], ['literal', ['park', 'garden', 'grass', 'forest', 'wood', 'cemetery', 'pitch', 'playground']]]], paint: { 'fill-color': '#d3e6c4' } },
-      { id: 'water', type: 'fill', source: src, 'source-layer': 'water', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#a8cbe0' } },
-      { id: 'waterways', type: 'line', source: src, 'source-layer': 'water', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#a8cbe0', 'line-width': 2 } },
-      { id: 'buildings', type: 'fill', source: src, 'source-layer': 'buildings', minzoom: 14, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#e2dbcf', 'fill-outline-color': '#d4ccbe' } },
-      { id: 'roads-casing', type: 'line', source: src, 'source-layer': 'roads', paint: { 'line-color': '#d8d0c2', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 9] } },
-      { id: 'roads', type: 'line', source: src, 'source-layer': 'roads', paint: { 'line-color': ['match', ['get', 'kind'], 'highway', '#f6d38a', 'major_road', '#fbe7b5', '#ffffff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 16, 7] } }
+      { id: 'earth', type: 'fill', source: src, 'source-layer': 'earth', paint: { 'fill-color': P.earth } },
+      { id: 'parks', type: 'fill', source: src, 'source-layer': 'landuse', filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['in', ['get', 'kind'], ['literal', ['park', 'garden', 'grass', 'forest', 'wood', 'cemetery', 'pitch', 'playground']]]], paint: { 'fill-color': P.parks } },
+      { id: 'water', type: 'fill', source: src, 'source-layer': 'water', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': P.water } },
+      { id: 'waterways', type: 'line', source: src, 'source-layer': 'water', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': P.water, 'line-width': 2 } },
+      { id: 'buildings', type: 'fill', source: src, 'source-layer': 'buildings', minzoom: 14, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': P.buildings, 'fill-outline-color': P.buildingLine } },
+      { id: 'roads-casing', type: 'line', source: src, 'source-layer': 'roads', paint: { 'line-color': P.casing, 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 9] } },
+      { id: 'roads', type: 'line', source: src, 'source-layer': 'roads', paint: { 'line-color': ['match', ['get', 'kind'], 'highway', P.highway, 'major_road', P.major, P.street], 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 16, 7] } }
     );
   }
-  const style = { version: 8, sources: {}, layers };
+  // A straight dashed line from you to the chosen place: direction, not turn-by-turn routing.
+  layers.push({ id: 'route', type: 'line', source: 'route', layout: { 'line-cap': 'round' }, paint: { 'line-color': P.route, 'line-opacity': 0.9, 'line-width': 3, 'line-dasharray': [0.7, 2.4] } });
+  const style = { version: 8, sources: { route: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } }, layers };
   if (TILES) style.sources[src] = { type: 'vector', tiles: ['buddy://{z}/{x}/{y}'], minzoom: CONFIG.minzoom, maxzoom: CONFIG.maxzoom, attribution: '© OpenStreetMap contributors' };
 
   const b = CONFIG.bounds;
@@ -110,6 +140,12 @@ html, body, #map { margin: 0; height: 100%; background: #efe9df; font-family: -a
     if (state.you) {
       if (!you) { const el = document.createElement('div'); el.className = 'you'; you = new maplibregl.Marker({ element: el }); }
       you.setLngLat([state.you.lon, state.you.lat]).addTo(map);
+    }
+    const route = map.getSource('route');
+    if (route) {
+      route.setData(state.route
+        ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: state.route } }
+        : { type: 'FeatureCollection', features: [] });
     }
     if (state.flyTo) map.flyTo({ center: [state.flyTo.lon, state.flyTo.lat], zoom: Math.max(map.getZoom(), 15.5), speed: 1.4 });
   };

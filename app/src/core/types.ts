@@ -88,6 +88,23 @@ export type PlaceCategory =
  */
 export type OpeningHours = Partial<Record<'daily' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', string>>;
 
+/**
+ * A photo shipped in the pack (scripts/build-photos.mjs). The image file itself is bundled through
+ * src/pack/<city>/photos/index.ts; this is its record, kept for the credits screen.
+ */
+export interface PhotoRef {
+  /** File name under src/pack/<city>/photos/. */
+  file: string;
+  /** Author, as Wikimedia Commons gives it. */
+  credit: string;
+  /** e.g. "CC BY-SA 4.0". */
+  license: string;
+  /** The Commons file page. */
+  source: string;
+}
+
+export type TimeOfDay = 'midday' | 'afternoon' | 'dusk' | 'night';
+
 export interface Place {
   id: string;
   name: string;
@@ -107,6 +124,8 @@ export interface Place {
   price?: 0 | 1 | 2 | 3;
   /** One or two sentences, used in search and as model context. */
   summary: string;
+  /** Pack photo; places without one get a drawn scene tile. */
+  photo?: PhotoRef;
 }
 
 export interface Fact {
@@ -153,6 +172,8 @@ export interface Destination {
   utcOffsetMinutes: number;
   /** Map bounds: [west, south, east, north]. */
   bounds: [number, number, number, number];
+  /** City photos for the Now screen, one per time of day. */
+  heroes?: Partial<Record<TimeOfDay, PhotoRef>>;
 }
 
 export interface Pack {

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type { GeoPoint } from '../core/types';
-import { buildMapHtml } from './mapHtml';
+import { buildMapHtml, type MapTheme } from './mapHtml';
 
 export interface MapPin {
   id: string;
@@ -20,26 +20,29 @@ interface Props {
   you?: GeoPoint;
   /** Changing this moves the map to the pin. */
   focusId?: string;
+  /** 'dusk': dark map, glass pins, and a dashed line from you to the chosen place. */
+  theme?: MapTheme;
   onPress?: (point: GeoPoint) => void;
   onSelect?: (id: string) => void;
 }
 
 /** MapLibre GL JS in a web view, fully offline. See mapHtml.ts. */
-export function MapView({ bounds, pins, you, focusId, onPress, onSelect }: Props) {
+export function MapView({ bounds, pins, you, focusId, theme = 'classic', onPress, onSelect }: Props) {
   // react-native-webview types default P to undefined, which makes WebViewProps & P never; pass {}.
   const ref = useRef<WebView<{}>>(null);
   const [ready, setReady] = useState(false);
   const lastFocus = useRef<string | undefined>(undefined);
-  const html = useMemo(() => buildMapHtml(bounds), [bounds]);
+  const html = useMemo(() => buildMapHtml(bounds, theme), [bounds, theme]);
 
   useEffect(() => {
     if (!ready) return;
     const focusPin = focusId ? pins.find(p => p.id === focusId) : undefined;
     const flyTo = focusPin && focusId !== lastFocus.current ? { lat: focusPin.lat, lon: focusPin.lon } : undefined;
     lastFocus.current = focusId;
-    const state = { pins: pins.map(p => ({ ...p, focus: p.id === focusId })), you, flyTo };
+    const route = theme === 'dusk' && you && focusPin ? [[you.lon, you.lat], [focusPin.lon, focusPin.lat]] : undefined;
+    const state = { pins: pins.map(p => ({ ...p, focus: p.id === focusId })), you, flyTo, route };
     ref.current?.injectJavaScript(`window.buddyUpdate(${JSON.stringify(state)}); true;`);
-  }, [ready, pins, you, focusId]);
+  }, [ready, pins, you, focusId, theme]);
 
   const onMessage = (e: WebViewMessageEvent) => {
     let m: any;
