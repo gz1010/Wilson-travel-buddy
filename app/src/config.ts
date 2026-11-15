@@ -8,4 +8,4 @@ export const AUDIO_HELPER_URL = 'ws://127.0.0.1:8765';
 
 // Which UI to show. 'classic' is the working three-column layout; 'dusk' is the liquid-glass
 // redesign being built. Switch to 'dusk' once its screens are in.
-export const UI_DESIGN: 'classic' | 'dusk' = 'classic';
+export const UI_DESIGN: 'classic' | 'dusk' = 'dusk';
