@@ -52,6 +52,17 @@ node scripts/prepare-pack.mjs
 
   It then writes `app/src/pack/seville/prepared.json`, which the Welcome screen shows ("Seville guide prepared Nov 14 · 60 places · …"). Each step also runs on its own, e.g. `node scripts/fetch-facts.mjs --dry-run`. Facts and photos are committed, so a fresh clone only needs the map: `node scripts/prepare-pack.mjs --skip facts,photos,forecast`. Wikimedia lets clients without contact details make 10 requests a minute, so the facts and photos steps pace themselves to that (about 20 minutes); `WIKIMEDIA_CONTACT=you@example.org node scripts/prepare-pack.mjs` is allowed 200 a minute (the address goes only into the User-Agent sent to Wikimedia).
 
+Does your itinerary name places in Seville that the pack lacks? Give it the itinerary while you are still online:
+
+```bash
+node scripts/prepare-pack.mjs --itinerary ~/Downloads/seville-trip.ics   # or a .txt itinerary
+```
+
+- `--itinerary <file>` reads an iCalendar export (Google Calendar, Apple Calendar) or a plain-text itinerary ("Day 1", "10:00 Lunch at Eslava", …) and finds the places in it that the pack does not have. For each event it takes Apple's place title, the first part of LOCATION unless that is a street address, and SUMMARY without the activity; it skips flights, trains and transfers, and never reads DESCRIPTION. `node scripts/itinerary.mjs <file>` shows the same list offline, without changing anything.
+- It looks those names up in OpenStreetMap inside the city's bounds (`fetch-places.mjs --match`: one Overpass query, then Nominatim, at most one request a second, for names Overpass misses) and adds what it finds to `app/src/pack/seville/places.json` with `"needsReview": true`: category, interest tags, indoor, visit length and opening hours come from OSM's tags, the neighbourhood from the nearest pack place, and the itinerary's wording becomes an alias when it differs from the name. A name that turns out to be a pack place under another name only becomes an alias of it.
+- Then the facts and photos steps run for the new places only, and each new place's summary becomes the first sentence or two of its Wikipedia fact. The forecast, tiles and aerial steps do not run; run `prepare-pack.mjs` without `--itinerary` for those.
+- `prepared.json` records the run as `"itinerary": { "file", "added": [ids], "notFound": [names] }`. Running the same file again adds nothing twice and retries facts and photos for places it added that still lack them. Check the new places (category, hours, summary in Spanish when English Wikipedia has no article), delete `needsReview`, and reload the app so Metro serves the new `places.json`. The app's Import on the Chat screen points here when an itinerary names places the pack lacks.
+
 Licences of what the pack contains:
 
 | Data | Source | Licence |
@@ -59,6 +70,7 @@ Licences of what the pack contains:
 | Place facts marked with a source | Wikipedia | CC BY-SA 4.0 (each fact keeps its article URL) |
 | Photos | Wikimedia Commons | Per photo (CC0, public domain, CC BY or CC BY-SA), with author and file page in `places.json` and `destination.json` |
 | Map tiles | OpenStreetMap contributors, via Protomaps | ODbL |
+| Places added by `--itinerary` (names, coordinates, hours; each keeps its OSM element in `osm.ref`) | OpenStreetMap contributors | ODbL |
 | Aerial photos (map's Aerial layer, `scripts/build-aerial.mjs`) | Instituto Geográfico Nacional, PNOA máxima actualidad orthophotos (WMTS), credited on the map as "PNOA máxima actualidad CC BY 4.0 scne.es" | CC BY 4.0 |
 | Forecast | Open-Meteo.com | CC BY 4.0 |
 | Manrope font | The Manrope Project Authors | SIL Open Font Licence (`app/assets/fonts/OFL.txt`) |
