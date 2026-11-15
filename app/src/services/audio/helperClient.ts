@@ -1,4 +1,4 @@
-import type { AudioClient, AudioInfo, Heard, Lang, LocationFix, TurnEvent } from '../../core/types';
+import type { AudioClient, AudioInfo, Heard, Lang, LevelKind, LocationFix, TurnEvent, WakeEvent } from '../../core/types';
 import { AUDIO_HELPER_URL, PROTOCOL_VERSION, type AppToHelper, type HelperToApp } from './protocol';
 
 /**
@@ -26,6 +26,11 @@ export class HelperAudioClient implements AudioClient {
   private snapWaiters = new Map<string, (jpeg: string | undefined) => void>();
   /** locate() calls waiting for the helper's location / location.error, by id. */
   private locateWaiters = new Map<string, (fix: LocationFix | undefined, error?: string) => void>();
+  /** The running wake word's handler, if any. A new wake() replaces it. */
+  private wakeHandler?: (e: WakeEvent) => void;
+  /** Re-sends wake.start while the wake word is on (the helper's keepalive). */
+  private wakeAlive?: ReturnType<typeof setInterval>;
+  private levelListeners = new Set<(kind: LevelKind, value: number) => void>();
 
   /** Connects and waits for "ready" (the helper may still be loading models). */
   connect(url = AUDIO_HELPER_URL, timeoutMs = 2000, readyTimeoutMs = 120_000): Promise<boolean> {
@@ -70,6 +75,13 @@ export class HelperAudioClient implements AudioClient {
         this.speakWaiters.clear();
         this.conversationHandler = undefined;
         this.endCamera('Audio helper disconnected');
+        const wake = this.wakeHandler;
+        this.wakeHandler = undefined;
+        if (this.wakeAlive) clearInterval(this.wakeAlive);
+        this.wakeAlive = undefined;
+        wake?.({ type: 'state', listening: false });
+        this.emitLevel('mic', 0);
+        this.emitLevel('voice', 0);
         for (const done of [...this.locateWaiters.values()]) done(undefined, 'The audio helper disconnected.');
         this.locateWaiters.clear();
         this.onDisconnect?.();
@@ -90,7 +102,7 @@ export class HelperAudioClient implements AudioClient {
         }
         if (m.type === 'ready') {
           clearTimeout(readyTimer);
-          this.info = { hasMicrophone: true, models: m.models, liveSpeakers: m.liveSpeakers, camera: m.camera === true };
+          this.info = { hasMicrophone: true, models: m.models, liveSpeakers: m.liveSpeakers, camera: m.camera === true, wake: m.wake === true };
           finish(true);
         }
       };
@@ -108,8 +120,26 @@ export class HelperAudioClient implements AudioClient {
         break;
       case 'level':
         this.onLevel?.(m.value);
+        this.emitLevel('mic', m.value);
         this.conversationHandler?.({ type: 'level', value: m.value });
         break;
+      case 'speak.level':
+        this.emitLevel('voice', m.value);
+        return; // about 20 a second: nothing else wants them
+      case 'wake.state':
+        this.wakeHandler?.({ type: 'state', listening: m.listening === true });
+        return;
+      case 'wake.heard':
+        this.wakeHandler?.({ type: 'heard', text: typeof m.text === 'string' ? m.text : '' });
+        return;
+      case 'wake':
+        this.wakeHandler?.({
+          type: 'wake',
+          text: typeof m.text === 'string' ? m.text : '',
+          heard: typeof m.heard === 'string' ? m.heard : '',
+          endedAt: typeof m.sinceEndMs === 'number' && Number.isFinite(m.sinceEndMs) ? Date.now() - m.sinceEndMs : undefined,
+        });
+        return;
       case 'speak.started': {
         const started = this.startWaiters.get(m.id);
         this.startWaiters.delete(m.id);
@@ -174,7 +204,7 @@ export class HelperAudioClient implements AudioClient {
     this.listener?.(m);
   }
 
-  listen(onPartial: (text: string) => void, language?: Lang): Promise<Heard> {
+  listen(onPartial: (text: string) => void, language?: Lang, options?: { quietMs?: number }): Promise<Heard> {
     return new Promise((resolve, reject) => {
       if (this.ws?.readyState !== WebSocket.OPEN) return reject(new Error('Audio helper not connected'));
       let heard: Heard = { text: '' };
@@ -189,7 +219,10 @@ export class HelperAudioClient implements AudioClient {
           reject(new Error(m.message));
         }
       };
-      this.send({ type: 'listen.start', language });
+      // The helper decodes quietMs as a whole number: a fraction would make it drop the whole
+      // listen.start, and this listen would never end.
+      const quietMs = options?.quietMs;
+      this.send({ type: 'listen.start', language, quietMs: typeof quietMs === 'number' && Number.isFinite(quietMs) ? Math.max(1, Math.round(quietMs)) : undefined });
     });
   }
 
@@ -297,6 +330,45 @@ export class HelperAudioClient implements AudioClient {
       };
       this.locateWaiters.set(id, finish);
       this.send({ type: 'location.get', id });
+    });
+  }
+
+  /**
+   * The wake word: the helper listens for "Wilson, …" whenever the microphone is free, until stop().
+   * wake.start is sent again every few seconds: the helper turns the microphone off 20 s after the
+   * app goes quiet (quit or crashed), and starts again on the next one. A new wake() replaces the old.
+   */
+  wake(onEvent: (e: WakeEvent) => void, aliveMs = 5000): () => void {
+    if (this.ws?.readyState !== WebSocket.OPEN || !this.info.wake) return () => {};
+    if (this.wakeAlive) clearInterval(this.wakeAlive);
+    this.wakeHandler = onEvent;
+    this.send({ type: 'wake.start' });
+    const alive = setInterval(() => this.send({ type: 'wake.start' }), aliveMs);
+    this.wakeAlive = alive;
+    return () => {
+      clearInterval(alive);
+      if (this.wakeHandler !== onEvent) return; // replaced (or disconnected): leave the newer one alone
+      this.wakeHandler = undefined;
+      this.wakeAlive = undefined;
+      this.send({ type: 'wake.stop' });
+    };
+  }
+
+  subscribeLevels(onLevel: (kind: LevelKind, value: number) => void): () => void {
+    this.levelListeners.add(onLevel);
+    return () => {
+      this.levelListeners.delete(onLevel);
+    };
+  }
+
+  private emitLevel(kind: LevelKind, value: number) {
+    const v = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+    this.levelListeners.forEach(fn => {
+      try {
+        fn(kind, v);
+      } catch {
+        // one listener's error never stops the others, or the message loop
+      }
     });
   }
 

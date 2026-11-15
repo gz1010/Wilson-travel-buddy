@@ -199,6 +199,14 @@ export interface ImportSheetProps {
   b: Buddy;
   /** A file dropped on Chat: read and imported as soon as the sheet opens. */
   dropped?: DroppedFile;
+  /** Opened to upload a file: the file panel comes up as the sheet opens. */
+  startWithFile?: boolean;
+  /**
+   * Why a read trip can't become this guide's trip (the home: another city's itinerary), or
+   * undefined when it can. The preview then says so up front and its Apply becomes OK, instead of
+   * promising to replace the trip.
+   */
+  refuse?: (trip: Trip) => string | undefined;
   onClose: () => void;
   /** Room to leave above the sheet and below it (the tab bar), and at the sides. */
   top: number;
@@ -209,7 +217,7 @@ export interface ImportSheetProps {
 /** The sheet's widest, on a wide window. */
 const MAX_WIDTH = 560;
 
-export function ImportSheet({ b, dropped, onClose, top, bottom, side }: ImportSheetProps) {
+export function ImportSheet({ b, dropped, startWithFile, refuse, onClose, top, bottom, side }: ImportSheetProps) {
   const { width } = useScreenSize();
   const llm = b.runtime.llm.name;
   const city = b.index.destination.name;
@@ -319,6 +327,18 @@ export function ImportSheet({ b, dropped, onClose, top, bottom, side }: ImportSh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [droppedPath]);
 
+  // Opened to upload a file (the home's "Upload itinerary"): the file panel comes up at once; Cancel
+  // in it leaves the sheet open for pasting instead. Only the first time: a hot reload (or React
+  // running effects twice) must not bring the panel back.
+  const askedForFile = useRef(false);
+  useEffect(() => {
+    if (!startWithFile || dropped || askedForFile.current) return;
+    askedForFile.current = true;
+    openFile();
+    // Once, as the sheet opens (it is keyed per opening).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const apply = async () => {
     if (phase.kind !== 'preview' || applying) return;
     setApplying(true);
@@ -372,6 +392,7 @@ export function ImportSheet({ b, dropped, onClose, top, bottom, side }: ImportSh
             name={name}
             source={phase.source}
             replacing={b.trip}
+            refusal={refuse?.(phase.result.trip)}
             error={phase.error}
             applying={applying}
             onEdit={() => setPhase({ kind: 'edit' })}
@@ -385,7 +406,7 @@ export function ImportSheet({ b, dropped, onClose, top, bottom, side }: ImportSh
           </View>
         ) : (
           <>
-            <Text style={styles.intro}>{`Paste it below, or open a calendar file (.ics) or a text file. You can also drop a file on Chat. Nothing goes online.`}</Text>
+            <Text style={styles.intro}>{`Paste it below, or open a calendar file (.ics) or a text file. You can also drop a file on the window. Nothing goes online.`}</Text>
             <View style={styles.sourceRow}>
               <Pressable
                 accessibilityRole="button"
@@ -451,6 +472,7 @@ function Preview({
   name,
   source,
   replacing,
+  refusal,
   error,
   applying,
   onEdit,
@@ -461,6 +483,8 @@ function Preview({
   name?: string;
   source: Kind;
   replacing?: Trip;
+  /** Set when this trip can't be applied here: said instead of "Apply replaces…", and Apply is OK. */
+  refusal?: string;
   error?: string;
   applying: boolean;
   onEdit: () => void;
@@ -522,7 +546,8 @@ function Preview({
             </View>
           );
         })}
-        {unmatched.length ? (
+        {/* Another city's places aren't missing from this guide: that city is (the note says so). */}
+        {unmatched.length > 0 && !refusal ? (
           <View style={styles.section}>
             <Text style={styles.label}>{`NOT IN YOUR ${city.toUpperCase()} GUIDE YET`}</Text>
             <Text style={styles.names}>{unmatched.join(' · ')}</Text>
@@ -542,14 +567,18 @@ function Preview({
           </View>
         ) : null}
       </ScrollView>
-      {error || replacing ? (
-        <Text style={[styles.note, error ? styles.error : null]} numberOfLines={2}>
-          {error ?? `Apply replaces your current trip (${importSummary(replacing!).split(' · ').slice(0, 2).join(', ')}).`}
+      {error || refusal || replacing ? (
+        <Text style={[styles.note, error ? styles.error : null]} numberOfLines={3} accessibilityLiveRegion="polite">
+          {error ?? refusal ?? `Apply replaces your current trip (${importSummary(replacing!).split(' · ').slice(0, 2).join(', ')}).`}
         </Text>
       ) : null}
       <View style={styles.buttons}>
         <GlassButton label="Edit" kind="clear" onPress={onEdit} style={styles.half} disabled={applying} />
-        <GlassButton label="Apply" accessibilityLabel="Apply the imported trip" onPress={onApply} style={styles.half} disabled={applying} />
+        {refusal ? (
+          <GlassButton label="OK" accessibilityLabel="Close. Nothing is added to your trip" onPress={onApply} style={styles.half} disabled={applying} />
+        ) : (
+          <GlassButton label="Apply" accessibilityLabel="Apply the imported trip" onPress={onApply} style={styles.half} disabled={applying} />
+        )}
       </View>
     </>
   );

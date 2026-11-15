@@ -10,6 +10,7 @@ import { useReduceMotion } from '../dusk/motion';
 import { dusk, font, ground } from '../dusk/tokens';
 import type { ScreenProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
+import { useVoiceLevel, wakeOf, WilsonFace, type WilsonMood } from './WilsonLive';
 
 // Translate (AntTalk; the screen is still called `talk`): the conversation translator. The phone
 // lies flat between two people. The top half is the local's, turned 180° so it reads the right way
@@ -26,10 +27,16 @@ import { useScreenSize } from '../dusk/Screen';
 // cool for the traveller, with a gentle glow, and the liquid background behind (Chat's) takes
 // the same colour, rising from that half and swelling with the voice.
 //
-// Layout, top to bottom: the local's half, a fixed band the status pill sits in (on the divider),
-// the traveller's half with the footer, then the bottom TAB_BAR_SPACE left free for the tab bar
-// DuskRoot draws over this screen. Every height comes from useScreenSize(), so it fits 390×844 and
-// the 390×700 minimum; each translation gets the room left in its half and shrinks to fit it.
+// Layout, top to bottom: the local's half, a band on the divider holding Wilson (120 px from 844
+// px tall, down to 88 at the 700 minimum) and the status pill beside him, the traveller's half with
+// the footer, then the bottom TAB_BAR_SPACE left free for the tab bar DuskRoot draws over this
+// screen. Every height comes from useScreenSize(), so it fits 390×844, 430×900 and the 390×700
+// minimum; each translation gets the room left in its half and shrinks to fit it.
+//
+// Wilson listens while the conversation runs (his rings follow the microphone), thinks while
+// Bonsai-2 translates, and speaks the translation (his mouth follows the voice when the helper
+// sends its level). Tap him, or the pill, to start or stop. He doesn't listen for his name here:
+// the conversation needs the microphone, so that switch is off while Translate is open.
 
 interface Turn {
   id: number;
@@ -57,8 +64,17 @@ const WARM = moodHex('speaking');
 const ACCENT: Record<Side, string> = { traveler: COOL, local: WARM };
 const PHONE_W = dusk.layout.phoneWidth;
 const PILL_H = 52;
-/** The fixed band between the halves; the status pill sits in it, on the divider. */
+/** The band between the halves at its smallest; Wilson and the status pill sit in it, on the divider. */
 const BAND = 72;
+/** Wilson in the band: the spec's translator size from the design height, smaller in a short window. */
+const WILSON_MAX = 120;
+const WILSON_MIN = 88;
+const BAND_PAD = 8;
+const WILSON_GAP = 10;
+function wilsonSize(height: number) {
+  const t = Math.max(0, Math.min(1, (height - 700) / (dusk.layout.phoneHeight - 700)));
+  return Math.round(WILSON_MIN + (WILSON_MAX - WILSON_MIN) * t);
+}
 /** The bottom strip left free for the floating tab bar (DuskRoot renders it on this screen). */
 const TAB_BAR_SPACE = 100;
 const GAP = 10;
@@ -102,10 +118,12 @@ function fitText(chars: number, base: number, width: number, height: number) {
 /** Heights for the screen at this size (see the top of the file). */
 function talkLayout(width: number, height: number, push: boolean) {
   const side = Math.round(26 * (width / PHONE_W));
-  const usable = Math.max(height - TAB_BAR_SPACE, 360 + BAND + FOOTER);
+  const wilson = wilsonSize(height);
+  const band = Math.max(BAND, wilson + 2 * BAND_PAD);
+  const usable = Math.max(height - TAB_BAR_SPACE, 360 + band + FOOTER);
   // The traveller's half also holds the footer row, so it is that much taller: both translations get the same room.
-  const top = Math.floor((usable - BAND - FOOTER) / 2);
-  const bottom = usable - BAND - top;
+  const top = Math.floor((usable - band - FOOTER) / 2);
+  const bottom = usable - band - top;
   const hold = push ? dusk.size.button + GAP : 0;
   // The local's text sits near their edge of the phone (the top of the screen), a little closer in push-to-talk.
   const localEdge = Math.max(16, Math.min(48, Math.round(top * 0.13)) - (push ? 16 : 0));
@@ -120,7 +138,8 @@ function talkLayout(width: number, height: number, push: boolean) {
     textWidth: width - 2 * side,
     top,
     bottom,
-    pillTop: top + (BAND - PILL_H) / 2,
+    band,
+    wilson,
     localEdge,
     local: room(top - localEdge - CLEAR, LOCAL_SIZE),
     traveller: room(bottom - TOP_PAD - BOTTOM_PAD - FOOTER, TRAVELLER_SIZE),
@@ -347,6 +366,24 @@ export function TalkScreen({ b, nav }: ScreenProps) {
   // Stop listening when the screen goes away.
   useEffect(() => stop, [stop]);
 
+  // No listening for his name here: the conversation needs the microphone. useBuddy's hold keeps
+  // the wake word off while Translate is open and leaves the switch as it was; without one, the
+  // switch is turned off and back on when Translate closes.
+  const wake = wakeOf(b);
+  const wakeRef = useRef(wake);
+  wakeRef.current = wake;
+  useEffect(() => {
+    const w = wakeRef.current;
+    if (!w) return undefined;
+    if (typeof w.hold === 'function') {
+      const release = w.hold('translate');
+      return typeof release === 'function' ? release : undefined;
+    }
+    if (!w.enabled) return undefined;
+    w.setEnabled(false);
+    return () => wakeRef.current?.setEnabled(true);
+  }, []);
+
   const toggle = () => (running ? stop() : start(mode));
 
   // Switching mode restarts listening in the new mode, keeping what was said.
@@ -430,6 +467,13 @@ export function TalkScreen({ b, nav }: ScreenProps) {
   const audioModel = audio.info.models[0];
   const push = mode === 'push';
   const L = useMemo(() => talkLayout(width, height, push), [width, height, push]);
+
+  // Wilson in the band: listening while the conversation runs, thinking while a translation
+  // streams, speaking while it plays; his rings follow the microphone, his mouth the voice.
+  const latestTurn = turns[turns.length - 1];
+  const wilsonMood: WilsonMood = !running ? 'idle' : playing ? 'speaking' : latestTurn && !latestTurn.done && !talking ? 'thinking' : 'listening';
+  const voice = useVoiceLevel(b, !!playing);
+  const wilsonLevel = wilsonMood === 'listening' ? (reduce ? undefined : level) : wilsonMood === 'speaking' ? voice : undefined;
   const holdLabel = (who: Side) => {
     const mine = holding === who;
     if (who === 'traveler') return mine ? (playing ? 'Wait: playing the translation…' : 'Listening… release when done') : `Hold to speak ${LANG_NAMES[home]}`;
@@ -485,8 +529,8 @@ export function TalkScreen({ b, nav }: ScreenProps) {
         </View>
       </Flipped>
 
-      {/* The band the status pill sits in (the pill itself is drawn last, on top). */}
-      <View style={{ height: BAND }} />
+      {/* The band Wilson and the status pill sit in (they are drawn last, on top). */}
+      <View style={{ height: L.band }} />
 
       {/* The traveller's half, ending above the tab bar. Its glass ends above the footer row. */}
       <View accessibilityLabel="For you" style={[styles.half, { height: L.bottom, paddingTop: TOP_PAD, paddingHorizontal: L.side, paddingBottom: BOTTOM_PAD }]}>
@@ -541,9 +585,17 @@ export function TalkScreen({ b, nav }: ScreenProps) {
         </View>
       </View>
 
-      {/* The glass status pill between the halves: tap to start or stop; the orb ends the conversation. */}
-      <View pointerEvents="box-none" style={[styles.pillRow, { top: L.pillTop }]}>
-        <Glass kind="clear" radius={dusk.radius.pill} style={[styles.pill, { maxWidth: L.textWidth }]}>
+      {/* Wilson and the glass status pill between the halves: tap either to start or stop; the orb ends the conversation. */}
+      <View pointerEvents="box-none" style={[styles.pillRow, { top: L.top, height: L.band, paddingHorizontal: L.side }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={running ? `Wilson, ${wilsonMood}. Stop translating` : 'Wilson. Start translating'}
+          onPress={toggle}
+          {...axPress(toggle)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
+          <WilsonFace size={L.wilson} mood={wilsonMood} level={wilsonLevel} decorative />
+        </Pressable>
+        <Glass kind="clear" radius={dusk.radius.pill} style={[styles.pill, { maxWidth: L.textWidth - L.wilson - WILSON_GAP }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={running ? `${status}. Stop listening` : 'Start the conversation'}
@@ -552,7 +604,7 @@ export function TalkScreen({ b, nav }: ScreenProps) {
             hitSlop={8}
             style={styles.pillTap}>
             <Wave level={level} active={running} />
-            <Text style={[onGlass, font('700'), styles.pillText]} numberOfLines={1}>
+            <Text style={[onGlass, font('700'), styles.pillText]} numberOfLines={2}>
               {status}
             </Text>
           </Pressable>
@@ -916,10 +968,10 @@ const styles = StyleSheet.create({
   speaker: { ...font('700'), fontSize: 11, color: dusk.color.text2, letterSpacing: 0.4 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   footerText: { ...font('600'), flex: 1, fontSize: 11, color: dusk.color.text2 },
-  pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 1 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingLeft: 16, paddingRight: 8, height: PILL_H },
+  pillRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: WILSON_GAP, zIndex: 1 },
+  pill: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingLeft: 16, paddingRight: 8, height: PILL_H },
   pillTap: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, minHeight: 36 },
-  pillText: { fontSize: 12, flexShrink: 1 },
+  pillText: { fontSize: 12, lineHeight: 15, flexShrink: 1 },
   wave: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 18 },
   hold: { height: dusk.size.button, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 },
 });

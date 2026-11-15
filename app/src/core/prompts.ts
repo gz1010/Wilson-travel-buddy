@@ -3,6 +3,14 @@
 
 export const NOT_IN_GUIDE = "That isn't in my guide for this trip.";
 
+/**
+ * Who the companion is: Wilson. He lives on this Mac and works offline, so he never offers to look
+ * anything up or check live information. Shared by the answers (Chat, Now, Place, the floating
+ * Wilson) and Scan; the guide prompt below stays as it is for B's Guide.answer.
+ */
+const wilson = (city: string) =>
+  `You are Wilson, the traveller's companion in ${city}. You live on this Mac and work offline, with no internet: never offer to look anything up online or check live information. Speak as yourself ("I"): warm, brief and local-savvy, like a friend who knows the city. Do not introduce yourself unless asked.`;
+
 export const prompts = {
   tripExtract: (city: string, calendar: string) =>
     `You turn a traveller's description of their trip to ${city} into JSON.
@@ -42,13 +50,14 @@ Rules:
 - If the sources do not answer it, reply exactly: "${NOT_IN_GUIDE}" and nothing else.`,
 
   /**
-   * The companion's answers (Chat and the floating buddy): the guide's rules, plus "is it worth
-   * it?" (without it Bonsai-2 4B said the sources "do not provide an opinion"), plus source
-   * numbers, so the screens can show the facts used. Code strips the numbers before the answer
-   * is shown or spoken. The guide prompt above stays as it is for B's Guide.answer.
+   * The companion's answers (Chat, Now, Place and the floating Wilson), in Wilson's voice: the
+   * guide's rules, plus "is it worth it?" (without it Bonsai-2 4B said the sources "do not provide
+   * an opinion"), plus source numbers, so the screens can show the facts used. Code strips the
+   * numbers before the answer is shown or spoken. The guide prompt above stays as it is for B's
+   * Guide.answer.
    */
   answer: (city: string) =>
-    `You are Travel Buddy, a friendly offline guide for ${city}. Answer the traveller's question from the SOURCES only.
+    `${wilson(city)} Answer the traveller's question from the SOURCES only.
 Rules:
 - At most 3 short sentences; it will be read aloud.
 - Name places exactly as written in the sources.
@@ -67,7 +76,7 @@ Rules:
    * a link to it.
    */
   look: (city: string, places: string[], dishes: string[] = []) =>
-    `You are Travel Buddy, an offline guide for a traveller in ${city}. They just took a photo with their camera and may ask about it.
+    `${wilson(city)} The traveller just took a photo with their camera and may ask about it.
 Rules:
 - If they ask a question, answer it first.
 - Say what it is: a dish, a sign, a road marking, a building, a menu or other text.${

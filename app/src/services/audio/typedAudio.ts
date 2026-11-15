@@ -1,4 +1,4 @@
-import type { AudioClient, AudioInfo, Heard, Lang, LocationFix, TurnEvent } from '../../core/types';
+import type { AudioClient, AudioInfo, Heard, Lang, LevelKind, LocationFix, TurnEvent, WakeEvent } from '../../core/types';
 
 export interface ScriptedLine {
   speaker: number;
@@ -17,7 +17,7 @@ export class TypedAudio implements AudioClient {
 
   constructor(private script: ScriptedLine[], private lineDelayMs = 2500) {}
 
-  listen(): Promise<Heard> {
+  listen(_onPartial?: (text: string) => void, _language?: Lang, _options?: { quietMs?: number }): Promise<Heard> {
     return Promise.reject(new Error('No microphone: type instead'));
   }
 
@@ -49,6 +49,16 @@ export class TypedAudio implements AudioClient {
   async locate(onError?: (message: string) => void): Promise<LocationFix | undefined> {
     onError?.('No macOS Location without the audio helper.');
     return undefined;
+  }
+
+  /** No microphone, so no wake word: the toggle stays, but nothing listens. */
+  wake(_onEvent: (e: WakeEvent) => void): () => void {
+    return () => {};
+  }
+
+  /** No microphone and no voice audio, so no levels. */
+  subscribeLevels(_onLevel: (kind: LevelKind, value: number) => void): () => void {
+    return () => {};
   }
 
   /** Replays the script word by word, as the real helper would stream it. */

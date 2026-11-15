@@ -27,17 +27,22 @@ import { modelLine } from '../dusk/modelNames';
 import { useReduceMotion } from '../dusk/motion';
 import { useScreenSize } from '../dusk/Screen';
 import { dusk, font, ground, white } from '../dusk/tokens';
-import { useMicLevel, VoiceMic } from '../dusk/VoiceMic';
+import { useMicLevel } from '../dusk/VoiceMic';
 import type { ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
+import { isDeclined, levelFor, NEARBY_QUESTION, useLevel, useMood, wakeOf, WilsonFace, type WilsonMood, type WilsonWake } from './WilsonLive';
 
-// Chat (the tab that was Plan; its screen id stays 'setup'): voice mode and chat with the buddy.
-// Voice first: the slim liquid mic at the bottom listens, the answer streams into the
-// conversation (you on the right, the buddy on glass on the left) and is spoken; typing works too.
-// Behind it an abstract liquid background in the Dusk palette brightens and takes the mic's tint
-// while it listens, thinks or speaks. "Your trip" above the conversation is a compact summary of
-// the days that opens to show them; it updates (and says so) when the trip changes, e.g. after
-// "I'm staying two more days". Facts the answer was built from (b.cited) show under the answer.
+// Chat (the tab that was Plan; its screen id stays 'setup'): talk to Wilson, the companion.
+// Voice first: Wilson himself sits at the bottom where the mic was (slim and alive: he breathes and
+// blinks, his rings follow your voice and his mouth his own); tap him to talk, tap him again to
+// send, tap him while he thinks or speaks to stop him (no barge-in). A switch beside him lets him
+// listen for his name ("Wilson, …"), offline. His answers stream into the conversation (you on the
+// right, Wilson on glass on the left, with his face and "Wilson · from your <city> guide" when the
+// guide's facts are behind an answer) and are spoken; typing works too. Behind it an abstract
+// liquid background in the Dusk palette brightens and takes his tint while he listens, thinks or
+// speaks. "Your trip" above the conversation is a compact summary of the days that opens to show
+// them; it updates (and says so) when the trip changes, e.g. after "I'm staying two more days".
+// Facts the answer was built from (b.cited) show under the answer.
 // Import (by the Offline chip, or a file dropped on the screen) brings in an itinerary: a calendar
 // file or text, previewed in a sheet (dusk/ImportSheet.tsx) before it becomes the trip.
 // DuskRoot draws the tab bar over the bottom TAB_BAR_RESERVE.
@@ -58,7 +63,7 @@ const IMPORT_TOOLTIP: object = { tooltip: 'Import an itinerary (.ics or text)' }
 const THIN_SPACE = ' ';
 /** The trip strip shows at most this many days (the longest trip the planner makes). */
 const MAX_DAYS = 14;
-/** Only the buddy's latest bubbles blur what's behind them; older ones are flat glass (cheaper). */
+/** Only Wilson's latest bubbles blur what's behind them; older ones are flat glass (cheaper). */
 const BLURRED_BUBBLES = 6;
 /** How long the trip card says "updated" after a change. */
 const UPDATED_MS = 5000;
@@ -225,9 +230,19 @@ export function SetupScreen({ b, nav }: ScreenProps) {
   const { trip, index } = b;
   const llm = b.runtime.llm.name;
 
-  // One mood for the mic and the background: what the buddy is doing right now.
+  // One mood for the background: what Wilson is doing right now.
   const mood: Mood = b.listening ? 'listening' : b.speaking ? 'speaking' : b.busy ? 'thinking' : 'idle';
   const mic = useMicLevel(b.runtime.audio, b.listening, b.partial);
+  // Wilson himself: his mood (also happy when a stop is added, unsure after "not in my guide"),
+  // the level his face follows, and the switch that lets him listen for his name.
+  const wilson = useMood(b);
+  const wilsonLevel = useLevel(b);
+  const wake = wakeOf(b);
+  /** The wake word is on and this helper has it: only then does the copy invite "Wilson, …". */
+  const wakeOn = !!wake && wake.enabled && wake.available !== false;
+  const city = index.destination.name;
+  // "Talk to Wilson" keeps to one line beside Import and Offline (about 180 px with their gaps).
+  const titleSize = Math.max(20, Math.min(30, Math.round((width - 40 * sx - 180) / 7.4)));
 
   // Every on-device model by name, always visible (with the Offline chip).
   const models = modelLine(llm, b.runtime.audio.info.models);
@@ -247,7 +262,14 @@ export function SetupScreen({ b, nav }: ScreenProps) {
     // On macOS, Enter takes focus away from the field; give it back so the next line can be typed.
     setTimeout(() => input.current?.focus(), 0);
   };
-  const onMic = () => (hasMic ? b.talk() : input.current?.focus());
+  /** Tap Wilson: talk; while he listens, send; while he thinks or speaks, stop him (no barge-in). */
+  const onWilson = () => {
+    if (!hasMic) input.current?.focus();
+    else if (b.listening) b.talk();
+    else if (b.speaking || b.busy) b.stopSpeaking();
+    else b.talk();
+  };
+  const wilsonLabel = !hasMic ? 'No microphone: type a message' : b.listening ? 'Stop listening and send' : b.speaking || b.busy ? 'Stop Wilson' : 'Talk to Wilson';
 
   // Import an itinerary: the sheet, opened by the Import button or by a file dropped on the screen
   // (keyed, so each drop starts afresh). While a file is dragged over, the screen says it can take it.
@@ -271,14 +293,39 @@ export function SetupScreen({ b, nav }: ScreenProps) {
     lastY.current = y;
   };
   const toEnd = () => scroll.current?.scrollToEnd({ animated: !reduce });
-  // A new line (yours or the buddy's) or the mic starting always brings the end back.
+  /** Where the latest question sits in the conversation, and how tall the conversation and its view are. */
+  const askedY = useRef<number | undefined>(undefined);
+  const viewH = useRef(0);
+  const contentH = useRef(0);
+  /** The answer whose question was last brought to the top (once per answer, so reading on is never undone). */
+  const shownAnswer = useRef<string | undefined>(undefined);
+  /**
+   * New words keep the end in view. Once an answer is in and it runs past the view (the guide's
+   * facts come under it), its question goes to the top instead: the end alone showed only the
+   * fact cards, with Wilson's reply scrolled away above them.
+   */
+  const follow = () => {
+    if (!atEnd.current || empty) return;
+    const latest = b.chat[b.chat.length - 1];
+    const y = askedY.current;
+    if (latest?.who === 'buddy' && !latest.pending && y !== undefined && viewH.current > 0 && shownAnswer.current !== latest.id && contentH.current - y > viewH.current) {
+      shownAnswer.current = latest.id;
+      atEnd.current = false;
+      scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: !reduce });
+      return;
+    }
+    if (b.listening || shownAnswer.current !== latest?.id) toEnd();
+  };
+  // A new line (yours or Wilson's) or the mic starting always brings the end back; the follow-up
+  // listen right after an answer waits for words first, so the answer stays where it can be read.
   // The empty conversation (the intro and suggestions) starts at its top instead: in a short window
   // it can be taller than the space, and its first line is the one to read.
   const lineCount = b.chat.length;
+  const listenNow = b.listening && (!b.followUp || !!b.partial);
   useEffect(() => {
     atEnd.current = true;
-    if (lineCount > 0 || b.listening) scroll.current?.scrollToEnd({ animated: !reduce });
-  }, [lineCount, b.listening, reduce]);
+    if (lineCount > 0 || listenNow) scroll.current?.scrollToEnd({ animated: !reduce });
+  }, [lineCount, listenNow, reduce]);
 
   const onDay = (date: string) => {
     b.setClock({ date, minute: b.situation.clock.minute });
@@ -288,6 +335,7 @@ export function SetupScreen({ b, nav }: ScreenProps) {
 
   const latestCited = factsIn(b);
   const lastBuddy = lastIndexWhere(b.chat, l => l.who === 'buddy');
+  const lastYou = lastIndexWhere(b.chat, l => l.who === 'you');
   const firstBlurred = Math.max(0, b.chat.length - BLURRED_BUBBLES * 2);
   const empty = b.chat.length === 0 && !b.listening;
 
@@ -295,13 +343,15 @@ export function SetupScreen({ b, nav }: ScreenProps) {
     ? 'No microphone here: type below'
     : b.listening
       ? b.partial
-        ? 'Listening · tap the ring to send'
+        ? 'Listening · tap me to send'
         : 'Listening…'
       : b.speaking
-        ? 'Speaking · tap the ring to interrupt'
+        ? 'Speaking · tap me to stop'
         : b.busy
           ? `${llm} is thinking…` // what it is doing (b.status) shows under its bubble
-          : b.status ?? 'Tap the ring to talk'; // e.g. why the microphone stopped
+          : b.status ?? // e.g. why the microphone stopped
+            (wakeOn ? (wake?.listening ? 'Listening for “Wilson, …” · or tap me' : 'Tap me, or say “Wilson, …”') : 'Tap me to talk');
+  const greetHint = !hasMic ? 'No microphone here: type below.' : wakeOn ? 'Tap me, or start with “Wilson, …”' : 'Tap me to talk, or type below.';
 
   // Suggestions for an empty conversation: they send like typed lines.
   const landmark = trip?.stops.find(s => s.placeId)?.title ?? index.destination.name;
@@ -316,8 +366,8 @@ export function SetupScreen({ b, nav }: ScreenProps) {
       {/* The models get the full width under the title: with the Argmax helper they are four long names. */}
       <View style={{ marginTop: f.top, marginHorizontal: 20 * sx }}>
         <View style={styles.header}>
-          <Text style={styles.title} accessibilityRole="header">
-            Chat
+          <Text style={[styles.title, { fontSize: titleSize, lineHeight: Math.round(titleSize * 1.2) }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} accessibilityRole="header">
+            Talk to Wilson
           </Text>
           <View style={styles.headerRight}>
             <ImportButton onPress={() => openImport()} />
@@ -337,13 +387,27 @@ export function SetupScreen({ b, nav }: ScreenProps) {
         contentContainerStyle={[styles.chatContent, { paddingHorizontal: 16 * sx }]}
         onScroll={onScroll}
         scrollEventThrottle={64}
-        onContentSizeChange={() => atEnd.current && !empty && toEnd()}
+        onContentSizeChange={(_, h) => {
+          contentH.current = h;
+          follow();
+        }}
+        onLayout={e => {
+          viewH.current = e.nativeEvent.layout.height;
+          follow();
+        }}
         showsVerticalScrollIndicator={false}
         accessibilityLabel="Conversation">
         {empty ? (
           <View style={styles.intro}>
-            <Text style={[styles.introBig, { fontSize: f.intro, lineHeight: Math.round(f.intro * 1.24) }]}>{trip ? 'What would you like to know?' : "Tell me how long you're here, where you're staying and what you love."}</Text>
-            <Text style={styles.introSmall}>{`Tap the ring and talk, or type below. ${llm} answers on this Mac, offline.`}</Text>
+            {/* Wilson's greeting: he lives on this Mac, so he works without signal. */}
+            <Glass kind="clear" radius={22} blur={false} style={styles.greeting}>
+              <WilsonFace size={32} mood={wilson === 'listening' || wilson === 'speaking' ? 'idle' : wilson} decorative />
+              <View style={styles.bubbleBody}>
+                <Text style={[styles.introBig, { fontSize: f.intro, lineHeight: Math.round(f.intro * 1.24) }]}>Hi, I'm Wilson. I live on this Mac, so I work without signal.</Text>
+                <Text style={styles.introSmall}>{greetHint}</Text>
+              </View>
+            </Glass>
+            <Text style={styles.introAsk}>{trip ? 'What would you like to know?' : "Tell me how long you're here, where you're staying and what you love."}</Text>
             <View style={styles.suggestions}>
               {suggestions.map(s => (
                 <Suggestion key={s} label={s} disabled={b.busy} onPress={() => submit(s)} />
@@ -352,28 +416,44 @@ export function SetupScreen({ b, nav }: ScreenProps) {
           </View>
         ) : null}
 
-        {b.chat.map((line, i) =>
-          line.who === 'you' ? (
-            <YouBubble key={line.id} text={line.text} terms={terms} />
-          ) : (
+        {b.chat.map((line, i) => {
+          if (line.who === 'you')
+            return i === lastYou ? (
+              <View
+                key={line.id}
+                onLayout={e => {
+                  askedY.current = e.nativeEvent.layout.y;
+                  follow();
+                }}>
+                <YouBubble text={line.text} terms={terms} />
+              </View>
+            ) : (
+              <YouBubble key={line.id} text={line.text} terms={terms} />
+            );
+          const latest = i === lastBuddy;
+          const cited = line.pending ? undefined : factsIn(line) ?? (latest ? latestCited : undefined);
+          const declined = !line.pending && isDeclined(line.text);
+          // His face in each answer: the latest one thinks and speaks; the older ones rest.
+          const face: WilsonMood = latest && line.pending && !line.text ? 'thinking' : latest && b.speaking ? 'speaking' : declined ? 'unsure' : 'idle';
+          return (
             <View key={line.id} style={styles.buddyBlock}>
               <BuddyBubble
                 line={line}
                 blur={i >= firstBlurred}
-                tint={b.speaking && i === lastBuddy ? moodColor('speaking', 0.16) : undefined}
+                tint={b.speaking && latest ? moodColor('speaking', 0.16) : undefined}
                 status={line.pending ? b.status : undefined}
                 reduce={reduce}
+                label={cited ? `Wilson · from your ${city} guide` : undefined}
+                face={face}
+                level={latest ? levelFor(face, wilsonLevel) : undefined}
+                alive={latest}
               />
-              {line.pending ? null : (
-                <Cited
-                  cited={factsIn(line) ?? (i === lastBuddy ? latestCited : undefined)}
-                  max={i === lastBuddy ? 3 : 2}
-                  onOpen={id => (index.place(id) ? nav.openPlace(id) : undefined)}
-                />
-              )}
+              {line.pending ? null : <Cited cited={cited} max={latest ? 3 : 2} onOpen={id => (index.place(id) ? nav.openPlace(id) : undefined)} />}
+              {/* "Not in my guide": he offers something nearby instead. */}
+              {latest && declined ? <Suggestion label="Something nearby instead" disabled={b.busy || b.listening} onPress={() => submit(NEARBY_QUESTION)} /> : null}
             </View>
-          ),
-        )}
+          );
+        })}
 
         {b.listening ? (
           <Glass kind="prominent" radius={20} blur={false} tint={moodColor('listening', 0.2)} style={styles.you}>
@@ -385,13 +465,17 @@ export function SetupScreen({ b, nav }: ScreenProps) {
       </ScrollView>
 
       <View style={[styles.dock, { paddingHorizontal: 14 * sx, paddingTop: f.dock, marginBottom: TAB_BAR_RESERVE }]}>
-        <VoiceMic
-          state={hasMic ? mood : 'idle'}
-          level={mic.value}
-          onPress={onMic}
-          size={f.mic}
-          accessibilityLabel={hasMic ? undefined : 'No microphone: type a message'}
-        />
+        {/* Wilson, where the mic was: tap him to talk. Beside him, the switch for his name. */}
+        <View style={[styles.wilsonRow, { height: f.mic }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={wilsonLabel} onPress={onWilson} {...axPress(onWilson)} hitSlop={6} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
+            <WilsonFace size={f.mic} mood={wilson} level={levelFor(wilson, wilsonLevel)} decorative />
+          </Pressable>
+          {hasMic && wake && wake.available !== false ? (
+            <View pointerEvents="box-none" style={[styles.wakeSpot, { maxWidth: (width - 28 * sx - f.mic) / 2 - 8 }]}>
+              <WakeSwitch wake={wake} reduce={reduce} />
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.caption} numberOfLines={1} accessibilityLiveRegion="polite">
           {caption}
         </Text>
@@ -454,6 +538,58 @@ export function SetupScreen({ b, nav }: ScreenProps) {
   );
 }
 
+/**
+ * "Listen for “Wilson”": a switch beside him. On, he listens for his name (Argmax, on this Mac, no
+ * network) and answers what follows without a tap; its knob glows while he is listening for it.
+ */
+function WakeSwitch({ wake, reduce }: { wake: WilsonWake; reduce: boolean }) {
+  const on = wake.enabled;
+  const hearing = on && wake.listening;
+  const glow = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!hearing || reduce) {
+      glow.setValue(1);
+      return;
+    }
+    const ease = Easing.inOut(Easing.sin);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 0.35, duration: 900, easing: ease, useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 1, duration: 900, easing: ease, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [hearing, reduce, glow]);
+  const toggle = () => wake.setEnabled(!on);
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel="Listen for “Wilson”"
+      accessibilityState={{ checked: on }}
+      accessibilityValue={{ text: hearing ? 'listening for his name' : on ? 'on' : 'off' }}
+      accessibilityHint="He listens for his name on this Mac, offline, and answers without a tap"
+      onPress={toggle}
+      {...axPress(toggle)}
+      hitSlop={6}
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+      <Glass kind={on ? 'prominent' : 'clear'} radius={18} blur={false} style={styles.wake}>
+        <View style={styles.wakeText}>
+          <Text style={styles.wakeSmall} numberOfLines={1}>
+            LISTEN FOR
+          </Text>
+          <Text style={[onGlass, styles.wakeName]} numberOfLines={1}>
+            “Wilson”
+          </Text>
+        </View>
+        <View style={[styles.track, on && styles.trackOn]}>
+          <Animated.View style={[styles.knob, on && styles.knobOn, { opacity: glow }]} />
+        </View>
+      </Glass>
+    </Pressable>
+  );
+}
+
 /** Import an itinerary: a small clear-glass pill by the Offline chip. */
 function ImportButton({ onPress }: { onPress: () => void }) {
   return (
@@ -499,18 +635,48 @@ const YouBubble = React.memo(function YouBubble({ text, terms }: { text: string;
 });
 
 /**
- * The buddy's answer, on the left on clear glass; dots until the first words stream in. Memoised:
+ * Wilson's answer, on the left on clear glass with his face (32) and, when the guide's facts are
+ * behind it, "Wilson · from your <city> guide"; dots until the first words stream in. Memoised:
  * while an answer streams only its own bubble re-renders (useBuddy keeps the other lines as they are).
  */
-const BuddyBubble = React.memo(function BuddyBubble({ line, blur, tint, status, reduce }: { line: ChatLine; blur: boolean; tint?: string; status?: string; reduce: boolean }) {
+const BuddyBubble = React.memo(function BuddyBubble({
+  line,
+  blur,
+  tint,
+  status,
+  reduce,
+  label,
+  face,
+  level,
+  alive,
+}: {
+  line: ChatLine;
+  blur: boolean;
+  tint?: string;
+  status?: string;
+  reduce: boolean;
+  label?: string;
+  face: WilsonMood;
+  level?: Animated.Value;
+  /** Breathing and blinking: only the latest answer's Wilson. */
+  alive: boolean;
+}) {
   return (
     <>
       <Glass kind="clear" radius={20} blur={blur} tint={tint} style={styles.buddy}>
-        {line.text ? (
-          <Text style={[styles.buddyText, line.error && styles.errorText]}>{line.text}</Text>
-        ) : (
-          <TypingDots reduce={reduce} />
-        )}
+        <WilsonFace size={32} mood={face} level={level} alive={alive} decorative />
+        <View style={styles.bubbleBody}>
+          {label ? (
+            <Text style={styles.buddyLabel} numberOfLines={1}>
+              {label}
+            </Text>
+          ) : null}
+          {line.text ? (
+            <Text style={[styles.buddyText, line.error && styles.errorText]}>{line.text}</Text>
+          ) : (
+            <TypingDots reduce={reduce} />
+          )}
+        </View>
       </Glass>
       {status ? (
         <Text style={styles.status} numberOfLines={1}>
@@ -798,8 +964,11 @@ const styles = StyleSheet.create({
   chat: { flex: 1 },
   chatContent: { flexGrow: 1, justifyContent: 'flex-end', paddingTop: 6, paddingBottom: 10, gap: 10 },
   intro: { gap: 10, paddingBottom: 4 },
+  greeting: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 14, paddingLeft: 12, paddingRight: 16 },
+  bubbleBody: { flexShrink: 1, gap: 4 },
   introBig: { ...font('300'), letterSpacing: -0.4, color: dusk.color.text }, // size: fit().intro
   introSmall: { ...font('500'), fontSize: 13, lineHeight: 18, color: dusk.color.text2 },
+  introAsk: { ...font('500'), fontSize: 15, lineHeight: 21, color: dusk.color.text, marginTop: 2 },
   suggestions: { gap: 6, alignItems: 'flex-start', marginTop: 4 },
   suggestionHit: { minHeight: dusk.size.touch, justifyContent: 'center', maxWidth: '100%' },
   suggestion: { paddingVertical: 8, paddingHorizontal: 14 },
@@ -810,7 +979,8 @@ const styles = StyleSheet.create({
   livePending: { color: dusk.color.textSoft },
   understood: { ...font('700'), color: dusk.color.white, backgroundColor: white(0.16) },
   buddyBlock: { alignSelf: 'stretch', alignItems: 'flex-start', gap: 6 },
-  buddy: { maxWidth: '88%', paddingVertical: 10, paddingHorizontal: 15 },
+  buddy: { maxWidth: '88%', flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, paddingLeft: 10, paddingRight: 15 },
+  buddyLabel: { ...font('600'), fontSize: 11.5, lineHeight: 15, color: dusk.color.text2 },
   buddyText: { ...font('400'), fontSize: 15.5, lineHeight: 22, color: dusk.color.text },
   errorText: { color: dusk.color.text2 },
   status: { ...font('500'), fontSize: 12, lineHeight: 16, color: dusk.color.text2, marginLeft: 6 },
@@ -825,6 +995,16 @@ const styles = StyleSheet.create({
   factSource: { ...font('500'), fontSize: 11, lineHeight: 14, color: dusk.color.text2, marginTop: 2 },
 
   dock: { alignItems: 'center' },
+  wilsonRow: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  wakeSpot: { position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' },
+  wake: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 6, paddingLeft: 12, paddingRight: 10 },
+  wakeText: { flexShrink: 1 },
+  wakeSmall: { ...font('700'), fontSize: 9.5, lineHeight: 12, letterSpacing: 0.6, color: dusk.color.text2 },
+  wakeName: { ...font('700'), fontSize: 13, lineHeight: 17 },
+  track: { width: 30, height: 18, borderRadius: 9, padding: 3, backgroundColor: white(0.16), borderWidth: 1, borderColor: white(0.2) },
+  trackOn: { backgroundColor: white(0.5), borderColor: white(0.6), alignItems: 'flex-end' },
+  knob: { width: 10, height: 10, borderRadius: 5, backgroundColor: white(0.75) },
+  knobOn: { backgroundColor: dusk.color.white, shadowColor: dusk.color.white, shadowOpacity: 0.9, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } },
   caption: { ...font('500'), fontSize: 12, lineHeight: 16, color: dusk.color.textSoft, marginTop: 6, alignSelf: 'stretch', textAlign: 'center' },
   field: {
     alignSelf: 'stretch',

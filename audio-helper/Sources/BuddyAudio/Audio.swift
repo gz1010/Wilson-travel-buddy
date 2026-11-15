@@ -143,8 +143,18 @@ final class Flag: @unchecked Sendable {
     }
 }
 
+/// When the app last sent anything. The wake word keeps the microphone open, so it stops when the
+/// app has gone quiet (quit or crashed): the server does not report disconnects.
+final class Stamp: @unchecked Sendable {
+    private let lock = NSLock()
+    private var at = Date()
+    func touch() { lock.lock(); at = Date(); lock.unlock() }
+    var age: TimeInterval { lock.lock(); defer { lock.unlock() }; return Date().timeIntervalSince(at) }
+}
+
 /// One speech stream's timeline: where each sentence's audio starts and ends among the seconds of
-/// audio handed to the player, and which speak.started / speak.done have been sent.
+/// audio handed to the player, and which speak.started / speak.done have been sent. It also keeps
+/// the loudness of every 20 ms of that audio, for speak.level at the playhead.
 final class SpeechTimeline: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [(id: String, start: Double, end: Double?)] = []
@@ -152,6 +162,9 @@ final class SpeechTimeline: @unchecked Sendable {
     private var finished: Set<String> = []
     private var seconds = 0.0
     private var _flushed = false
+    static let hop = 0.02
+    private var envelope: [Float] = []
+    private var carry: [Float] = []
 
     /// True once the pre-buffer has been released and audio plays as it arrives.
     var flushed: Bool {
@@ -159,7 +172,37 @@ final class SpeechTimeline: @unchecked Sendable {
         set { lock.lock(); _flushed = newValue; lock.unlock() }
     }
     var audioSeconds: Double { lock.lock(); defer { lock.unlock() }; return seconds }
-    func add(seconds s: Double) { lock.lock(); seconds += s; lock.unlock() }
+    /// Audio handed to the player: counts its seconds and measures its loudness.
+    func add(audio samples: [Float], rate: Double) {
+        guard rate > 0 else { return }
+        let hopSamples = max(1, Int(rate * Self.hop))
+        lock.lock()
+        seconds += Double(samples.count) / rate
+        carry.append(contentsOf: samples)
+        var i = 0
+        while carry.count - i >= hopSamples {
+            var rms: Float = 0
+            carry.withUnsafeBufferPointer { vDSP_rmsqv($0.baseAddress! + i, 1, &rms, vDSP_Length(hopSamples)) }
+            envelope.append(rms)
+            i += hopSamples
+        }
+        carry.removeFirst(i)
+        lock.unlock()
+    }
+    /// The loudness (RMS) of the audio at `t` seconds: the louder of this 20 ms and the next.
+    func loudness(at t: Double) -> Float {
+        lock.lock(); defer { lock.unlock() }
+        let i = Int(t / Self.hop)
+        guard t >= 0, i < envelope.count else { return 0 }
+        return max(envelope[i], i + 1 < envelope.count ? envelope[i + 1] : 0)
+    }
+    /// For the log: the median and 95th-percentile loudness of the whole stream.
+    func loudnessSummary() -> (median: Float, p95: Float) {
+        lock.lock(); defer { lock.unlock() }
+        let sorted = envelope.filter { $0 > 0.001 }.sorted()
+        guard !sorted.isEmpty else { return (0, 0) }
+        return (sorted[sorted.count / 2], sorted[min(sorted.count - 1, sorted.count * 95 / 100)])
+    }
     func begin(_ id: String) { lock.lock(); entries.append((id, seconds, nil)); lock.unlock() }
     func end(_ id: String) {
         lock.lock()
@@ -194,9 +237,9 @@ final class SpeechTimeline: @unchecked Sendable {
 }
 
 /// Everything audio, driven by messages from the app. One listen or one
-/// conversation at a time; speech is queued.
+/// conversation at a time; speech is queued. While neither runs, the wake word may listen.
 actor AudioService {
-    enum Mode { case idle, listen, conversation }
+    enum Mode { case idle, listen, conversation, wake }
 
     private let models: ArgmaxModels
     private let send: (Outgoing) -> Void
@@ -220,6 +263,8 @@ actor AudioService {
     private var partialTask: Task<Void, Never>?
     private var finals: Task<Void, Never> = Task {}
     private var listenStarted = Date()
+    /// A listen with no speech ends after this many seconds (listen.start's quietMs, else 8).
+    private var listenQuiet = 8.0
     private var lastLevelSent = Date.distantPast
     private var startGeneration = 0
     /// Translator fallback: record only between turn.start and turn.end (one button per person).
@@ -236,28 +281,92 @@ actor AudioService {
     private var speechGeneration = 0
     private let cancelSpeech = Flag()
 
-    init(models: ArgmaxModels, voiceThreshold: Float, voices: [String: Qwen3Speaker], send: @escaping (Outgoing) -> Void) {
+    // Wake word state (see "Wake word" below).
+    private enum WakePhase { case waiting, checking, capturing, finishing, skipping }
+    /// The app asked for the wake word (wake.start) and has not taken it back (wake.stop).
+    private var wakeWanted = false
+    private var wakePhase = WakePhase.waiting
+    private var wakeEndpointer: Endpointer = {
+        var e = Endpointer()
+        e.silenceToEnd = 0.7
+        e.minSpeech = 0.25
+        return e
+    }()
+    /// The sentence so far, with half a second from before it.
+    private var wakeAudio: [Float] = []
+    /// Its loudest chunk (RMS), against the loudness floor.
+    private var wakeLoudest: Float = 0
+    /// The sentence has ended; nothing more is added to it.
+    private var wakeEnded = false
+    /// Goes up with every new sentence, so a late reading of an old one is dropped.
+    private var wakeSentence = 0
+    private var wakeLastSpeech: Date?
+    /// When Whisper was last asked about a sentence (at most wakeChecksPerMinute).
+    private var wakeChecks: [Date] = []
+    private var wakeResume: Task<Void, Never>?
+    private var wakeStateSent = false
+    /// No listening until then: the end of the helper's own voice.
+    private var wakeQuietUntil = Date.distantPast
+    /// When macOS last refused the microphone to the wake word.
+    private var wakeRefusedAt: Date?
+    private let wakeFloor: Float
+    private let wakePrompt: [Int]?
+    /// When the app last sent a message (main.swift touches it on every one).
+    nonisolated let appContact = Stamp()
+
+    init(models: ArgmaxModels, voiceThreshold: Float, voices: [String: Qwen3Speaker], wakeFloor: Float = 0.012, send: @escaping (Outgoing) -> Void) {
         self.models = models
         self.send = send
         self.voices = voices
         self.prints = VoicePrints(threshold: voiceThreshold)
+        self.wakeFloor = wakeFloor
+        // Whisper reads the name as "Wilson" (not "Willson", "Will son") with it as the previous text.
+        // BUDDY_WAKE_PROMPT="" turns that off, for comparing.
+        let prompt = ProcessInfo.processInfo.environment["BUDDY_WAKE_PROMPT"] ?? " Wilson"
+        self.wakePrompt = prompt.isEmpty ? nil : models.whisper.tokenizer.map { tokenizer in
+            tokenizer.encode(text: prompt).filter { $0 < tokenizer.specialTokens.specialTokenBegin }
+        }
         // BUDDY_LANG_TEST=/a.aiff,/b.wav checks language detection without a microphone (see languageTest).
         if let test = ProcessInfo.processInfo.environment["BUDDY_LANG_TEST"], !test.isEmpty {
             let paths = test.split(separator: ",").map { String($0) }
             Task { await self.languageTest(paths) }
         }
+        // BUDDY_WAKE_TEST=/a.aiff,/b.aiff runs files through the wake word in real time (see wakeTest).
+        if let test = ProcessInfo.processInfo.environment["BUDDY_WAKE_TEST"], !test.isEmpty {
+            let paths = test.split(separator: ",").map { String($0) }
+            Task { await self.wakeTest(paths) }
+        }
     }
+
+    nonisolated func heardFromApp() { appContact.touch() }
 
     // MARK: Messages
 
     func handle(_ m: Incoming) async {
+        defer { updateWakeState() }
         switch m.type {
-        case "listen.start": await start(.listen, languages: [], listenLanguage: m.language)
+        case "listen.start":
+            listenQuiet = m.quietMs.map { max(1, Double($0) / 1000) } ?? 8
+            await start(.listen, languages: [], listenLanguage: m.language)
         case "listen.stop":
             if mode == .listen {
-                if micTask == nil { startGeneration += 1; mode = .idle; send(.listenDone()) } // still waiting for permission
+                if micTask == nil { startGeneration += 1; mode = .idle; send(.listenDone()); scheduleWakeResume() } // still waiting for permission
                 else { await endListen() }
+            } else if mode == .wake, wakePhase == .capturing {
+                // A tap while Wilson listens after his name: what was said so far is the question.
+                wakeEnded = true
+                finishWake()
             }
+        case "wake.start":
+            // Also the app's keepalive while it wants the wake word: sent again every few seconds.
+            wakeWanted = true
+            if mode == .idle, wakeRefusedAt.map({ Date().timeIntervalSince($0) > 60 }) ?? true {
+                wakeResume?.cancel()
+                await start(.wake, languages: [], listenLanguage: "en")
+            }
+        case "wake.stop":
+            wakeWanted = false
+            stopWake()
         case "conversation.start":
             resetConversation()
             pushToTalk = m.pushToTalk ?? false
@@ -279,10 +388,12 @@ actor AudioService {
             pttActive = false
             finishTurnNow()
         case "conversation.stop":
+            guard mode == .conversation else { break } // never stops a listen or the wake word
             startGeneration += 1
             stopMic()
             mode = .idle
             resetConversation()
+            scheduleWakeResume()
         case "mute":
             muted = m.muted ?? false
             // A held push-to-talk turn keeps what was said before the translation started playing;
@@ -291,6 +402,7 @@ actor AudioService {
                 utterance = []
                 endpointer.reset()
             }
+            if muted, mode == .wake { resetWakeSentence() }
         case "speak": if let id = m.id, let text = m.text { speak(id: id, text: text, language: m.language ?? "en") }
         case "speak.stop":
             speechGeneration += 1
@@ -306,19 +418,30 @@ actor AudioService {
 
     private func start(_ newMode: Mode, languages: [String], listenLanguage: String?) async {
         stopMic()
+        // A listen or a conversation takes the microphone from the wake word; it comes back after.
+        wakeResume?.cancel()
+        resetWakeSentence()
         mode = newMode
         startGeneration += 1
         let generation = startGeneration
+        updateWakeState()
         guard await AudioProcessor.requestRecordPermission() else {
             mode = .idle
-            send(.error("Microphone access was refused. Allow it in System Settings > Privacy & Security > Microphone."))
+            // The wake word asks again at most once a minute (wake.start comes every few seconds), and says so once.
+            if newMode != .wake || wakeRefusedAt == nil {
+                send(.error("Microphone access was refused. Allow it in System Settings > Privacy & Security > Microphone."))
+            }
             if newMode == .listen { send(.listenDone()) }
+            if newMode == .wake { wakeRefusedAt = Date() }
             return
         }
+        if newMode == .wake { wakeRefusedAt = nil }
         // A stop (or another start) arrived while we waited for permission.
         guard generation == startGeneration, mode == newMode else { return }
-        self.languages = languages
-        self.listenLanguage = listenLanguage
+        if newMode != .wake {
+            self.languages = languages
+            self.listenLanguage = listenLanguage
+        }
         utterance = []
         heardSpeech = false
         endpointer.reset()
@@ -328,10 +451,15 @@ actor AudioService {
         micContinuation = continuation
         micTask = Task { [weak self] in
             do {
-                for try await chunk in stream { await self?.onChunk(chunk) }
+                // The generation drops chunks still buffered from a stream that has been replaced.
+                for try await chunk in stream { await self?.onChunk(chunk, generation: generation) }
             } catch {
                 await self?.report(error)
             }
+        }
+        if newMode == .wake {
+            updateWakeState()
+            return
         }
         partialTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -354,8 +482,13 @@ actor AudioService {
         micContinuation = nil
     }
 
-    private func onChunk(_ chunk: [Float]) async {
-        guard mode != .idle, !muted else { return }
+    private func onChunk(_ chunk: [Float], generation: Int) async {
+        guard generation == startGeneration, mode != .idle else { return }
+        if mode == .wake {
+            onWakeChunk(chunk)
+            return
+        }
+        guard !muted else { return }
         // Push-to-talk: nothing is recorded until someone holds their button.
         if mode == .conversation, pushToTalk, !pttActive { return }
         // Push-to-talk cap: keep the first 30 s and wait for the release, which always sends the final.
@@ -378,12 +511,12 @@ actor AudioService {
         switch mode {
         case .listen:
             let waited = Date().timeIntervalSince(listenStarted)
-            if ended || (heardSpeech && waited > 20) || (!heardSpeech && waited > 8) { await endListen() }
+            if ended || (heardSpeech && waited > 20) || (!heardSpeech && waited > listenQuiet) { await endListen() }
         case .conversation:
             if !pushToTalk, ended || (heardSpeech && utterance.count > 15 * sampleRate) {
                 finishTurnNow()
             }
-        case .idle: break
+        case .idle, .wake: break
         }
     }
 
@@ -432,7 +565,7 @@ actor AudioService {
     }
 
     private func partial() async {
-        guard mode != .idle, heardSpeech, utterance.count > sampleRate / 2 else { return }
+        guard mode == .listen || mode == .conversation, heardSpeech, utterance.count > sampleRate / 2 else { return }
         let lang = mode == .listen ? listenLanguage : (pushToTalk && pttActive ? pttLanguage : nil)
         let (text, heard) = await transcribe(utterance, language: lang)
         // In a conversation, the language heard so far (if it is one of the app's) tells the app who is talking.
@@ -454,6 +587,256 @@ actor AudioService {
             if !text.isEmpty { send(.final(text: text, language: lang ?? language, speaker: nil)) }
         }
         send(.listenDone(sinceEndMs: spoke ? Int(Date().timeIntervalSince(endedAt) * 1000) : nil))
+        scheduleWakeResume()
+        updateWakeState()
+    }
+
+    // MARK: Wake word
+
+    // "Wilson, …" without a tap. While the app wants it (wake.start) and nothing else uses the
+    // microphone (no listen, no conversation), the helper keeps the microphone open and cuts the
+    // sound into sentences with its own Endpointer. Whisper reads only the start of each loud
+    // enough sentence (the first ~2 s; a short sentence whole, never more than 6 s), in English,
+    // with "Wilson" as the previous text. If it starts with the name, the app hears wake.heard
+    // while the person is still talking, and wake {text} with the rest of the sentence when they
+    // stop. Audio is dropped while the app's own voice plays (mute) or the helper speaks, and
+    // nothing leaves the Mac: Argmax's Whisper runs here like everything else.
+
+    /// Seconds into a sentence (with the half second kept from before it) when Whisper checks it.
+    private let wakeCheckAt = 2.0
+    /// The most Whisper reads to decide, for a sentence that has not been checked yet.
+    private let wakeMaxCheck = 6.0
+    /// A sentence after the name ends after this long at most (as a listen does).
+    private let wakeMaxSentence = 20.0
+    /// A busy café: at most this many checks a minute; other sentences are skipped.
+    private let wakeChecksPerMinute = 20
+
+    private func onWakeChunk(_ chunk: [Float]) {
+        if appContact.age > 20 {
+            // wake.start arrives every few seconds while the app wants the wake word.
+            log("Wake word: nothing from the app for 20 s, so it has gone; microphone off")
+            wakeWanted = false
+            stopWake()
+            return
+        }
+        if muted || speaking || Date() < wakeQuietUntil {
+            if wakePhase != .waiting || !wakeAudio.isEmpty { resetWakeSentence() }
+            return
+        }
+        // A sentence that has ended waits for Whisper; the next one starts afterwards.
+        if wakeEnded { return }
+        var rms: Float = 0
+        vDSP_rmsqv(chunk, 1, &rms, vDSP_Length(chunk.count))
+        let (level, ended) = wakeEndpointer.feed(chunk)
+        if wakeEndpointer.chunkIsSpeech {
+            wakeLastSpeech = Date()
+            wakeLoudest = max(wakeLoudest, rms)
+        }
+        // After the name, Wilson's listening rings follow the voice, as in a listen.
+        if wakePhase == .capturing, Date().timeIntervalSince(lastLevelSent) > 0.1 {
+            send(.level(level))
+            lastLevelSent = Date()
+        }
+        if wakePhase == .skipping {
+            if ended { resetWakeSentence() }
+            return
+        }
+        wakeAudio.append(contentsOf: chunk)
+        let seconds = Double(wakeAudio.count) / Double(sampleRate)
+        switch wakePhase {
+        case .waiting:
+            if ended {
+                wakeEnded = true
+                checkWake() // a short sentence: all of it
+            } else if !wakeEndpointer.inSpeech {
+                // Keep half a second from before speech starts, so the first word is not clipped.
+                if wakeAudio.count > sampleRate { wakeAudio.removeFirst(wakeAudio.count - sampleRate / 2) }
+            } else if seconds >= wakeCheckAt {
+                checkWake() // the start of a longer one; it goes on being recorded meanwhile
+            }
+        case .checking:
+            if ended || seconds > wakeMaxSentence { wakeEnded = true }
+        case .capturing:
+            if ended || seconds > wakeMaxSentence {
+                wakeEnded = true
+                finishWake()
+            }
+        case .finishing, .skipping:
+            break
+        }
+    }
+
+    /// Has Whisper read the start of the sentence, if it is loud enough and the rate allows.
+    private func checkWake() {
+        let now = Date()
+        wakeChecks.removeAll { now.timeIntervalSince($0) > 60 }
+        // Too quiet to be someone talking to the Mac (a far-off voice, the TV), or too many checks.
+        guard wakeLoudest >= wakeFloor, wakeChecks.count < wakeChecksPerMinute else {
+            if wakeEnded { resetWakeSentence() } else { wakePhase = .skipping }
+            return
+        }
+        wakeChecks.append(now)
+        wakePhase = .checking
+        let audio = Array(wakeAudio.prefix(Int(wakeMaxCheck * Double(sampleRate))))
+        let sentence = wakeSentence
+        Task { [weak self] in
+            guard let self else { return }
+            let text = await self.readWake(audio, check: true)
+            await self.wakeChecked(text, sentence: sentence, length: audio.count)
+        }
+    }
+
+    private func wakeChecked(_ text: String, sentence: Int, length: Int) {
+        guard sentence == wakeSentence, mode == .wake, wakePhase == .checking else { return }
+        guard let rest = WakeWord.parse(text) else {
+            if !text.isEmpty { log("wake word: not for Wilson: \(text)") }
+            if wakeEnded { resetWakeSentence() } else { wakePhase = .skipping }
+            return
+        }
+        log("wake word: heard \(text)")
+        if wakeEnded, length >= wakeAudio.count {
+            sendWake(rest, heard: text) // that was the whole sentence
+        } else if wakeEnded {
+            finishWake()
+        } else {
+            wakePhase = .capturing
+            log("wake word -> app: wake.heard \(String(reflecting: rest))")
+            send(.wakeHeard(text: rest))
+        }
+    }
+
+    /// The sentence after the name has ended (or was cut short): Whisper reads all of it.
+    private func finishWake() {
+        guard wakePhase != .finishing else { return }
+        wakePhase = .finishing
+        let audio = wakeAudio
+        let sentence = wakeSentence
+        Task { [weak self] in
+            guard let self else { return }
+            let text = await self.readWake(audio, check: false)
+            await self.wakeFinished(text, sentence: sentence)
+        }
+    }
+
+    private func wakeFinished(_ text: String, sentence: Int) {
+        guard sentence == wakeSentence, mode == .wake else { return }
+        log("wake word: whole sentence \(text)")
+        // The check heard the name; if the whole reading lost it, the app gets the sentence as read.
+        sendWake(WakeWord.parse(text) ?? text, heard: text)
+    }
+
+    private func sendWake(_ rest: String, heard: String) {
+        let since = wakeLastSpeech.map { Int(Date().timeIntervalSince($0) * 1000) }
+        log("wake word -> app: wake \(String(reflecting: rest))\(since.map { ", \($0) ms after the speech ended" } ?? "")")
+        send(.wake(text: rest, heard: heard, sinceEndMs: since))
+        resetWakeSentence()
+    }
+
+    /// Whisper, in English, with the name as the previous text. A check reads a few seconds and
+    /// takes Whisper's first reading (no retries at higher temperatures), so it stays quick.
+    private func readWake(_ audio: [Float], check: Bool) async -> String {
+        let options = DecodingOptions(
+            task: .transcribe,
+            language: "en",
+            temperature: 0,
+            temperatureFallbackCount: check ? 0 : 2,
+            sampleLength: check ? 64 : Constants.maxTokenContext,
+            usePrefillPrompt: true,
+            detectLanguage: false,
+            skipSpecialTokens: true,
+            withoutTimestamps: true,
+            promptTokens: wakePrompt
+        )
+        do {
+            let results = try await models.whisper.transcribe(audioArray: audio, decodeOptions: options)
+            return results.map(\.text).joined(separator: " ")
+                .replacingOccurrences(of: "<\\|[^|]*\\|>", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            log("Wake word transcription failed: \(error)")
+            return ""
+        }
+    }
+
+    private func resetWakeSentence() {
+        wakeSentence += 1
+        wakePhase = .waiting
+        wakeAudio = []
+        wakeLoudest = 0
+        wakeEnded = false
+        wakeEndpointer.reset()
+    }
+
+    private func stopWake() {
+        wakeResume?.cancel()
+        wakeResume = nil
+        resetWakeSentence()
+        if mode == .wake {
+            startGeneration += 1
+            stopMic()
+            mode = .idle
+        }
+        updateWakeState()
+    }
+
+    /// After a listen or a conversation, the wake word comes back if the app still wants it.
+    private func scheduleWakeResume(after seconds: Double = 0.5) {
+        wakeResume?.cancel()
+        guard wakeWanted else { return }
+        wakeResume = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.resumeWake()
+        }
+    }
+
+    private func resumeWake() async {
+        wakeResume = nil
+        guard wakeWanted, mode == .idle else { return }
+        await start(.wake, languages: [], listenLanguage: "en")
+    }
+
+    /// Tells the app when the wake word starts or stops listening.
+    private func updateWakeState() {
+        let listening = mode == .wake && micTask != nil && !muted && !speaking
+        guard listening != wakeStateSent else { return }
+        wakeStateSent = listening
+        send(.wakeState(listening: listening))
+    }
+
+    /// BUDDY_WAKE_TEST=/a.aiff,/b.aiff: on start, plays each file (16 kHz after loading) into the
+    /// wake word in real time, between a second of near-silence before and two after, as if the
+    /// microphone heard it, and logs what Whisper read and what the app would get. Check with
+    /// `say -o wake.aiff "Wilson, where is the cathedral?"`. Needs no app; the helper carries on after.
+    private func wakeTest(_ paths: [String]) async {
+        for path in paths {
+            guard let audio = try? AudioProcessor.loadAudioAsFloatArray(fromPath: path) else {
+                log("wake test: could not read \(path)")
+                continue
+            }
+            log("wake test \(URL(fileURLWithPath: path).lastPathComponent) (\(String(format: "%.1f", Double(audio.count) / Double(sampleRate))) s)")
+            mode = .wake
+            resetWakeSentence()
+            var noise = (0 ..< sampleRate).map { _ in Float.random(in: -0.0008 ... 0.0008) }
+            let samples = noise + audio + noise + noise
+            noise = []
+            let chunk = sampleRate / 10
+            var i = 0
+            let started = Date()
+            while i < samples.count {
+                appContact.touch()
+                guard mode == .wake else { break }
+                onWakeChunk(Array(samples[i ..< min(samples.count, i + chunk)]))
+                i += chunk
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            // Whisper may still be reading the last sentence.
+            for _ in 0 ..< 100 where wakePhase != .waiting { try? await Task.sleep(nanoseconds: 100_000_000) }
+            log("wake test \(URL(fileURLWithPath: path).lastPathComponent): done after \(String(format: "%.1f", Date().timeIntervalSince(started))) s")
+            if mode == .wake { mode = .idle }
+            resetWakeSentence()
+        }
+        log("wake test done")
     }
 
     // MARK: Translator
@@ -683,6 +1066,9 @@ actor AudioService {
     private func speakQueued() async {
         while !sentences.isEmpty { await speakStream() }
         speaking = false
+        // The wake word starts listening again a moment after the voice (and its echo) ends.
+        wakeQuietUntil = Date().addingTimeInterval(0.4)
+        updateWakeState()
     }
 
     /// One playback stream: generates the queued sentences one after another into it, takes the
@@ -712,13 +1098,22 @@ actor AudioService {
         let maxTokens = options.maxNewTokens
 
         // speak.started when the playhead reaches a sentence (sound is actually playing), speak.done
-        // when it passes its end.
+        // when it passes its end; speak.level about 20 times a second, from the loudness of the
+        // audio at the playhead (Wilson's mouth opens with it).
         let watcher = Task {
+            var lastLevel: Float = 0
+            var lastLevelAt = Date.distantPast
             while !Task.isCancelled {
                 let t = out.currentPlaybackTime
                 let due = timeline.due(at: t)
                 for id in due.started { sendOut(.speakStarted(id: id)) }
                 for id in due.done { sendOut(.speakDone(id: id)) }
+                if Date().timeIntervalSince(lastLevelAt) >= 0.035 {
+                    let level = t > 0 ? voiceLevel(timeline.loudness(at: t)) : 0
+                    if level > 0 || lastLevel > 0 { sendOut(.speakLevel(level)) }
+                    lastLevel = level
+                    lastLevelAt = Date()
+                }
                 try? await Task.sleep(nanoseconds: 20_000_000)
             }
         }
@@ -743,7 +1138,7 @@ actor AudioService {
                                 sampleRate: rate, minimumBuffer: minBuffer))
                         }
                         out.enqueueAudioChunk(progress.audio)
-                        timeline.add(seconds: Double(progress.audio.count) / Double(rate))
+                        timeline.add(audio: progress.audio, rate: Double(rate))
                         return nil
                     }
                 } catch {
@@ -775,10 +1170,20 @@ actor AudioService {
         }
         if !flag.value { await out.stopPlayback(waitForCompletion: true) }
         watcher.cancel()
+        send(.speakLevel(0))
+        let loud = timeline.loudnessSummary()
+        log("voice loudness (RMS): median \(String(format: "%.3f", loud.median)), 95th percentile \(String(format: "%.3f", loud.p95))")
         for id in timeline.remaining() { sendDone(id) }
     }
 
     private func sendDone(_ id: String) { send(.speakDone(id: id)) }
+
+    /// speak.level from the RMS of the voice at the playhead, 0-1. Measured on Qwen3-TTS (aiden):
+    /// median 0.09, 95th percentile 0.24 (the "voice loudness" log line), so a typical syllable opens
+    /// the mouth about 40% and only the loudest 5% fully; pauses close it.
+    private nonisolated func voiceLevel(_ rms: Float) -> Float {
+        rms < 0.004 ? 0 : min(1, rms * 4.5)
+    }
 
     /// The voice for a language: the one the helper was given for it; else Qwen3-TTS's native voice
     /// for Japanese, Korean and Chinese; else the local's voice (the one for Spanish), so the two

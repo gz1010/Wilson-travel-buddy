@@ -12,14 +12,17 @@ import { dusk, font, ground, white } from '../dusk/tokens';
 import type { ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
+import { isDeclined, levelFor, NEARBY_QUESTION, UNSURE_LINE, useLevel, useMood, WilsonFace, type WilsonMood } from './WilsonLive';
 
 // AntPlace: one place. Its pack photo on top, sharp, melting into a blurred and darkened copy of
 // itself that fills the window (AmbientBackdrop, as on Now), so the glass has colour behind it
 // instead of flat black. Then the name, how far it is and whether it is open, the summary, then the
-// "From your <city> guide" card: the question asked about this place and its streamed answer,
-// every fact the pack has about it, and questions to ask when the pack has few. All of that scrolls
-// behind Add to day · Map · Ask (which float on a soft shade), and the card grows to meet them, so
-// the page never ends in an empty band. No tab bar here: the close orb goes back to Now.
+// guide card, headed by Wilson (32) and "Wilson · from your <city> guide": the question asked about
+// this place and his streamed answer (or, when the guide declined it, "My guide doesn't cover that
+// one. Want something nearby instead?"), every fact the pack has about it, and questions to ask
+// when the pack has few. All of that scrolls behind Add to day · Map · Ask (which float on a soft
+// shade), and the card grows to meet them, so the page never ends in an empty band. No tab bar
+// here: the close orb goes back to Now.
 
 const W = dusk.layout.phoneWidth;
 const H = dusk.layout.phoneHeight;
@@ -53,10 +56,13 @@ const ACTIONS_SHADE: [number, number][] = [
   [0.6, 0.86],
   [1, 0.94],
 ];
-/** Once the page scrolls: behind the pill and close orb, so text never runs under them. */
+/**
+ * Once the page scrolls: behind the pill and close orb, so text never runs under them. Nearly
+ * solid down to just under the orb (the clear glass chips showed the page's text through them).
+ */
 const TOP_SHADE: [number, number][] = [
-  [0, 0.88],
-  [0.55, 0.62],
+  [0, 0.94],
+  [0.72, 0.88],
   [1, 0],
 ];
 /** The fallback scene tile (no photo, no backdrop) still fades into the ground. */
@@ -117,6 +123,24 @@ function attribution(fact: Fact): string | undefined {
   return [from && `From ${from}`, lic].filter(Boolean).join(' · ');
 }
 
+/**
+ * "Photo: Ingo Mehling · CC BY-SA 4.0 · Wikimedia Commons": the pack keeps each photo's author and
+ * licence (CC BY and BY-SA ask for the credit). Commons' author field is sometimes a sentence; this
+ * keeps the name.
+ */
+function photoCredit(place: Place): string | undefined {
+  const ref = place.photo;
+  if (!ref) return undefined;
+  let who = (typeof ref.credit === 'string' ? ref.credit : '')
+    .trim()
+    .replace(/^No machine-readable author provided\.\s*(.+?)\s+assumed\b.*$/i, '$1')
+    .replace(/^Taken by the uploader,\s*/i, '')
+    .replace(/\bw:[a-z-]+:(?:Usuario|User):/gi, '');
+  if (/^unknown author$/i.test(who)) who = '';
+  const from = typeof ref.source === 'string' && /commons\.wikimedia\.org/i.test(ref.source) ? 'Wikimedia Commons' : undefined;
+  return [who ? `Photo: ${who}` : 'Photo', ref.license, from].filter(Boolean).join(' · ');
+}
+
 export function PlaceScreen({ b, nav }: ScreenProps) {
   const { width, height } = useScreenSize();
   const sx = width / W;
@@ -135,6 +159,9 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
 
   // The chat length when the user asked from this screen: anything from there on is about this place.
   const [askedFrom, setAskedFrom] = useState<number>();
+  // Wilson heads the guide card: his mood (happy when this place is added to the day) and his level.
+  const wilsonNow = useMood(b);
+  const wilsonLevel = useLevel(b);
 
   // Once the page scrolls, the top row gets a dark fade so text never runs under the pill and orb.
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -205,10 +232,31 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
   const answer = exchange?.answer;
   const answerText = answer ? answer.text || (answer.pending ? '…' : '') : b.busy ? '…' : '';
   const answerPending = !answer || (!!answer.pending && !answer.text);
+  // The guide declined the question: he says so, and offers something nearby instead.
+  const declined = !!answer && !answer.pending && isDeclined(answer.text);
+  const askNearby = () => {
+    if (!canAsk) return;
+    setAskedFrom(b.chat.length);
+    b.send(NEARBY_QUESTION);
+  };
+  // His face: this place's exchange first; otherwise his own mood when he is happy, waking, or
+  // listening without a tap here ("Wilson, …", or the wait for a follow-up).
+  const wilson: WilsonMood = listeningHere
+    ? 'listening'
+    : speakingHere
+      ? 'speaking'
+      : exchange && answerPending && b.busy
+        ? 'thinking'
+        : declined
+          ? 'unsure'
+          : wilsonNow === 'happy' || wilsonNow === 'waking' || wilsonNow === 'listening'
+            ? wilsonNow
+            : 'idle';
 
   // The place's photo: sharp on top, and blurred behind the whole page. Without one, the drawn
   // scene tile fades into the plain ground as before.
   const photo = placePhotoSource(place.id);
+  const photoLine = photoCredit(place);
   // The buttons' row: 12 above, the 54 px buttons, the bottom inset. The page scrolls behind it.
   const actionsH = ACTIONS_GAP + BTN + bottom;
 
@@ -245,12 +293,18 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
         </View>
 
         <Glass kind="clear" radius={26} style={[styles.card, { marginHorizontal: 14 * sx, marginTop: Math.round(24 * sy) }]}>
-          <View style={styles.cardInner} accessibilityLabel={`From your ${city} guide`}>
+          <View style={styles.cardInner} accessibilityLabel={`Wilson · from your ${city} guide`}>
             <View style={styles.labelRow}>
-              {speakingHere && <WaveIcon size={14} />}
-              <Text style={[styles.label, font('700')]}>
-                {speakingHere ? `SPEAKING · FROM YOUR ${city.toUpperCase()} GUIDE` : `FROM YOUR ${city.toUpperCase()} GUIDE`}
+              <WilsonFace size={32} mood={wilson} level={levelFor(wilson, wilsonLevel)} decorative />
+              <Text style={[styles.wilsonLabel, font('600')]} numberOfLines={2}>
+                {`Wilson · from your ${city} guide`}
               </Text>
+              {speakingHere && (
+                <View style={styles.speaking}>
+                  <WaveIcon size={12} />
+                  <Text style={[styles.label, font('700')]}>SPEAKING</Text>
+                </View>
+              )}
             </View>
 
             {/* What the traveller asked about this place, and the answer as it streams. */}
@@ -263,10 +317,32 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
                 <Text style={[styles.asked, font('500')]}>
                   You asked: <Text style={[styles.askedQ, font('600')]}>{`“${shownQuestion(exchange.question.text)}”`}</Text>
                 </Text>
-                {!!answerText && (
-                  <Text style={[styles.answer, font('500'), answerPending ? styles.pending : null]} accessibilityLiveRegion="polite">
-                    {answerText}
-                  </Text>
+                {declined ? (
+                  <>
+                    <Text style={[styles.answer, font('500')]} accessibilityLiveRegion="polite">
+                      {UNSURE_LINE}
+                    </Text>
+                    <View style={styles.chips}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Ask Wilson for something nearby instead"
+                        accessibilityState={{ disabled: !canAsk }}
+                        disabled={!canAsk}
+                        onPress={askNearby}
+                        {...axPress(askNearby, !canAsk)}
+                        style={({ pressed }) => ({ opacity: !canAsk ? 0.45 : pressed ? 0.8 : 1 })}>
+                        <Glass kind="prominent" radius={dusk.radius.pill} style={styles.chip}>
+                          <Text style={[onGlass, font('700'), styles.chipText]}>Yes, something nearby</Text>
+                        </Glass>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  !!answerText && (
+                    <Text style={[styles.answer, font('500'), answerPending ? styles.pending : null]} accessibilityLiveRegion="polite">
+                      {answerText}
+                    </Text>
+                  )
                 )}
               </View>
             ) : null}
@@ -289,7 +365,7 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
             {few && (
               <View style={styles.questions}>
                 <Text style={[styles.asked, font('500')]}>
-                  {facts.length === 0 ? `The guide has no notes on ${place.name} yet. Ask your buddy:` : 'Ask your buddy:'}
+                  {facts.length === 0 ? `My guide has no notes on ${place.name} yet. Ask me:` : 'Ask me:'}
                 </Text>
                 <View style={styles.chips}>
                   {QUESTIONS.map(q => (
@@ -312,6 +388,12 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
             )}
           </View>
         </Glass>
+        {/* The photo at the top is someone's work: its author and licence, as the pack records them. */}
+        {photo !== undefined && !!photoLine ? (
+          <Text style={[styles.credit, styles.photoCredit, font('500'), { marginHorizontal: 22 * sx }]} numberOfLines={2}>
+            {photoLine}
+          </Text>
+        ) : null}
       </Animated.ScrollView>
 
       {/* Bottom row, floating over the page on a soft shade (it never ends in a hard edge). */}
@@ -370,8 +452,10 @@ const styles = StyleSheet.create({
   // Grows to the buttons when the content is short.
   card: { flexGrow: 1 },
   cardInner: { padding: 16, gap: 14 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   label: { color: dusk.color.text2, fontSize: 11, letterSpacing: 0.66 },
+  wilsonLabel: { flexShrink: 1, color: dusk.color.textSoft, fontSize: 13, lineHeight: 17 },
+  speaking: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 },
   exchange: { gap: 8 },
   asked: { color: dusk.color.text2, fontSize: 13, lineHeight: 18 },
   askedQ: { color: dusk.color.text },
@@ -382,6 +466,7 @@ const styles = StyleSheet.create({
   factTitle: { color: dusk.color.text, fontSize: 13, lineHeight: 18 },
   factBody: { color: dusk.color.textSoft, fontSize: 14, lineHeight: 20 },
   credit: { color: dusk.color.text2, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  photoCredit: { marginTop: 12 },
   questions: { gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { height: 34, justifyContent: 'center', paddingHorizontal: 14 },
@@ -391,7 +476,7 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   settled: { flex: 1, opacity: 1 },
   settledText: { color: dusk.color.text2 },
-  topFade: { position: 'absolute', left: 0, right: 0, top: 0, height: TOP + CLOSE + 22 },
+  topFade: { position: 'absolute', left: 0, right: 0, top: 0, height: TOP + CLOSE + 40 },
   pill: { position: 'absolute', top: TOP + 5, paddingVertical: 8, paddingHorizontal: 13 },
   close: { position: 'absolute', top: TOP },
   // The Offline chip (28 tall) centred on the 42 px close orb.

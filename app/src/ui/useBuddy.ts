@@ -5,9 +5,11 @@ import { distanceMeters, formatDistance } from '../core/geo';
 import type { PackIndex } from '../core/pack';
 import { SentenceChunker } from '../core/sentences';
 import { parseHHMM, shiftClock } from '../core/time';
-import type { Cited, Clock, GeoPoint, Lang, LocationFix, Recommendation, Situation, Trip } from '../core/types';
+import type { Cited, Clock, GeoPoint, Heard, Lang, LocationFix, Recommendation, Situation, Trip, WakeEvent } from '../core/types';
+import { LevelFeed } from '../services/audio/wake';
 import type { Runtime } from '../services/runtime';
 import * as storage from '../services/storage';
+import { VoiceLoop, type VoiceLoopDeps } from './voiceLoop';
 
 export interface ChatLine {
   id: string;
@@ -109,11 +111,20 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
   const speechQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingSpeech = useRef(0);
   const speechGen = useRef(0);
+  // Ref copies for the voice handlers, which run outside a render (wake word, follow-ups).
+  const speakingRef = useRef(false);
+  const busyRef = useRef(false);
+  const listeningRef = useRef(false);
+  /** Wilson heard his name and is hearing the rest of the sentence (the helper's wake word has it). */
+  const wakeCaptureRef = useRef(false);
+  /** A sentence after the name that cancelVoice() dropped: its wake event is ignored when it comes. */
+  const dropWake = useRef(false);
   const say = useCallback(
     (text: string, lang: Lang = 'en', onStart?: () => void) => {
       if (!text.trim()) return;
       const gen = speechGen.current;
       pendingSpeech.current++;
+      speakingRef.current = true;
       setSpeaking(true);
       rt.audio.setMuted(true);
       // Resolves when this sentence has finished playing; sentences finish in the order they were sent.
@@ -124,6 +135,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
         .finally(() => {
           if (gen !== speechGen.current) return; // cancelled by stopSpeaking
           if (--pendingSpeech.current === 0) {
+            speakingRef.current = false;
             setSpeaking(false);
             rt.audio.setMuted(false);
           }
@@ -131,19 +143,46 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     },
     [rt.audio],
   );
+  // A spoken exchange (VoiceLoop, below) reads these through a ref, so it is created once.
+  const loopDeps = useRef<VoiceLoopDeps | undefined>(undefined);
+  const [followUp, setFollowUp] = useState(false);
+  const voiceLoop = useMemo(
+    () =>
+      new VoiceLoop({
+        ask: (text, heardAt) => loopDeps.current?.ask(text, heardAt) ?? Promise.resolve({ spoke: false }),
+        listen: quietMs => loopDeps.current?.listen(quietMs) ?? Promise.resolve({ text: '' }),
+        say: text => loopDeps.current?.say(text) ?? Promise.resolve(),
+        onFollowUp: on => setFollowUp(on),
+        canListen: () => loopDeps.current?.canListen?.() ?? false,
+      }),
+    [],
+  );
+
+  /** Stops the voice. It also ends a spoken exchange: tapping Wilson while he talks stops him (no barge-in). */
   const stopSpeaking = useCallback(() => {
+    voiceLoop.cancel();
     speechGen.current++;
     pendingSpeech.current = 0;
     rt.audio.stopSpeaking();
     rt.audio.setMuted(false); // sent before talk()'s listen.start
+    speakingRef.current = false;
     setSpeaking(false);
-  }, [rt.audio]);
+  }, [rt.audio, voiceLoop]);
+  /** Says `text` and resolves once it (and anything queued before it) has played. */
+  const sayAndWait = useCallback(
+    async (text: string) => {
+      say(text);
+      await speechQueue.current;
+    },
+    [say],
+  );
 
-  // --- Sending text (typed, or heard by the microphone) to the companion.
-  const send = useCallback(
-    async (text: string, heardAt?: number) => {
+  // --- Sending text (typed, or heard by the microphone) to the companion. ask() resolves once the
+  // answer has been spoken, saying whether any of it was (a voice exchange then listens for more).
+  const ask = useCallback(
+    async (text: string, heardAt?: number): Promise<{ spoke: boolean }> => {
       const t = text.trim();
-      if (!t) return;
+      if (!t) return { spoke: false };
       // Only this reply's first sentence measures latency.
       const startedAt = heardAt ?? Date.now();
       let measured = false;
@@ -158,10 +197,15 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
       setBusy(true);
       const chunker = new SentenceChunker();
       let streamed = '';
+      busyRef.current = true;
       // If the user stops the voice mid-reply, the rest of this reply stays silent.
       const replyGen = speechGen.current;
+      let spoke = false;
+      let ended = false; // an error, or the companion opened Translate
       const speak = (s: string, lang?: Lang) => {
-        if (replyGen === speechGen.current) say(s, lang, onFirstAudio);
+        if (replyGen !== speechGen.current || !s.trim()) return;
+        spoke = true;
+        say(s, lang, onFirstAudio);
       };
       const update = (patch: Partial<ChatLine>) => setChat(c => c.map(l => (l.id === replyId ? { ...l, ...patch } : l)));
       await companion.handle(t, ev => {
@@ -189,40 +233,221 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
             setFocusId(ev.placeId);
             break;
           case 'translator':
+            ended = true;
             setMode('translator');
             break;
           case 'error':
+            ended = true;
             update({ text: `Something went wrong: ${ev.text}`, pending: false, error: true });
             break;
         }
       });
       setStatus(undefined);
+      busyRef.current = false;
       setBusy(false);
+      if (!spoke) return { spoke: false };
+      await speechQueue.current; // this answer's last sentence has played (or the voice was stopped)
+      return { spoke: !ended && replyGen === speechGen.current };
     },
     [companion, say],
   );
+  /**
+   * A typed (or tapped) question. It ends any spoken exchange: a follow-up listen still running
+   * stops (what it heard is dropped), and none starts after this answer.
+   */
+  const send = useCallback(
+    async (text: string, heardAt?: number) => {
+      if (voiceLoop.active && listeningRef.current) rt.audio.stopListening();
+      voiceLoop.cancel();
+      await ask(text, heardAt);
+    },
+    [ask, rt.audio, voiceLoop],
+  );
 
-  // --- The microphone button.
+  /** One listen through the helper; { text: '' } when nothing was heard or it failed (the reason goes to status). */
+  const listenOnce = useCallback(
+    async (quietMs?: number): Promise<Heard> => {
+      listeningRef.current = true;
+      setListening(true);
+      setPartial('');
+      try {
+        return await rt.audio.listen(setPartial, 'en', quietMs ? { quietMs } : undefined);
+      } catch (e) {
+        setStatus(e instanceof Error ? e.message : String(e));
+        return { text: '' };
+      } finally {
+        listeningRef.current = false;
+        setPartial('');
+        setListening(false);
+      }
+    },
+    [rt.audio],
+  );
+
+  // --- The microphone button, and a tap on Wilson. While he listens, a tap finishes the sentence
+  // (it is sent); otherwise it stops his voice and listens. After his spoken answer he listens for
+  // a follow-up by himself (call and response, VoiceLoop).
   const talk = useCallback(async () => {
-    if (listening) {
+    // Also after "Wilson, …": the helper ends that sentence now and sends it.
+    if (listeningRef.current || wakeCaptureRef.current) {
       rt.audio.stopListening();
       return;
     }
     stopSpeaking();
-    setListening(true);
-    setPartial('');
-    try {
-      const heard = await rt.audio.listen(setPartial, 'en');
-      const heardAt = heard.endedAt ?? Date.now();
-      setPartial('');
+    await voiceLoop.listenFirst();
+  }, [rt.audio, stopSpeaking, voiceLoop]);
+  /** Ends whatever Wilson is doing by voice and drops a sentence still being heard (a close button). */
+  const cancelVoice = useCallback(() => {
+    voiceLoop.cancel();
+    if (listeningRef.current) rt.audio.stopListening();
+    if (wakeCaptureRef.current) {
+      dropWake.current = true;
+      wakeCaptureRef.current = false;
+      // listening first: with wakeCapture still on, the wake word stays on between the two renders.
       setListening(false);
-      if (heard.text.trim()) await send(heard.text, heardAt);
-    } catch (e) {
-      setListening(false);
+      setWakeCapture(false);
       setPartial('');
-      setStatus(e instanceof Error ? e.message : String(e));
+      // Restart the wake word: the helper drops the sentence now instead of recording it to the end
+      // (it would also swallow a new "Wilson, …" said meanwhile).
+      setWakeEpoch(n => n + 1);
     }
-  }, [listening, rt.audio, send, stopSpeaking]);
+    if (speakingRef.current) stopSpeaking();
+  }, [rt.audio, stopSpeaking, voiceLoop]);
+
+  // --- The wake word: "Wilson, …" / "Hey Wilson" without a tap, fully offline (Argmax Whisper in
+  // the helper reads each sentence's start). On by default and remembered; it listens only while
+  // Wilson is idle (not listening, thinking or speaking) and nothing holds it (Translate needs the
+  // microphone to itself: b.wake.hold('translate')). "Wilson, where is …" asks at once; "Wilson"
+  // alone gets "Yes?" and a listen.
+  const [wakeEnabled, setWakeEnabledState] = useState(true);
+  const [wakeLoaded, setWakeLoaded] = useState(false);
+  const [wakeListening, setWakeListening] = useState(false);
+  const [wakeCapture, setWakeCapture] = useState(false);
+  const wakeHolds = useRef(new Set<string>());
+  const [wakeHeld, setWakeHeld] = useState(0);
+  /** Goes up to restart the wake word (cancelVoice drops a sentence after the name). */
+  const [wakeEpoch, setWakeEpoch] = useState(0);
+  useEffect(() => {
+    AsyncStorage.getItem(WAKE_KEY)
+      .then(v => {
+        if (v === '0') setWakeEnabledState(false);
+      })
+      .catch(() => {})
+      .finally(() => setWakeLoaded(true));
+  }, []);
+  const setWakeEnabled = useCallback((on: boolean) => {
+    setWakeEnabledState(on);
+    AsyncStorage.setItem(WAKE_KEY, on ? '1' : '0').catch(() => {});
+  }, []);
+  /** Keeps the wake word off until the returned release() (Translate, while it is open). */
+  const holdWake = useCallback((reason: string) => {
+    const token = `${reason}#${++holdCounter}`;
+    wakeHolds.current.add(token);
+    setWakeHeld(wakeHolds.current.size);
+    return () => {
+      if (wakeHolds.current.delete(token)) setWakeHeld(wakeHolds.current.size);
+    };
+  }, []);
+  const hasMic = rt.audio.info.hasMicrophone;
+  const wakeAvailable = hasMic && rt.audio.info.wake === true && typeof rt.audio.wake === 'function';
+  const wakeOn =
+    wakeAvailable && wakeLoaded && wakeEnabled && wakeHeld === 0 && mode !== 'translator' && !(listening && !wakeCapture) && !speaking && !busy && !followUp;
+
+  loopDeps.current = {
+    ask,
+    listen: listenOnce,
+    say: sayAndWait,
+    // Follow-ups need the helper build that ends a quiet listen after 6 s (the one with the wake word).
+    canListen: () => hasMic && rt.audio.info.wake === true && wakeHolds.current.size === 0,
+  };
+
+  const endCapture = useCallback(() => {
+    if (!wakeCaptureRef.current) return;
+    wakeCaptureRef.current = false;
+    // listening first: the other order passes through "listening, not after his name", which turns
+    // the wake word off and on again (wake.stop, then wake.start) when the two renders are not batched.
+    setListening(false);
+    setWakeCapture(false);
+    setPartial('');
+  }, []);
+  const onWake = useCallback(
+    (e: WakeEvent) => {
+      if (e.type === 'state') {
+        setWakeListening(e.listening);
+        return;
+      }
+      // Wilson is busy with something else (a sentence that raced a tap): ignore it.
+      if (busyRef.current || speakingRef.current || listeningRef.current) {
+        endCapture();
+        return;
+      }
+      if (e.type === 'heard') {
+        wakeCaptureRef.current = true;
+        setWakeCapture(true);
+        setListening(true);
+        setPartial(e.text);
+        return;
+      }
+      endCapture();
+      if (dropWake.current) {
+        dropWake.current = false; // the sentence cancelVoice() dropped
+        return;
+      }
+      voiceLoop.wake(e.text, e.endedAt ?? Date.now()).catch(() => {});
+    },
+    [endCapture, voiceLoop],
+  );
+  useEffect(() => {
+    if (!wakeOn || typeof rt.audio.wake !== 'function') return;
+    const audio = rt.audio;
+    let stop: (() => void) | undefined;
+    // A moment's grace, so a follow-up listen starting right after the voice doesn't flap it on and off.
+    const timer = setTimeout(() => {
+      dropWake.current = false;
+      stop = audio.wake?.(onWake);
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      stop?.(); // the helper drops a sentence it was still hearing
+      endCapture();
+      setWakeListening(false);
+    };
+  }, [wakeOn, wakeEpoch, rt.audio, onWake, endCapture]);
+  // A sentence after the name ends within ~20 s; if the helper never says, stop showing it.
+  useEffect(() => {
+    if (!wakeCapture) return;
+    const timer = setTimeout(endCapture, 25_000);
+    return () => clearTimeout(timer);
+  }, [wakeCapture, endCapture]);
+  const wake = useMemo<WakeControl>(
+    () => ({
+      /** The toggle (remembered; on by default). */
+      enabled: wakeEnabled,
+      setEnabled: setWakeEnabled,
+      /** True while the helper is listening for "Wilson" right now. */
+      listening: wakeOn && wakeListening,
+      /** False without the helper's microphone, or with an older helper build. */
+      available: wakeAvailable,
+      /** Keeps the wake word off until release() (e.g. while Translate is open): const release = b.wake.hold('translate'). */
+      hold: holdWake,
+    }),
+    [wakeEnabled, setWakeEnabled, wakeOn, wakeListening, wakeAvailable, holdWake],
+  );
+
+  // --- Levels for Wilson's rings (microphone) and mouth (voice), straight from the helper. A feed,
+  // not state: ten to twenty levels a second never re-render the screens.
+  const levels = useMemo(() => new LevelFeed(), []);
+  useEffect(() => {
+    const audio = rt.audio;
+    if (typeof audio.subscribeLevels !== 'function') return;
+    return audio.subscribeLevels((kind, value) => levels.push(kind, value));
+  }, [rt.audio, levels]);
+  useEffect(() => {
+    if (!listening) levels.push('mic', 0);
+  }, [listening, levels]);
+  useEffect(() => {
+    if (!speaking) levels.push('voice', 0);
+  }, [speaking, levels]);
 
   // --- Recommendations refresh whenever the trip or the situation changes.
   const refineToken = useRef(0);
@@ -376,6 +601,14 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     talk,
     say,
     stopSpeaking,
+    /** Ends a spoken exchange and drops a sentence still being heard (talk() instead sends it). */
+    cancelVoice,
+    /** True while Wilson listens for a follow-up after his answer (listening is true too). */
+    followUp,
+    /** The wake word: { enabled, setEnabled(on), listening, available, hold(reason) => release }. */
+    wake,
+    /** levels.subscribe(cb({ mic, voice })) => unsubscribe; levels.get() for the latest. 0-1 each. */
+    levels,
     setClock,
     shiftMinutes,
     setLocation,
@@ -397,6 +630,26 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
 }
 
 export type Buddy = ReturnType<typeof useBuddy>;
+
+/**
+ * b.wake. The contract is enabled / setEnabled / listening; available and hold are extras, typed
+ * optional so a test's stand-in Buddy needs only the contract (call them as b.wake.hold?.(…)).
+ */
+export interface WakeControl {
+  /** The toggle (remembered; on by default). */
+  enabled: boolean;
+  setEnabled(on: boolean): void;
+  /** True while the helper is listening for "Wilson" right now. */
+  listening: boolean;
+  /** False without the helper's microphone, or with a helper build from before the wake word. */
+  available?: boolean;
+  /** Keeps the wake word off until the returned release() is called (Translate, while it is open). */
+  hold?(reason: string): () => void;
+}
+
+/** Whether the wake word is on ('1') or off ('0'); missing means on. */
+const WAKE_KEY = 'travelbuddy.wake.v1';
+let holdCounter = 0;
 
 // ---------------------------------------------------------------------------
 // Locating the Mac. A Mac has no GPS: macOS locates it from nearby Wi-Fi networks, so with

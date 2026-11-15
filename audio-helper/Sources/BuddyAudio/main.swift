@@ -2,11 +2,14 @@ import Foundation
 import TTSKit
 
 // buddy-audio [--port 8765] [--models-dir DIR] [--whisper-model NAME]
-//             [--voice-threshold 0.55] [--prepare] [--pro] [--no-app-bundle]
+//             [--voice-threshold 0.55] [--wake-floor 0.012] [--prepare] [--pro] [--no-app-bundle]
+//             [--wake-selftest]
 //
 // --prepare downloads every model while online, writes the manifest, and exits.
 // After that, the helper starts with Wi-Fi off.
 // --no-app-bundle: don't rerun from BuddyAudio.app (then macOS never offers Location; see Location.swift).
+// --wake-floor: how loud (microphone RMS) a sentence must get before Whisper checks it for "Wilson".
+// --wake-selftest: checks the wake word's parsing ("Hey Wilson, …") without any model, and exits.
 
 let args = CommandLine.arguments
 func arg(_ name: String) -> String? {
@@ -19,6 +22,9 @@ let modelsDir = URL(fileURLWithPath: arg("--models-dir") ?? NSString(string: "~/
 let whisperModel = arg("--whisper-model") ?? "large-v3-v20240930_626MB"
 let voiceThreshold = Float(arg("--voice-threshold") ?? "0.55") ?? 0.55
 let voices: [String: Qwen3Speaker] = ["en": .aiden, "es": .serena, "default": .aiden]
+let wakeFloor = Float(arg("--wake-floor") ?? "0.012") ?? 0.012
+
+if args.contains("--wake-selftest") { exit(WakeWord.selfTest() == 0 ? 0 : 1) }
 
 if args.contains("--prepare") {
     Task {
@@ -52,6 +58,7 @@ var lastStatus = Outgoing.status("Starting the audio helper…")
 server.onMessage = { data in
     guard let m = try? JSONDecoder().decode(Incoming.self, from: data) else { return }
     camera.heardFromApp()
+    service?.heardFromApp() // the wake word stops when the app goes quiet
     if m.type == "hello" {
         server.send(readyMessage ?? lastStatus)
         return
@@ -67,8 +74,12 @@ server.onMessage = { data in
     }
     inboxContinuation.yield(m)
 }
-// A new client (the app reloading or relaunching) replaces the old one: turn off its camera.
-server.onConnect = { inboxContinuation.yield(Incoming(type: "camera.stop")) }
+// A new client (the app reloading or relaunching) replaces the old one: turn off its camera and
+// its wake word (the new one asks again if it wants it).
+server.onConnect = {
+    inboxContinuation.yield(Incoming(type: "camera.stop"))
+    inboxContinuation.yield(Incoming(type: "wake.stop"))
+}
 // One consumer, so messages reach the audio service and the camera in the order the app sent them.
 Task {
     for await m in inbox {
@@ -92,7 +103,7 @@ Task {
             lastStatus = .status(message)
             server.send(lastStatus)
         }
-        service = AudioService(models: models, voiceThreshold: voiceThreshold, voices: voices) { server.send($0) }
+        service = AudioService(models: models, voiceThreshold: voiceThreshold, voices: voices, wakeFloor: wakeFloor) { server.send($0) }
         readyMessage = .ready(models: models.names, liveSpeakers: false)
         server.send(readyMessage!)
         log("Ready: \(models.names.joined(separator: ", "))")

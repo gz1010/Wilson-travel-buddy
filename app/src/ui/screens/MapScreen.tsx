@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View 
 import Svg, { Path, Rect } from 'react-native-svg';
 import { distanceMeters, formatDistance } from '../../core/geo';
 import { fold } from '../../core/pack';
+import { stopsOn } from '../../core/trip';
 import type { GeoPoint, Place } from '../../core/types';
 import { aerial, hasAerial, MAP_PALETTES, PAN_MARGIN, type MapLayer } from '../../map/mapHtml';
 import { MapView, type MapPadding, type MapPin } from '../../map/MapView';
@@ -139,8 +140,11 @@ export function MapScreen({ b, nav }: ScreenProps) {
   const you = b.situation.location;
 
   // Pins as the classic Home screen builds them: ranked suggestions, then trip stops, then places.
+  // A suggestion already in today's plan is a stop (★), not a numbered idea: numbered as Now numbers its cards.
+  const today = b.situation.clock.date;
   const pins = useMemo<MapPin[]>(() => {
-    const recIds = new Map(b.recs.map((r, i) => [r.placeId, i + 1]));
+    const plannedToday = new Set(b.trip ? stopsOn(b.trip, today).flatMap(s => (s.placeId ? [s.placeId] : [])) : []);
+    const recIds = new Map(b.recs.filter(r => !plannedToday.has(r.placeId)).map((r, i) => [r.placeId, i + 1]));
     const stopIds = new Set(b.trip?.stops.map(s => s.placeId).filter(Boolean));
     return b.index.pack.places.map(p => ({
       id: p.id,
@@ -150,7 +154,7 @@ export function MapScreen({ b, nav }: ScreenProps) {
       kind: recIds.has(p.id) ? 'rec' : stopIds.has(p.id) ? 'stop' : 'place',
       badge: recIds.has(p.id) ? String(recIds.get(p.id)) : stopIds.has(p.id) ? '★' : undefined,
     }));
-  }, [b.index, b.recs, b.trip]);
+  }, [b.index, b.recs, b.trip, today]);
 
   // While typing: the five places that best match, by name, local name, kind or neighbourhood.
   const typed = query.trim();

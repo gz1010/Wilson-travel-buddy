@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { Fact } from '../../core/types';
 import type { Buddy } from '../useBuddy';
 import { axPress, Glass, onGlass } from './Glass';
@@ -9,14 +8,18 @@ import { CloseIcon } from './Icons';
 import { useReduceMotion } from './motion';
 import { TAB_BAR_BOTTOM, TAB_BAR_HEIGHT } from './Nav';
 import { useScreenSize } from './Screen';
-import { dusk, font, ground, sceneColors, white } from './tokens';
+import { dusk, font, ground, white } from './tokens';
+import { createWilsonMotion, Pivot, useWilsonLevel, useWilsonMood, Wilson, wilsonTint, type WilsonMood, type WilsonMotion } from './Wilson';
 
-// The floating buddy: a small liquid-glass orb with a living light inside, laid over every main
-// screen. Drag it anywhere (it springs to the nearest side and remembers where); tap it to talk
-// without leaving the page: a compact glass panel beside it shows what it hears, its answer as it
-// streams, when it speaks, and the guide facts the answer came from.
+// The floating Wilson: the companion (dusk/Wilson.tsx) laid over every main screen. Drag him
+// anywhere (he springs to the nearest side and remembers where); tap him to talk without leaving
+// the page: a compact glass panel beside him shows what he hears, his answer as it streams, when he
+// speaks, and the guide facts the answer came from. While dragged he behaves like liquid glass
+// (after liquid-glass-studio): he stretches along the way he is thrown, his rim and glare light up
+// with colour fringes at the edges, a few droplets trail behind and merge back in, and he wobbles
+// to rest when let go. On macOS 26 his body is Apple's Liquid Glass, which refracts what is under him.
 
-const SIZE = 60;
+const SIZE = 64;
 /** Gap between the orb and the window's sides. */
 const EDGE = 12;
 const TOP = 12;
@@ -38,36 +41,44 @@ interface Spot {
 /** Bottom right, just above the tab bar: where the mic orb used to be. */
 const HOME: Spot = { side: 'right', frac: 1 };
 
-type Mood = 'idle' | 'listening' | 'thinking' | 'speaking';
-
-const hexRGB = (c: string) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
-/** A token colour made lighter (k > 1), as a hex colour. */
-const lift = (c: string, k: number) => `#${hexRGB(c).map(v => Math.min(255, Math.round(v * k)).toString(16).padStart(2, '0')).join('')}`;
-const alpha = (c: string, a: number) => `rgba(${hexRGB(c).join(',')},${a})`;
-// The same mood colours as the Chat tab's liquid background (LiquidBackground's MOOD_RGB), from
-// the Dusk tokens: the "you" blue while listening, the dusk violet while thinking, the warm
-// awning amber while speaking.
-const VIOLET = lift(sceneColors.tower.front, 1.6);
-const AMBER = lift(sceneColors.awnings.front, 1.9);
-
-/** Colours per mood: the glass tint (a CSS colour with alpha), the core's light and its glow. */
-const MOOD: Record<Mood, { tint?: string; core: string; glow: string; label: string }> = {
-  idle: { core: dusk.color.text, glow: dusk.color.direction, label: 'Your buddy' },
-  listening: { tint: alpha(dusk.color.you, 0.34), core: dusk.color.you, glow: dusk.color.direction, label: 'Listening' },
-  thinking: { tint: alpha(VIOLET, 0.24), core: VIOLET, glow: dusk.color.direction, label: 'Thinking' },
-  speaking: { tint: alpha(AMBER, 0.36), core: AMBER, glow: lift(AMBER, 1.25), label: 'Speaking' },
+/** The panel's heading and its dot per mood: the dot is white light, warm when happy, cool when unsure. */
+const MOOD: Record<WilsonMood, { label: string; dot: string }> = {
+  idle: { label: 'Wilson', dot: white(0.7) },
+  listening: { label: 'Listening', dot: dusk.color.you },
+  thinking: { label: 'Thinking', dot: dusk.color.direction },
+  speaking: { label: 'Speaking', dot: dusk.color.white },
+  happy: { label: 'Added to your day', dot: wilsonTint('happy').light },
+  unsure: { label: 'Not in my guide', dot: wilsonTint('unsure').light },
+  waking: { label: 'Waking up', dot: dusk.color.pending },
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/** The heading for a mood. Unsure after a failed answer (not a decline) doesn't claim "Not in my guide". */
+function moodLabel(mood: WilsonMood, b: Buddy): string {
+  if (mood !== 'unsure') return MOOD[mood].label;
+  for (let i = b.chat.length - 1; i >= 0; i--) {
+    const l = b.chat[i];
+    if (l.who === 'buddy' && !l.pending) return l.error ? 'Unsure' : MOOD.unsure.label;
+  }
+  return MOOD.unsure.label;
+}
 
 function bounds(width: number, height: number) {
   const minY = TOP;
   return { minX: EDGE, maxX: Math.max(EDGE, width - SIZE - EDGE), minY, maxY: Math.max(minY, height - BOTTOM - SIZE) };
 }
 
-function placeOf(spot: Spot, width: number, height: number) {
+/** The lowest he rests on a screen that keeps `keepClear` px above the tab bar free (the Map's place card). */
+function lowestY(width: number, height: number, keepClear: number) {
   const b = bounds(width, height);
-  return { x: spot.side === 'left' ? b.minX : b.maxX, y: Math.round(b.minY + spot.frac * (b.maxY - b.minY)) };
+  return Math.max(b.minY, b.maxY - keepClear);
+}
+
+/** Where a spot is. On a screen with room to keep clear he rests no lower than it, and comes back down elsewhere. */
+function placeOf(spot: Spot, width: number, height: number, keepClear = 0) {
+  const b = bounds(width, height);
+  return { x: spot.side === 'left' ? b.minX : b.maxX, y: Math.min(Math.round(b.minY + spot.frac * (b.maxY - b.minY)), lowestY(width, height, keepClear)) };
 }
 
 function parseSpot(raw: string | null): Spot | undefined {
@@ -102,10 +113,12 @@ interface Props {
   visible: boolean;
   /** Translate needs the microphone: while hidden there, a listen in progress is ended (and its reply kept quiet). */
   yieldMicrophone?: boolean;
+  /** Room above the tab bar he stays out of on this screen (the Map's place card and Locate row), px. */
+  keepClear?: number;
 }
 
-/** The floating buddy. Mount once over the screens; it hides itself where `visible` is false. */
-export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
+/** The floating Wilson. Mount once over the screens; he hides himself where `visible` is false. */
+export function FloatingBuddy({ b, visible, yieldMicrophone, keepClear = 0 }: Props) {
   const { width, height } = useScreenSize();
   const reduce = useReduceMotion();
   const [spot, setSpot] = useState<Spot>(HOME);
@@ -114,15 +127,15 @@ export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
   /** The first chat line of this conversation: the panel shows only what was said since it opened. */
   const [from, setFrom] = useState(0);
   const [draft, setDraft] = useState('');
-  const mood: Mood = b.listening ? 'listening' : b.speaking ? 'speaking' : b.busy ? 'thinking' : 'idle';
+  const mood = useWilsonMood(b);
   const hasMic = b.runtime.audio.info.hasMicrophone;
 
   // --- Where the orb is. `left`/`top` are layout props: AppKit owns a view's layer transform and
   // can reset a translate, but it keeps the frame.
   const pos = useRef(new Animated.ValueXY(placeOf(HOME, width, height))).current;
   const lastTarget = useRef<{ x: number; y: number }>(undefined);
-  const live = useRef({ width, height, reduce });
-  live.current = { width, height, reduce };
+  const live = useRef({ width, height, reduce, keepClear });
+  live.current = { width, height, reduce, keepClear };
 
   useEffect(() => {
     let alive = true;
@@ -140,12 +153,12 @@ export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
   // Rest at the spot; follow the window when it is resized.
   useEffect(() => {
     if (dragging) return;
-    const p = placeOf(spot, width, height);
+    const p = placeOf(spot, width, height, keepClear);
     if (lastTarget.current && lastTarget.current.x === p.x && lastTarget.current.y === p.y) return; // springing there already
     lastTarget.current = p;
     pos.stopAnimation();
     pos.setValue(p);
-  }, [spot, width, height, dragging, pos]);
+  }, [spot, width, height, keepClear, dragging, pos]);
 
   // --- The conversation.
   /** A listen ended early (close, or Translate) and has not finished yet. */
@@ -172,14 +185,26 @@ export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
     else if (b.speaking || b.busy) stopSpeaking();
     else startConversation();
   };
-  /** Ends a listen early. Its words still reach the companion (useBuddy has no cancel), so the reply is kept quiet. */
+  /** useBuddy's cancelVoice when it has one: ends the exchange and drops a sentence still being heard. */
+  const cancelVoice = (b as unknown as { cancelVoice?: () => void }).cancelVoice;
+  /**
+   * Ends a listen early. With cancelVoice what was being said is dropped; without it, its words
+   * still reach the companion (an older useBuddy can't cancel a listen), so the reply is kept quiet.
+   */
   const endListen = () => {
+    if (typeof cancelVoice === 'function') return cancelVoice();
     if (!b.listening) return;
     talk();
     endedEarly.current = true;
   };
   const close = () => {
     setOpen(false);
+    if (typeof cancelVoice === 'function') {
+      cancelVoice(); // it stops his voice too
+      // cancelVoice leaves a reply still being written alone (nothing is playing yet): keep it quiet.
+      if (b.busy) stopSpeaking();
+      return;
+    }
     endListen();
     if (b.speaking || b.busy) stopSpeaking();
   };
@@ -204,19 +229,23 @@ export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
   useEffect(() => {
     if (visible) return;
     setOpen(false);
+    // With cancelVoice this also ends the exchange, so no follow-up listen takes the microphone.
     if (yieldMicrophone) handlers.current.endListen();
   }, [visible, yieldMicrophone]);
 
   // --- Dragging. A press that moves less than a few points is a tap.
   const origin = useRef({ x: 0, y: 0 });
   const moved = useRef(false);
+  const fx = useDragGlass();
   const pan = useMemo(() => {
     const settle = (x: number, y: number) => {
-      const { width: w, height: h, reduce: still } = live.current;
+      const { width: w, height: h, reduce: still, keepClear: k } = live.current;
       const bd = bounds(w, h);
-      const next: Spot = { side: x + SIZE / 2 < w / 2 ? 'left' : 'right', frac: bd.maxY > bd.minY ? (clamp(y, bd.minY, bd.maxY) - bd.minY) / (bd.maxY - bd.minY) : 1 };
-      const p = placeOf(next, w, h);
+      // Let go over what this screen keeps clear: he lands just above it, and remembers that.
+      const next: Spot = { side: x + SIZE / 2 < w / 2 ? 'left' : 'right', frac: bd.maxY > bd.minY ? (clamp(y, bd.minY, lowestY(w, h, k)) - bd.minY) / (bd.maxY - bd.minY) : 1 };
+      const p = placeOf(next, w, h, k);
       lastTarget.current = p;
+      fx.release(still);
       if (still) pos.setValue(p);
       else Animated.spring(pos, { toValue: p, useNativeDriver: false, stiffness: 240, damping: 21, mass: 1 }).start();
       setSpot(next);
@@ -238,10 +267,14 @@ export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
           if (Math.abs(g.dx) + Math.abs(g.dy) < 5) return;
           moved.current = true;
           setDragging(true);
+          fx.pickUp(live.current.reduce);
         }
         const { width: w, height: h } = live.current;
         const bd = bounds(w, h);
-        pos.setValue({ x: clamp(origin.current.x + g.dx, 0, Math.max(0, w - SIZE)), y: clamp(origin.current.y + g.dy, bd.minY, bd.maxY) });
+        // Held, he goes anywhere above the tab bar (over the Map's card too); let go, he settles clear of it.
+        const p = { x: clamp(origin.current.x + g.dx, 0, Math.max(0, w - SIZE)), y: clamp(origin.current.y + g.dy, bd.minY, bd.maxY) };
+        pos.setValue(p);
+        fx.track(p.x, p.y, live.current.reduce);
       },
       onPanResponderRelease: (_e, g) => {
         if (moved.current) return settle(origin.current.x + g.dx, origin.current.y + g.dy);
@@ -254,32 +287,17 @@ export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
         if (moved.current) settle(origin.current.x + g.dx, origin.current.y + g.dy);
       },
     });
-  }, [pos]);
+  }, [pos, fx]);
 
-  // --- The mic level (the helper sends it about ten times a second while it listens).
-  const level = useRef(new Animated.Value(0)).current;
-  const listeningRef = useRef(b.listening);
-  listeningRef.current = b.listening;
-  useEffect(() => {
-    // useBuddy doesn't pass the level on; the helper client has one onLevel slot, so chain onto it.
-    const audio = b.runtime.audio as { onLevel?: (v: number) => void };
-    const before = audio.onLevel;
-    const mine = (v: number) => {
-      before?.(v);
-      if (listeningRef.current) Animated.timing(level, { toValue: clamp(v, 0, 1), duration: 110, useNativeDriver: true }).start();
-    };
-    audio.onLevel = mine;
-    return () => {
-      if (audio.onLevel === mine) audio.onLevel = before;
-    };
-  }, [b.runtime.audio, level]);
-  useEffect(() => {
-    if (!b.listening) Animated.timing(level, { toValue: 0, duration: 240, useNativeDriver: true }).start();
-  }, [b.listening, level]);
+  // --- What moves him: the microphone while listening, the voice while speaking (useBuddy's
+  // levels when it has them; else the helper's mic level through its onLevel slot). Without a
+  // voice level his mouth moves by itself while he speaks.
+  const { level, voice } = useWilsonLevel(b);
+  const wilsonLevel = mood === 'speaking' && !voice ? undefined : level;
 
   if (!visible) return null;
 
-  const at = placeOf(spot, width, height);
+  const at = placeOf(spot, width, height, keepClear);
   const panelW = Math.min(PANEL_MAX_W, width - EDGE * 2 - SIZE - GAP);
   const below = at.y + SIZE / 2 < height / 2;
   const panelStyle: StyleProp<ViewStyle> = [
@@ -310,141 +328,168 @@ export function FloatingBuddy({ b, visible, yieldMicrophone }: Props) {
         accessible
         accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityValue={{ text: `Wilson: ${mood === 'idle' ? 'waiting' : moodLabel(mood, b).toLowerCase()}` }}
         accessibilityHint="Drag to move it"
         {...axPress(tap)}
         style={{ position: 'absolute', left: pos.x, top: pos.y, width: SIZE, height: SIZE, cursor: 'pointer' }}>
-        <Orb mood={mood} level={level} reduce={reduce} lifted={dragging} />
+        {/* Reduce motion: no trail (the droplets would only sit inside him, seen through the glass). */}
+        {!reduce && <Droplets size={SIZE} fx={fx} />}
+        <Wilson size={SIZE} mood={mood} level={wilsonLevel} motion={fx} lifted={dragging} decorative />
       </Animated.View>
     </View>
   );
 }
 
-/**
- * A zero-size view at (x, y) that carries a transform for its children, so they scale about that
- * point (see TalkScreen's Flipped: on macOS a layer turns about its top-left corner, and RCTView
- * re-centres transforms only when it redraws; a zero-size layer has one point to turn about).
- */
-function Pivot({ x, y, style, children }: { x: number; y: number; style?: Animated.WithAnimatedValue<StyleProp<ViewStyle>>; children: React.ReactNode }) {
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: x, top: y, width: 0, height: 0, transformOrigin: 'center' }, style]}>
-      {children}
-    </Animated.View>
-  );
+/** Wilson's liquid-glass drag: his motion values, the droplets' offset, and what moves them. */
+interface DragGlass extends WilsonMotion {
+  /** Where the droplets trail, relative to his centre (px). */
+  trailX: Animated.Value;
+  trailY: Animated.Value;
+  /** Picked up: he grows a little and his rim lights up. */
+  pickUp(reduce: boolean): void;
+  /** Each move: his new top-left corner. */
+  track(x: number, y: number, reduce: boolean): void;
+  /** Let go: he wobbles back into a sphere, the droplets merge back in, the glare fades. */
+  release(reduce: boolean): void;
 }
 
-/** A soft round light: a radial gradient drawn once at its size (SVG on macOS keeps its first drawing). */
-function Light({ size, color, strength = 1, dx = 0, dy = 0 }: { size: number; color: string; strength?: number; dx?: number; dy?: number }) {
-  const id = `l${useId().replace(/:/g, '')}`;
-  // Keyed by colour: a new mood draws a new light rather than repainting the old one.
-  return (
-    <Svg key={color} width={size} height={size} style={{ position: 'absolute', left: -size / 2 + dx, top: -size / 2 + dy }}>
-      <Defs>
-        <RadialGradient id={id} cx="50%" cy="50%" r="50%">
-          <Stop offset="0" stopColor={color} stopOpacity={0.95 * strength} />
-          <Stop offset="0.38" stopColor={color} stopOpacity={0.6 * strength} />
-          <Stop offset="0.72" stopColor={color} stopOpacity={0.16 * strength} />
-          <Stop offset="1" stopColor={color} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={`url(#${id})`} />
-    </Svg>
-  );
-}
+/** How fast (px/ms) counts as moving at all; below it the direction is noise. */
+const STILL = 0.04;
+/** Stretch per px/ms of speed, and the most he stretches (liquid-glass-studio grows its shape with the spring's speed). */
+const STRETCH_PER_SPEED = 0.15;
+const STRETCH_MAX = 0.26;
+/** How far behind him the last droplet trails: this many ms of travel, at most this share of his size. */
+const TRAIL_MS = 34;
+const TRAIL_MAX = 0.9;
+/** A pause mid-drag: after this long without a move he settles round again (he is still held). */
+const RELAX_MS = 70;
 
 /**
- * The orb: Liquid Glass (Apple's own on macOS 26) tinted by mood, with a living light inside. Idle
- * it breathes slowly; listening it swells with the voice it hears; thinking it quickens; speaking
- * it sends out rings. With reduce motion it holds still and only follows the voice.
+ * The motion of the drag, after liquid-glass-studio (src/App.tsx: the shape follows the pointer on
+ * a spring and grows with the spring's speed). Everything here runs on the native driver: each move
+ * only sets a few values (smoothed velocity → stretch, direction, glare, trail); the springs on
+ * release run natively. Reduce motion keeps only the glare.
  */
-const Orb = React.memo(function Orb({ mood, level, reduce, lifted }: { mood: Mood; level: Animated.Value; reduce: boolean; lifted: boolean }) {
-  const m = MOOD[mood];
-  const breath = useRef(new Animated.Value(0.5)).current;
-  const ripple = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    breath.stopAnimation();
-    if (reduce) {
-      breath.setValue(0.5);
-      return;
-    }
-    const half = mood === 'thinking' ? 520 : mood === 'listening' ? 1100 : mood === 'speaking' ? 800 : 2100;
-    const ease = Easing.inOut(Easing.sin);
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: half, easing: ease, useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: half, easing: ease, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [mood, reduce, breath]);
-
-  useEffect(() => {
-    ripple.stopAnimation();
-    ripple.setValue(0);
-    if (mood !== 'speaking' || reduce) return;
-    const loop = Animated.loop(Animated.timing(ripple, { toValue: 1, duration: 1600, easing: Easing.out(Easing.quad), useNativeDriver: true }));
-    loop.start();
-    return () => loop.stop();
-  }, [mood, reduce, ripple]);
-
-  const c = SIZE / 2;
-  // Built once: the native driver keeps running these while the orb re-renders (every streamed token).
-  const motion = useMemo(() => {
-    // Two rings half a cycle apart: each grows from the orb's edge and fades.
-    const phases = [
-      ripple.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-      ripple.interpolate({ inputRange: [0, 0.5, 0.5001, 1], outputRange: [0.5, 1, 0, 0.5] }),
-    ];
-    return {
-      // The core breathes (0.8–1) and swells with the voice (up to 1.5×); the glow moves against it.
-      core: Animated.multiply(
-        breath.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }),
-        level.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5], extrapolate: 'clamp' }),
-      ),
-      glowScale: breath.interpolate({ inputRange: [0, 1], outputRange: [1.08, 0.84] }),
-      glowOpacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0.55] }),
-      rings: phases.map(p => ({
-        opacity: p.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 0.6, 0] }),
-        scale: p.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] }),
-      })),
+function useDragGlass(): DragGlass {
+  const [fx] = useState<DragGlass>(() => {
+    const m = createWilsonMotion();
+    const trailX = new Animated.Value(0);
+    const trailY = new Animated.Value(0);
+    /** The last position and the smoothed velocity (px/ms). */
+    const k = { x: 0, y: 0, t: 0, vx: 0, vy: 0 };
+    let relax: ReturnType<typeof setTimeout> | undefined;
+    const spring = (v: Animated.Value, toValue: number, stiffness: number, damping: number) =>
+      Animated.spring(v, { toValue, stiffness, damping, mass: 1, useNativeDriver: true }).start();
+    const rest = (held: boolean) => {
+      // Round again and the droplets back in; still lit while held.
+      spring(m.stretch, 0, 300, 14);
+      spring(trailX, 0, 200, 18);
+      spring(trailY, 0, 200, 18);
+      Animated.timing(m.moving, { toValue: held ? 0.4 : 0, duration: held ? 180 : 320, useNativeDriver: true }).start();
     };
-  }, [breath, level, ripple]);
+    return {
+      ...m,
+      trailX,
+      trailY,
+      pickUp(reduce) {
+        k.t = 0;
+        k.vx = 0;
+        k.vy = 0;
+        if (!reduce) spring(m.lift, 1, 320, 18);
+        Animated.timing(m.moving, { toValue: 0.4, duration: 140, useNativeDriver: true }).start();
+      },
+      track(x, y, reduce) {
+        const now = Date.now();
+        if (k.t) {
+          const dt = clamp(now - k.t, 4, 64);
+          // An exponential average: the pointer's own steps are uneven.
+          k.vx += ((x - k.x) / dt - k.vx) * 0.35;
+          k.vy += ((y - k.y) / dt - k.vy) * 0.35;
+        }
+        k.x = x;
+        k.y = y;
+        k.t = now;
+        const speed = Math.hypot(k.vx, k.vy);
+        if (!reduce) {
+          if (speed > STILL) m.angle.setValue(Math.atan2(k.vy, k.vx));
+          m.stretch.setValue(Math.min(STRETCH_MAX, speed * STRETCH_PER_SPEED));
+          const len = Math.min(SIZE * TRAIL_MAX, speed * TRAIL_MS);
+          trailX.setValue(speed > STILL ? (-k.vx / speed) * len : 0);
+          trailY.setValue(speed > STILL ? (-k.vy / speed) * len : 0);
+        }
+        m.moving.setValue(Math.min(1, 0.4 + speed * 0.5));
+        if (relax) clearTimeout(relax);
+        relax = setTimeout(() => {
+          k.vx = 0;
+          k.vy = 0;
+          rest(true);
+        }, RELAX_MS);
+      },
+      release(reduce) {
+        if (relax) clearTimeout(relax);
+        relax = undefined;
+        k.t = 0;
+        k.vx = 0;
+        k.vy = 0;
+        if (reduce) {
+          m.stretch.setValue(0);
+          m.lift.setValue(0);
+          trailX.setValue(0);
+          trailY.setValue(0);
+          Animated.timing(m.moving, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+          return;
+        }
+        // A soft, under-damped spring: he overshoots into a squash and wobbles back to round.
+        spring(m.stretch, 0, 300, 8);
+        spring(m.lift, 0, 260, 14);
+        spring(trailX, 0, 180, 14);
+        spring(trailY, 0, 180, 14);
+        Animated.timing(m.moving, { toValue: 0, duration: 340, useNativeDriver: true }).start();
+      },
+    };
+  });
+  return fx;
+}
 
+/**
+ * The blob trail: three glass droplets behind Wilson along the way he moves, smaller the further
+ * back, that merge into him as he slows (the blob merge of liquid-glass-studio's smooth-min shapes,
+ * drawn as overlapping drops rather than a shader). They are light, plain views (no blur), never
+ * take touches, and show only while he moves.
+ */
+const DROPS = [
+  { at: 0.3, size: 0.62, opacity: 0.9 },
+  { at: 0.62, size: 0.42, opacity: 0.75 },
+  { at: 1, size: 0.26, opacity: 0.6 },
+];
+
+const Droplets = React.memo(function Droplets({ size, fx }: { size: number; fx: DragGlass }) {
+  const drops = useMemo(
+    () =>
+      DROPS.map(d => ({
+        d: Math.round(size * d.size),
+        x: Animated.multiply(fx.trailX, d.at),
+        y: Animated.multiply(fx.trailY, d.at),
+        opacity: fx.moving.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0, d.opacity], extrapolate: 'clamp' }),
+      })),
+    [size, fx],
+  );
   return (
     <>
-      {mood === 'speaking' &&
-        !reduce &&
-        motion.rings.map((r, i) => (
-          <Pivot key={i} x={c} y={c} style={{ opacity: r.opacity, transform: [{ scale: r.scale }] }}>
-            <View style={{ position: 'absolute', left: -c, top: -c, width: SIZE, height: SIZE, borderRadius: c, borderWidth: 1.5, borderColor: m.core }} />
-          </Pivot>
-        ))}
-      <Glass
-        kind="orb"
-        radius={c}
-        tint={m.tint}
-        style={[
-          { width: SIZE, height: SIZE },
-          mood !== 'idle' && { shadowColor: m.core, shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 0 } },
-          lifted && { shadowOpacity: 0.5, shadowRadius: 26, shadowOffset: { width: 0, height: 16 } },
-        ]}>
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: c, overflow: 'hidden' }]}>
-          <Pivot x={c} y={c} style={{ opacity: motion.glowOpacity, transform: [{ scale: motion.glowScale }] }}>
-            <Light size={34} color={m.glow} strength={0.85} dx={-6} dy={-7} />
-          </Pivot>
-          <Pivot x={c} y={c} style={{ transform: [{ scale: motion.core }] }}>
-            <Light size={42} color={m.core} strength={mood === 'idle' ? 0.75 : 1} />
-          </Pivot>
-        </View>
-      </Glass>
+      {drops.map(({ d, x, y, opacity }, i) => (
+        <Pivot key={i} x={size / 2} y={size / 2} style={{ opacity, transform: [{ translateX: x }, { translateY: y }] }}>
+          <View style={[styles.drop, { left: -d / 2, top: -d / 2, width: d, height: d, borderRadius: d / 2 }]}>
+            <View style={[styles.dropGlint, { left: d * 0.2, top: d * 0.16, width: d * 0.3, height: d * 0.22, borderRadius: d * 0.15 }]} />
+          </View>
+        </Pivot>
+      ))}
     </>
   );
 });
 
 interface PanelProps {
   b: Buddy;
-  mood: Mood;
+  mood: WilsonMood;
   from: number;
   hasMic: boolean;
   draft: string;
@@ -454,7 +499,13 @@ interface PanelProps {
   style: StyleProp<ViewStyle>;
 }
 
-/** The compact conversation beside the orb: state, what it heard, its answer, and the facts used. */
+/** Says "start with “Wilson, …”" only while the wake word is on (useBuddy's wake, when it has one). */
+function wakeWordOn(b: Buddy): boolean {
+  const wake = (b as unknown as { wake?: { enabled?: unknown; available?: unknown } }).wake;
+  return !!wake && wake.enabled === true && wake.available !== false;
+}
+
+/** The compact conversation beside Wilson: his state, what he heard, his answer, and the facts used. */
 function Panel({ b, mood, from, hasMic, draft, setDraft, onClose, reduce, style }: PanelProps) {
   const fade = useRef(new Animated.Value(reduce ? 1 : 0)).current;
   useEffect(() => {
@@ -463,8 +514,10 @@ function Panel({ b, mood, from, hasMic, draft, setDraft, onClose, reduce, style 
 
   const lines = b.chat.slice(from);
   const you = [...lines].reverse().find(l => l.who === 'you');
-  // While it listens to a new question, the last answer (and its facts) step aside.
-  const answer = b.listening ? undefined : [...lines].reverse().find(l => l.who === 'buddy');
+  // After his spoken answer he listens for a follow-up by himself (useBuddy's followUp): the answer
+  // stays, with what he hears under it. A new question (a tap) moves the last answer aside.
+  const followUp = (b as unknown as { followUp?: unknown }).followUp === true && b.listening;
+  const answer = b.listening && !followUp ? undefined : [...lines].reverse().find(l => l.who === 'buddy');
 
   // Facts show only when `cited` changed after the question was asked, so an older answer's
   // sources never sit under a new answer.
@@ -476,13 +529,18 @@ function Panel({ b, mood, from, hasMic, draft, setDraft, onClose, reduce, style 
   const city = b.index.destination.name;
 
   const m = MOOD[mood];
-  const heard = b.listening ? b.partial : you?.text;
-  const hint = b.listening
+  const heard = b.listening && !followUp ? b.partial : you?.text;
+  // His greeting (the spec's, on a Mac): he lives here, so he works without signal.
+  // A no-break space inside the quote, so the panel never leaves "…”." alone on a line.
+  const greeting = `Hi, I'm Wilson. I live on this Mac, so I work without signal. Tap me${wakeWordOn(b) ? ', or start with “Wilson, …”' : ' and ask anything'}.`;
+  const hint = followUp
+    ? undefined
+    : b.listening
     ? 'Ask about where you are, your plan, or what is nearby.'
     : mood === 'thinking'
       ? b.status
       : !answer
-        ? b.status ?? (hasMic ? 'Tap me and ask anything.' : 'No microphone here: type your question.')
+        ? b.status ?? (hasMic ? greeting : 'No microphone here: type your question.')
         : undefined;
   const send = () => {
     const t = draft.trim();
@@ -496,9 +554,9 @@ function Panel({ b, mood, from, hasMic, draft, setDraft, onClose, reduce, style 
       {/* The panel never grows past the room beside the orb (maxHeight on the wrapper): the body scrolls. */}
       <Glass kind="clear" radius={24} tint={ground(0.42)} style={styles.panel}>
         <View style={styles.head}>
-          <View style={[styles.dot, { backgroundColor: mood === 'idle' ? white(0.7) : m.core, shadowColor: m.core }]} />
+          <View style={[styles.dot, { backgroundColor: m.dot, shadowColor: m.dot }]} />
           <Text style={styles.state} numberOfLines={1}>
-            {m.label}
+            {moodLabel(mood, b)}
           </Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} {...axPress(onClose)} hitSlop={8} style={({ pressed }) => [styles.close, { opacity: pressed ? 0.7 : 1 }]}>
             <CloseIcon size={11} strokeWidth={2.6} />
@@ -511,7 +569,7 @@ function Panel({ b, mood, from, hasMic, draft, setDraft, onClose, reduce, style 
             </Text>
           )}
           {!!hint && (
-            <Text style={styles.hint} numberOfLines={2}>
+            <Text style={styles.hint} numberOfLines={3}>
               {hint}
             </Text>
           )}
@@ -545,6 +603,11 @@ function Panel({ b, mood, from, hasMic, draft, setDraft, onClose, reduce, style 
               })}
             </View>
           )}
+          {followUp && (
+            <Text style={[styles.hint, !!b.partial && styles.heard]} numberOfLines={2}>
+              {b.partial ? `“${b.partial}”` : 'Listening for a follow-up. Or say “thanks”.'}
+            </Text>
+          )}
         </ScrollView>
         {!hasMic && (
           <View style={styles.inputRow}>
@@ -552,7 +615,7 @@ function Panel({ b, mood, from, hasMic, draft, setDraft, onClose, reduce, style 
               value={draft}
               onChangeText={setDraft}
               onSubmitEditing={send}
-              placeholder="Ask your buddy…"
+              placeholder="Ask Wilson…"
               placeholderTextColor={dusk.color.pending}
               accessibilityLabel="Ask your buddy"
               autoFocus
@@ -585,4 +648,6 @@ const styles = StyleSheet.create({
   factSource: { ...font('500'), fontSize: 11, lineHeight: 14, color: dusk.color.text2 },
   inputRow: { height: 38, borderRadius: 19, paddingHorizontal: 14, justifyContent: 'center', backgroundColor: white(0.1) },
   input: { ...font('500'), fontSize: 14, height: 20, paddingVertical: 0, color: dusk.color.text },
+  drop: { position: 'absolute', backgroundColor: white(0.1), borderWidth: 1, borderColor: white(0.34), overflow: 'hidden' },
+  dropGlint: { position: 'absolute', backgroundColor: white(0.32) },
 });

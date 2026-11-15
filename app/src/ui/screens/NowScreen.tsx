@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type TextStyle } from 'react-native';
+import { Animated, Easing, PanResponder, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { dayTimeline, forecastDates, pickDistinct, placeBefore, planDays, reasonWithoutWalk, stopSpan, type PlanDay, type TimelineRow } from '../../core/dayplan';
 import { timeOfDay } from '../../core/look';
 import { templateReason } from '../../core/scoring';
@@ -17,14 +17,22 @@ import { useReduceMotion } from '../dusk/motion';
 import { LinearGradient } from '../dusk/Gradient';
 import { PhotoFade, PlacePhoto, placePhotoSource } from '../dusk/Photos';
 import { useScreenSize } from '../dusk/Screen';
+import { HomeLink } from '../dusk/Nav';
+import { CloseIcon } from '../dusk/Icons';
 import { dusk, font, ground, white } from '../dusk/tokens';
-import type { Buddy } from '../useBuddy';
+import type { Buddy, ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
+import { isDeclined, levelFor, UNSURE_LINE, useLevel, useMood, useWilsonMotion, WilsonFace, type WilsonLevel, type WilsonMood, type WilsonMotion } from './WilsonLive';
 
 // AntNow, by days: a compact header (the city photo for the time of day, the clock, the weather,
 // the Offline chip and the on-device models), a strip of the trip's days, and the picked day as a
 // timeline: times on the left, that day's planned stops and suggestions on the right, and on
 // today a "now" line with the suggestions for right now. DuskRoot draws the tab bar.
+//
+// Wilson rides the "now" line (48 px, in the time column under the clock): tap him to talk (what
+// he hears and answers shows in a bubble on the line), tap another time or drag him to it and he
+// glides there in 240 ms while the day re-plans around him. The times before "now" stay, dimmed,
+// so a time keeps its place when he moves to it. The floating Wilson is hidden here (DuskRoot).
 
 const W = dusk.layout.phoneWidth;
 /** Below the window's title bar, as on the other screens. */
@@ -70,6 +78,17 @@ const STRIP_SHADOW = 12;
 const CLOCK_SIZE = Math.round(dusk.font.clock.size * 0.8);
 /** Rain from this chance shows next to a time. */
 const RAIN_SHOWN = 30;
+/** Wilson on the timeline, and where his top sits in the "now" row: under "Now", the time and its weather lines. */
+const WILSON = 48;
+const NOW_HEAD = 16 + 16 + 8;
+const WEATHER_LINE = 14;
+const wilsonTopIn = (weatherLines: number) => NOW_HEAD + weatherLines * WEATHER_LINE;
+/** Once per app session: the hint on the line ("tap me…") goes after the first time he is tapped or moved. */
+let introduced = false;
+/** A move's re-plan is laid out within this many ms; later layouts are the clock set elsewhere. */
+const MOVE_SETTLE = 800;
+// macOS-only View prop the iOS typings lack: dragging Wilson must never drag the window.
+const NO_WINDOW_DRAG = { mouseDownCanMoveWindow: false } as object;
 
 /** Dark behind the pills at the top and behind the glass name at the bottom. */
 const CARD_FADE: [number, number][] = [
@@ -132,10 +151,13 @@ export function NowScreen({ b, nav }: ScreenProps) {
 
       <View onLayout={onTopLayout} style={styles.top}>
         <View style={[styles.header, { marginHorizontal: 22 * sx }]}>
-          <Text style={[styles.city, font('700')]} numberOfLines={1} accessibilityRole="header">
-            {dest.name}
-            {dayNo !== undefined && trip ? <Text style={[font('500'), { fontSize: 15 }]}>{` · day ${dayNo} of ${trip.days}`}</Text> : null}
-          </Text>
+          {/* The city's name leads back home, to the cities Wilson knows (HomeLink, W1). */}
+          <HomeLink nav={nav} city={dest.name}>
+            <Text style={[styles.city, font('700')]} numberOfLines={1} accessibilityRole="header">
+              {dest.name}
+              {dayNo !== undefined && trip ? <Text style={[font('500'), { fontSize: 15 }]}>{` · day ${dayNo} of ${trip.days}`}</Text> : null}
+            </Text>
+          </HomeLink>
           <View style={styles.headerRight}>
             {b.recsThinking && (
               <Text style={[styles.thinking, font('500')]} accessibilityLiveRegion="polite">
@@ -161,7 +183,7 @@ export function NowScreen({ b, nav }: ScreenProps) {
         <DayStrip days={days} selected={day.date} sx={sx} onPick={date => setPick({ date, at: clock.date })} />
       </View>
 
-      <DayTimeline key={day.date} b={b} onOpen={nav.openPlace} day={day} sx={sx} width={width} />
+      <DayTimeline key={day.date} b={b} onOpen={nav.openPlace} onChat={() => nav.go('setup')} day={day} sx={sx} width={width} />
     </View>
   );
 }
@@ -243,15 +265,43 @@ function DayChip({ day, selected, onPress, onLayout }: { day: PlanDay; selected:
 // ---------------------------------------------------------------------------
 // The picked day's timeline
 
-function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId: string) => void; day: PlanDay; sx: number; width: number }) {
+/**
+ * The day's rows; on today also the free times before "now", dimmed as past. Wilson moves along
+ * the day, so a time must keep its place when he moves to it or away from it (dayTimeline alone
+ * drops the free times before "now", which pulled the whole day up under him).
+ */
+function dayRows(stops: readonly Stop[], now: number | undefined): TimelineRow[] {
+  const rows = dayTimeline(stops, { now });
+  if (now === undefined) return rows;
+  const have = new Set(rows.map(r => r.key));
+  const earlier = dayTimeline(stops)
+    .filter(r => r.open && r.minute !== undefined && r.minute < now && !have.has(r.key))
+    .map(r => ({ ...r, past: true }));
+  if (!earlier.length) return rows;
+  const out: TimelineRow[] = [];
+  let i = 0;
+  for (const row of rows) {
+    while (i < earlier.length && row.minute !== undefined && earlier[i].minute! < row.minute) out.push(earlier[i++]);
+    out.push(row);
+  }
+  return [...out, ...earlier.slice(i)];
+}
+
+function DayTimeline({ b, onOpen, onChat, day, sx, width }: { b: Buddy; onOpen: (placeId: string) => void; onChat: () => void; day: PlanDay; sx: number; width: number }) {
   const { clock, location, visited } = b.situation;
   const trip = b.trip;
   const today = day.date === clock.date;
+  const reduce = useReduceMotion();
   const stops = useMemo(() => (trip ? stopsOn(trip, day.date) : []), [trip, day.date]);
-  const rows = useMemo(() => dayTimeline(stops, { now: today ? clock.minute : undefined }), [stops, today, clock.minute]);
+  const rows = useMemo(() => dayRows(stops, today ? clock.minute : undefined), [stops, today, clock.minute]);
 
-  // Right now: the live suggestions (the model's picks once it has thought).
-  const nowRecs = useMemo(() => (today ? b.recs.slice(0, NOW_CARDS) : []), [today, b.recs]);
+  // Right now: the live suggestions (the model's picks once it has thought), less any place already
+  // in this day's plan (the recommender skips only booked stops; "+ Add" on one would add it twice).
+  const nowRecs = useMemo(() => {
+    if (!today) return [];
+    const planned = new Set(stops.flatMap(s => (s.placeId ? [s.placeId] : [])));
+    return b.recs.filter(r => !planned.has(r.placeId)).slice(0, NOW_CARDS);
+  }, [today, b.recs, stops]);
 
   // The free times: the recommender's own ranking (code, no model) as if the clock were then and
   // the traveller at the stop before (else where they are now, or at their base on another day),
@@ -272,7 +322,16 @@ function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId
       return companion.recommender.candidates(trip, sit);
     });
     const taken = [...stops.flatMap(s => (s.placeId ? [s.placeId] : [])), ...nowRecs.map(r => r.placeId)];
-    return pickDistinct(lists, taken, 1).map(list =>
+    // The times still to come choose first; the times already past (dimmed) take what is left.
+    const order = rows.map((_, i) => i).sort((a, c) => Number(rows[a].past) - Number(rows[c].past) || a - c);
+    const chosen = pickDistinct(
+      order.map(i => lists[i]),
+      taken,
+      1,
+    );
+    const byRow: (typeof chosen)[number][] = [];
+    order.forEach((i, k) => (byRow[i] = chosen[k]));
+    return byRow.map(list =>
       list.map<Recommendation>(c => ({
         placeId: c.place.id,
         reason: templateReason(c),
@@ -288,15 +347,26 @@ function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId
   const [view, setView] = useState({ y: 0, h: 0 });
   const scroll = useRef<ScrollView>(null);
   const scrolledTo = useRef<number | undefined>(undefined);
+  /** The scroll offset as it is (view.y is rounded). */
+  const scrollTop = useRef(0);
+  /** When Wilson last moved along the day (a tapped time, a drop): the view holds and he glides. */
+  const movedAt = useRef(0);
   const onRowLayout = (row: TimelineRow) => (e: LayoutChangeEvent) => {
     const { y, height } = e.nativeEvent.layout;
     setBoxes(prev => (prev[row.key]?.y === y && prev[row.key]?.h === height ? prev : { ...prev, [row.key]: { y, h: height } }));
-    // On today, open at "now" (stops earlier in the day stay above it), and follow it when a
-    // tapped time moves it. The glass names follow too, in case the scroll sends no event.
+    // On today, open at "now" (stops earlier in the day stay above it), and follow it when the
+    // clock is set elsewhere. The glass names follow too, in case the scroll sends no event.
     if (row.now && scrolledTo.current !== clock.minute) {
       scrolledTo.current = clock.minute;
       const to = Math.max(0, y - 8);
+      if (Date.now() - movedAt.current < MOVE_SETTLE) {
+        // Wilson moved along the day: the view stays, unless his new time is out of it.
+        movedAt.current = 0;
+        if (view.h > 0 && (y < scrollTop.current || y + NOW_HEAD + WILSON > scrollTop.current + view.h)) scroll.current?.scrollTo({ y: to, animated: !reduce });
+        return;
+      }
       scroll.current?.scrollTo({ y: to, animated: false });
+      scrollTop.current = to;
       viewAt(to);
       setUnder(to > EDGE_UNDER);
     }
@@ -308,6 +378,7 @@ function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId
   // Whether anything has scrolled up under the day strip (see EdgeShade).
   const [under, setUnder] = useState(false);
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollTop.current = e.nativeEvent.contentOffset.y;
     viewAt(e.nativeEvent.contentOffset.y);
     setUnder(e.nativeEvent.contentOffset.y > EDGE_UNDER);
   };
@@ -323,6 +394,81 @@ function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId
   const pad = 12 * sx;
   const cardW = width - 2 * pad - TIME_W;
   const empty = !today && rows.every((row, i) => row.stops.length === 0 && recsFor(row, i).length === 0);
+  /** The weather beside a time: once per time (a stop and "now" can share one). */
+  const weatherFor = (i: number) => {
+    const minute = rows[i].minute;
+    return minute !== undefined && rows[i - 1]?.minute !== minute ? weatherAt(b, day.date, minute) : [];
+  };
+
+  // --- Wilson on the line.
+  const level = useLevel(b);
+  // He thinks while the day re-plans around him, too.
+  const mood = useMood(b, { replan: true });
+  const hasMic = b.runtime.audio.info.hasMicrophone;
+  /** The bubble shows exchanges from here on: none from before Now opened, and a tap starts afresh. */
+  const [from, setFrom] = useState(() => b.chat.length);
+  const [intro, setIntro] = useState(!introduced);
+  const introduce = () => {
+    introduced = true;
+    setIntro(false);
+  };
+  /** Moves Wilson (and the clock) to a time of this day; the day re-plans around him. */
+  const moveTo = (minute: number) => {
+    introduce();
+    if (today && minute === clock.minute) return;
+    movedAt.current = Date.now();
+    b.setClock({ date: day.date, minute });
+  };
+  /** Tap: talk; while he listens, send; while he thinks or speaks, stop him (no barge-in). Without a microphone, Chat. */
+  const tapWilson = () => {
+    introduce();
+    if (b.listening) b.talk();
+    else if (b.speaking || b.busy) b.stopSpeaking();
+    else if (hasMic) {
+      setFrom(b.chat.length);
+      b.talk();
+    } else onChat();
+  };
+  const wilsonLabel = b.listening ? 'Wilson is listening. Tap to send' : b.speaking || b.busy ? 'Wilson. Tap to stop him' : hasMic ? 'Wilson. Tap to talk' : 'Wilson. Tap to write to him in Chat';
+  const nowIndex = today ? rows.findIndex(r => r.now) : -1;
+  const nowBox = nowIndex >= 0 ? boxes[rows[nowIndex].key] : undefined;
+  // The times he can be dragged to, top to bottom, and the one his centre is over.
+  const timed = rows.filter(r => r.minute !== undefined && boxes[r.key]);
+  const rowAt = (top: number) => {
+    let hit = timed[0];
+    for (const r of timed) if (boxes[r.key].y <= top + WILSON / 2) hit = r;
+    return hit;
+  };
+  const firstBox = timed.length ? boxes[timed[0].key] : undefined;
+  const lastBox = timed.length ? boxes[timed[timed.length - 1].key] : undefined;
+  const rider =
+    nowBox && firstBox && lastBox ? (
+      <WilsonRider
+        y={nowBox.y + wilsonTopIn(weatherFor(nowIndex).length)}
+        minY={firstBox.y}
+        maxY={lastBox.y + Math.max(NOW_HEAD, lastBox.h - WILSON)}
+        mood={mood}
+        level={level}
+        reduce={reduce}
+        label={wilsonLabel}
+        onTap={tapWilson}
+        timeAt={top => {
+          const r = rowAt(top);
+          return r && (r.now ? `Now · ${r.label}` : r.label);
+        }}
+        onDrop={top => {
+          const r = rowAt(top);
+          if (!r || r.now || r.minute === undefined) return false;
+          moveTo(r.minute);
+          return true;
+        }}
+        onStep={dir => {
+          const at = timed.findIndex(t => t.now);
+          const r = at >= 0 ? timed[at + dir] : undefined;
+          if (r && r.minute !== undefined) moveTo(r.minute);
+        }}
+      />
+    ) : null;
 
   return (
     <View style={styles.timeline}>
@@ -344,10 +490,21 @@ function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId
           setView(v => (v.h === h ? v : { ...v, h }));
         }}
       >
+        {/* Another day: Wilson stays on today's line, and says how to bring him here. */}
+        {!today ? (
+          <>
+            <Pressable accessibilityRole="button" accessibilityLabel={`${wilsonLabel}. Tap a time to move him to ${day.spoken}`} onPress={tapWilson} {...axPress(tapWilson)} style={({ pressed }) => [styles.away, { opacity: pressed ? 0.85 : 1 }]}>
+              <WilsonFace size={32} mood={mood} level={levelFor(mood, level)} decorative />
+              <Text style={[styles.awayText, font('600')]} numberOfLines={2}>{`Tap a time and I'll move to ${day.spoken}.`}</Text>
+            </Pressable>
+            {/* Talked to here (a tap, or "Wilson, …"): what he hears and answers shows under him, as on today's line. */}
+            <WilsonSays b={b} from={from} intro={false} onChat={onChat} onClose={() => setFrom(b.chat.length)} style={styles.awaySays} />
+          </>
+        ) : null}
         {empty ? (
           <Glass kind="clear" style={styles.empty}>
             <Text style={[onGlass, font('700'), { fontSize: 15 }]}>Nothing planned or open on {day.label}</Text>
-            <Text style={[styles.emptyHint, font('500')]}>Tell your buddy in Chat what you would like to do that day.</Text>
+            <Text style={[styles.emptyHint, font('500')]}>Tell Wilson in Chat what you would like to do that day.</Text>
           </Glass>
         ) : (
           <View>
@@ -355,13 +512,13 @@ function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId
             {rows.map((row, i) => {
               const recs = recsFor(row, i);
               const minute = row.minute;
-              const setClock = minute !== undefined && !row.now ? () => b.setClock({ date: day.date, minute }) : undefined;
+              const setClock = minute !== undefined && !row.now ? () => moveTo(minute) : undefined;
               return (
-                <View key={row.key} onLayout={onRowLayout(row)} style={[styles.row, row.past && styles.pastRow]}>
+                <View key={row.key} testID={`row-${row.key}`} onLayout={onRowLayout(row)} style={[styles.row, row.past && styles.pastRow]}>
                   {row.now ? <View pointerEvents="none" style={styles.nowLine} /> : null}
-                  {/* The weather once per time (a stop and "now" can share one). */}
-                  <TimeCell row={row} weather={minute !== undefined && rows[i - 1]?.minute !== minute ? weatherAt(b, day.date, minute) : []} day={day} onPress={setClock} />
+                  <TimeCell row={row} weather={weatherFor(i)} day={day} onPress={setClock} />
                   <View style={[styles.rowBody, row.now && styles.nowBody]}>
+                    {row.now ? <WilsonSays b={b} from={from} intro={intro} onChat={onChat} onClose={() => setFrom(b.chat.length)} /> : null}
                     {row.stops.map(s => {
                       const place = s.placeId ? b.index.place(s.placeId) : undefined;
                       return <StopCard key={s.id} stop={s} place={place} onPress={place ? () => onOpen(place.id) : undefined} />;
@@ -372,17 +529,293 @@ function DayTimeline({ b, onOpen, day, sx, width }: { b: Buddy; onOpen: (placeId
                       </FadeIn>
                     ))}
                     {row.open && recs.length === 0 ? (
-                      <Text style={[styles.nothing, font('500')]}>{row.now ? 'Nothing fits right now. Ask your buddy what you feel like, or tap a later time.' : 'Nothing open nearby then.'}</Text>
+                      <Text style={[styles.nothing, font('500')]}>{row.now ? 'Nothing fits right now. Ask Wilson what you feel like, or move him to a later time.' : 'Nothing open nearby then.'}</Text>
                     ) : null}
                   </View>
                 </View>
               );
             })}
+            {rider}
           </View>
         )}
       </ScrollView>
       <EdgeShade shown={under} />
     </View>
+  );
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * His liquid-glass feel while he is dragged along the day, as the floating Wilson does it (after
+ * liquid-glass-studio): picked up he lifts and his rim lights; moving he stretches along the way he
+ * goes, more the faster; let go he wobbles back round. All native-driven. Reduce motion: no
+ * stretching or lifting, only the light.
+ */
+function dragGlass(m: WilsonMotion | undefined) {
+  const k = { y: 0, t: 0, vy: 0 };
+  let relax: ReturnType<typeof setTimeout> | undefined;
+  const spring = (v: Animated.Value, toValue: number, stiffness: number, damping: number) => Animated.spring(v, { toValue, stiffness, damping, mass: 1, useNativeDriver: true }).start();
+  return {
+    pickUp(reduce: boolean) {
+      if (!m) return;
+      k.t = 0;
+      k.vy = 0;
+      if (!reduce) spring(m.lift, 1, 320, 18);
+      Animated.timing(m.moving, { toValue: 0.4, duration: 140, useNativeDriver: true }).start();
+    },
+    track(y: number, reduce: boolean) {
+      if (!m) return;
+      const now = Date.now();
+      if (k.t) k.vy += ((y - k.y) / clamp(now - k.t, 4, 64) - k.vy) * 0.35; // smoothed px/ms
+      k.y = y;
+      k.t = now;
+      const speed = Math.abs(k.vy);
+      if (!reduce) {
+        if (speed > 0.04) m.angle.setValue(k.vy > 0 ? Math.PI / 2 : -Math.PI / 2);
+        m.stretch.setValue(Math.min(0.26, speed * 0.15));
+      }
+      m.moving.setValue(Math.min(1, 0.4 + speed * 0.5));
+      // A pause mid-drag: round again (still held).
+      if (relax) clearTimeout(relax);
+      relax = setTimeout(() => {
+        k.vy = 0;
+        spring(m.stretch, 0, 300, 14);
+        Animated.timing(m.moving, { toValue: 0.4, duration: 180, useNativeDriver: true }).start();
+      }, 70);
+    },
+    release(reduce: boolean) {
+      if (!m) return;
+      if (relax) clearTimeout(relax);
+      k.t = 0;
+      k.vy = 0;
+      if (reduce) {
+        m.stretch.setValue(0);
+        m.lift.setValue(0);
+      } else {
+        spring(m.stretch, 0, 300, 8);
+        spring(m.lift, 0, 260, 14);
+      }
+      Animated.timing(m.moving, { toValue: 0, duration: 340, useNativeDriver: true }).start();
+    },
+  };
+}
+
+interface RiderProps {
+  /** Where his top belongs: the "now" row's Wilson slot, in the timeline's coordinates. */
+  y: number;
+  /** How far he can be dragged. */
+  minY: number;
+  maxY: number;
+  mood: WilsonMood;
+  level: WilsonLevel;
+  reduce: boolean;
+  label: string;
+  onTap: () => void;
+  /** The time under him at this top, for the pill shown while he is dragged. */
+  timeAt: (top: number) => string | undefined;
+  /** Dropped here: true when that moves the clock (he then glides to his new place once the day re-plans). */
+  onDrop: (top: number) => boolean;
+  /** VoiceOver's increment and decrement: the next or the previous time. */
+  onStep: (dir: 1 | -1) => void;
+}
+
+/**
+ * Wilson on the timeline. He glides (240 ms) to wherever "now" is laid out; drag him up or down
+ * the day and let go on a time to move "now" there. `top` is a layout prop, not a transform:
+ * AppKit owns a view's layer transform and can reset it, but keeps the frame (as in dusk/Buddy.tsx).
+ * Reduce motion: no gliding, he is just there.
+ */
+function WilsonRider({ y, minY, maxY, mood, level, reduce, label, onTap, timeAt, onDrop, onStep }: RiderProps) {
+  const top = useRef(new Animated.Value(y)).current;
+  /** Where he is, or is heading. */
+  const at = useRef(y);
+  const mountedAt = useRef(Date.now());
+  const dragging = useRef(false);
+  const [dragTime, setDragTime] = useState<string>();
+  const landing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const live = useRef({ y, minY, maxY, reduce, onTap, timeAt, onDrop });
+  live.current = { y, minY, maxY, reduce, onTap, timeAt, onDrop };
+  const fx = useWilsonMotion();
+  const glass = useMemo(() => dragGlass(fx), [fx]);
+
+  const glide = useCallback(
+    (to: number) => {
+      if (landing.current !== undefined) clearTimeout(landing.current);
+      landing.current = undefined;
+      top.stopAnimation();
+      at.current = to;
+      // Not while the first layouts settle (the rows above him are still being measured).
+      if (live.current.reduce || Date.now() - mountedAt.current < 600) top.setValue(to);
+      else Animated.timing(top, { toValue: to, duration: dusk.motion.replan, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    },
+    [top],
+  );
+  useEffect(() => {
+    if (!dragging.current && at.current !== y) glide(y);
+  }, [y, glide]);
+  useEffect(
+    () => () => {
+      if (landing.current !== undefined) clearTimeout(landing.current);
+    },
+    [],
+  );
+
+  // A press that moves less than a few points is a tap.
+  const pan = useMemo(() => {
+    const start = { v: 0 };
+    let moved = false;
+    const finish = (to: number) => {
+      dragging.current = false;
+      setDragTime(undefined);
+      glass.release(live.current.reduce);
+      const { minY: lo, maxY: hi } = live.current;
+      const dropped = clamp(to, lo, hi);
+      top.setValue(dropped);
+      at.current = dropped;
+      if (live.current.onDrop(dropped)) {
+        // The day re-plans: the new "now" moves his y and he glides there; if it lands where it was, go anyway.
+        landing.current = setTimeout(() => glide(live.current.y), 400);
+      } else glide(live.current.y);
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        moved = false;
+        top.stopAnimation(v => {
+          start.v = v;
+        });
+      },
+      onPanResponderMove: (_e, g) => {
+        if (!moved) {
+          if (Math.abs(g.dx) + Math.abs(g.dy) < 5) return;
+          moved = true;
+          dragging.current = true;
+          glass.pickUp(live.current.reduce);
+        }
+        const { minY: lo, maxY: hi, timeAt: time } = live.current;
+        const v = clamp(start.v + g.dy, lo, hi);
+        top.setValue(v);
+        glass.track(v, live.current.reduce);
+        const t = time(v);
+        setDragTime(prev => (prev === t ? prev : t));
+      },
+      onPanResponderRelease: (_e, g) => {
+        if (moved) return finish(start.v + g.dy);
+        // A tap; if it caught him mid-glide, let him finish the trip.
+        if (Math.abs(start.v - live.current.y) > 0.5) glide(live.current.y);
+        live.current.onTap();
+      },
+      onPanResponderTerminate: (_e, g) => {
+        if (moved) finish(start.v + g.dy);
+        else glide(live.current.y); // the press stopped a glide: finish it
+      },
+    });
+  }, [top, glide, glass]);
+
+  return (
+    <>
+      {dragTime ? (
+        <Animated.View pointerEvents="none" style={[styles.dragTime, { top }]}>
+          <Glass kind="prominent" radius={999} style={styles.dragPill}>
+            <Text style={[onGlass, font('700'), { fontSize: 12.5, fontVariant: ['tabular-nums'] }]} numberOfLines={1}>
+              {dragTime}
+            </Text>
+          </Glass>
+        </Animated.View>
+      ) : null}
+      <Animated.View
+        {...pan.panHandlers}
+        {...NO_WINDOW_DRAG}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint="Drag him to another time, or tap a time, and the day re-plans around him"
+        accessibilityActions={[
+          { name: 'increment', label: 'Move to the next time' },
+          { name: 'decrement', label: 'Move to the time before' },
+        ]}
+        onAccessibilityAction={e => {
+          const name = e.nativeEvent.actionName;
+          if (name === 'increment') onStep(1);
+          else if (name === 'decrement') onStep(-1);
+        }}
+        {...axPress(onTap)}
+        style={[styles.rider, { top, cursor: 'pointer' }]}>
+        <WilsonFace size={WILSON} mood={mood} level={levelFor(mood, level)} decorative lifted={dragTime !== undefined} motion={fx} />
+      </Animated.View>
+    </>
+  );
+}
+
+const lastExchange = (lines: ChatLine[]): { question: ChatLine; answer?: ChatLine } | undefined => {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].who === 'you') return { question: lines[i], answer: lines[i + 1]?.who === 'buddy' ? lines[i + 1] : undefined };
+  }
+  return undefined;
+};
+
+/**
+ * What Wilson says on the "now" line: what he hears while he listens, then the question and his
+ * answer (with "Wilson · from your <city> guide" when the guide's facts are behind it). Before
+ * anyone has talked to him here, a one-line hint. Tapping an answer opens Chat with the whole
+ * conversation; the small close button puts it away.
+ */
+function WilsonSays({ b, from, intro, onChat, onClose, style }: { b: Buddy; from: number; intro: boolean; onChat: () => void; onClose: () => void; style?: StyleProp<ViewStyle> }) {
+  const city = b.index.destination.name;
+  // After his spoken answer he waits a few seconds for a follow-up (useBuddy's followUp): until the
+  // person starts talking, his answer stays on the line (as on the home and the floating Wilson).
+  const quiet = b.listening && (b as unknown as { followUp?: unknown }).followUp === true && !b.partial;
+  const ex = b.listening && !quiet ? undefined : lastExchange(b.chat.slice(from));
+  let label = 'Wilson';
+  let text: string;
+  let heard: string | undefined;
+  let pending = false;
+  if (b.listening && !(quiet && ex)) {
+    label = 'Wilson · listening';
+    text = b.partial ? `“${b.partial}”` : 'Listening…';
+    pending = !b.partial;
+  } else if (ex) {
+    const a = ex.answer;
+    heard = ex.question.text;
+    if (a && !a.pending && (a.cited?.facts?.length ?? 0) > 0) label = `Wilson · from your ${city} guide`;
+    if (!a || (a.pending && !a.text)) {
+      text = b.status ?? 'Thinking…';
+      pending = true;
+    } else text = !a.pending && isDeclined(a.text) ? UNSURE_LINE : a.text;
+  } else if (intro) {
+    text = b.runtime.audio.info.hasMicrophone ? "Tap me to talk, or tap another time and I'll move there." : "Tap me to chat, or tap another time and I'll move there.";
+  } else return null;
+
+  const body = (
+    <Glass kind="clear" radius={20} style={[styles.says, styles.softShadow, style]}>
+      <View style={styles.saysHead}>
+        <Text style={[styles.saysLabel, font('700')]} numberOfLines={1}>
+          {label}
+        </Text>
+        {ex ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} {...axPress(onClose)} hitSlop={10} style={({ pressed }) => [styles.saysClose, { opacity: pressed ? 0.7 : 1 }]}>
+            <CloseIcon size={9} strokeWidth={2.6} />
+          </Pressable>
+        ) : null}
+      </View>
+      {heard ? (
+        <Text style={[styles.saysHeard, font('500')]} numberOfLines={1}>
+          {`“${heard}”`}
+        </Text>
+      ) : null}
+      <Text style={[styles.saysText, font('500'), pending && { color: dusk.color.pending }]} numberOfLines={4} accessibilityLiveRegion="polite">
+        {text}
+      </Text>
+    </Glass>
+  );
+  if (!ex) return body;
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${text}`} accessibilityHint="Opens the conversation in Chat" onPress={onChat} {...axPress(onChat)} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
+      {body}
+    </Pressable>
   );
 }
 
@@ -434,6 +867,8 @@ function TimeCell({ row, weather, day, onPress }: { row: TimelineRow; weather: s
           {w}
         </Text>
       ))}
+      {/* Room for Wilson, who rides over it (WilsonRider): his top is wilsonTopIn(weather.length). */}
+      {row.now ? <View style={styles.wilsonSlot} /> : null}
       <View style={[styles.dot, row.now && styles.nowDot]} />
     </View>
   );
@@ -653,6 +1088,20 @@ const styles = StyleSheet.create({
   walkPill: { position: 'absolute', left: 10, top: 10, height: 26, paddingHorizontal: 11, justifyContent: 'center' },
   reason: { position: 'absolute', left: REASON_X, right: REASON_X, top: REASON_TOP, fontSize: 13, lineHeight: REASON_LINE, color: dusk.color.white, ...shadowText(4, 0.8) },
   nothing: { fontSize: 12.5, lineHeight: 17, color: dusk.color.text2, paddingTop: 1, ...shadowText(3, 0.6) },
+  // Wilson on the line: his slot under the time (top = wilsonTopIn), the rider, and the time shown while he is dragged.
+  wilsonSlot: { marginTop: NOW_HEAD - 32, height: WILSON },
+  rider: { position: 'absolute', left: 0, width: WILSON, height: WILSON },
+  dragTime: { position: 'absolute', left: RAIL_X + 12, height: WILSON, justifyContent: 'center' },
+  dragPill: { height: 28, paddingHorizontal: 12, justifyContent: 'center' },
+  says: { paddingTop: 9, paddingBottom: 11, paddingHorizontal: 14, gap: 3 },
+  saysHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 18 },
+  saysLabel: { flex: 1, fontSize: 11.5, lineHeight: 15, color: dusk.color.text2 },
+  saysClose: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: white(0.14) },
+  saysHeard: { fontSize: 12.5, lineHeight: 17, color: dusk.color.text2 },
+  saysText: { fontSize: 14.5, lineHeight: 20, color: dusk.color.text },
+  away: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4, paddingRight: 8, marginBottom: 14, minHeight: dusk.size.touch },
+  awayText: { flex: 1, fontSize: 13, lineHeight: 17, color: dusk.color.text2, ...shadowText(3, 0.6) },
+  awaySays: { marginLeft: TIME_W, marginBottom: 14 },
   empty: { padding: 22, gap: 6 },
   emptyHint: { fontSize: 14, lineHeight: 19, color: dusk.color.textSoft },
 });

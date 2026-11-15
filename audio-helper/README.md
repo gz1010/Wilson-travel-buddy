@@ -39,7 +39,10 @@ the same speaker; tune it in the demo room).
   picks the likelier of the two languages, transcribes, and labels the
   speaker by comparing SpeakerKit voice prints. Labels arrive when each
   sentence ends, not live.
-- **speak**: Qwen3-TTS through TTSKit, queued, interruptible.
+- **speak**: Qwen3-TTS through TTSKit, queued, interruptible. While speech
+  plays, `speak.level {value}` (0-1, about 20 a second) follows the loudness
+  of the audio at the playhead, for Wilson's mouth; 0 when it stops.
+- **wake word** ("Wilson, …"): see "Wake word" below.
 - **mute**: drops microphone audio while the app's voice plays.
 - **location** (the map): `location.get {id}` answers `location {id, lat, lon,
   accuracy, at}` or `location.error {id, message}`; see "Location" below.
@@ -56,6 +59,54 @@ the same speaker; tune it in the demo room).
   shows), so the camera light never stays on after the app quits. The app
   sends the snapped photo to Bonsai-2's vision on llama-server; nothing
   leaves the Mac.
+
+## Wake word
+
+"Wilson, where is the cathedral?" or "Hey Wilson" works without a tap, and
+fully offline: no keyword-spotting service, just Argmax's Whisper (the same
+model as listen) on short speech segments.
+
+- `wake.start` turns it on; the app sends it again every 5 s as a keepalive.
+  After 20 s without any message from the app (it quit or crashed), or when a
+  new client connects, the helper turns the microphone off. `wake.stop` turns
+  it off.
+- It listens only while the microphone is free: a `listen.start` or
+  `conversation.start` takes the microphone, and the wake word comes back
+  half a second after they end. Audio is dropped while muted or speaking.
+  `wake.state {listening}` says when it starts and stops listening.
+- Its own Endpointer cuts the sound into sentences (0.7 s of quiet ends one).
+  A sentence must reach a loudness floor (`--wake-floor`, microphone RMS,
+  default 0.012) before Whisper reads it, and at most 20 sentences a minute
+  are read. Whisper reads it in English, with " Wilson" as the previous text
+  (prompt tokens) so the name comes out spelled that way; a short sentence is
+  read whole, a longer one only its first 2 s (never more than 6 s), with no
+  temperature fallback, so a check stays quick.
+- If the reading starts with the name (after up to two words like "hey",
+  "hi", "OK so"; accents, case and punctuation ignored; one letter of slack:
+  Willson, Wilsen, Will son), the helper sends `wake.heard {text}` while the
+  person is still talking (Wilson shows that he is listening, and `level`
+  follows the voice), then `wake {text, heard, sinceEndMs}` when the sentence
+  ends: `text` is the rest after the name ('' for "Wilson" alone), `heard`
+  the whole sentence. `listen.stop` ends that sentence early. Other sentences
+  are dropped and never leave the helper.
+- The app (useBuddy) sends `text` as a question; for the name alone it says
+  "Yes?" and listens. After a spoken answer it listens for a follow-up for 6 s
+  (`listen.start {quietMs: 6000}`) without a tap. It turns the wake word off
+  while Wilson listens, thinks or speaks, and while Translate is open.
+
+Check it without a microphone (or the app):
+
+```sh
+.build/release/BuddyAudio --wake-selftest          # the name parsing, no models
+say -o /tmp/w1.aiff "Wilson, where is the cathedral?"
+say -o /tmp/w2.aiff "Will someone show me the cathedral?"
+BUDDY_WAKE_TEST=/tmp/w1.aiff,/tmp/w2.aiff .build/release/BuddyAudio --port 8767 --no-app-bundle
+# logs: wake word -> app: wake "Where is the cathedral?" … / not for Wilson: Will someone …
+```
+
+`BUDDY_WAKE_TEST` plays each file into the wake word in real time, as if the
+microphone heard it; `BUDDY_WAKE_PROMPT=""` turns the prompt tokens off for
+comparison. Stop that helper when done (it keeps running).
 
 ## Camera access
 

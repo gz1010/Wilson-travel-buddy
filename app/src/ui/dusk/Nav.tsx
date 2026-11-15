@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { hasLiquidGlass } from './Blur';
 import { axPress, Glass } from './Glass';
 import { ChatIcon, MapIcon, MicIcon, NowIcon, ScanIcon, TranslateIcon } from './Icons';
@@ -10,12 +10,47 @@ import { dusk, white } from './tokens';
 
 export type ScreenName = 'welcome' | 'setup' | 'now' | 'place' | 'map' | 'talk' | 'look';
 
+/** The home (WelcomeScreen): Wilson, the cities he knows, and Plan your next journey. */
+export const HOME: ScreenName = 'welcome';
+
 export interface Nav {
   screen: ScreenName;
   go(screen: ScreenName): void;
   /** Opens the Place screen for a pack place. */
   openPlace(placeId: string): void;
   placeId?: string;
+}
+
+/** A chevron pointing left (decorative: HomeLink carries the label). */
+const BackChevron = ({ size = 16, color = dusk.color.white }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M15 5l-7 7 7 7" />
+  </Svg>
+);
+
+/**
+ * The way home from inside a city's guide: wraps the city's name in a screen's header (Now) with a
+ * small chevron before it, and takes it back to the cities Wilson knows when pressed.
+ */
+export function HomeLink({ nav, city, children, style }: { nav: Nav; city: string; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const [hover, setHover] = useState(false);
+  const go = () => nav.go(HOME);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${city} guide`}
+      accessibilityHint="Back to the cities Wilson knows"
+      onPress={go}
+      {...axPress(go)}
+      {...tooltip('Back to the cities Wilson knows')}
+      onHoverIn={() => setHover(true)}
+      onHoverOut={() => setHover(false)}
+      hitSlop={8}
+      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1, opacity: pressed ? 0.7 : 1 }, style]}>
+      <BackChevron size={17} color={hover ? dusk.color.white : dusk.color.text2} />
+      {children}
+    </Pressable>
+  );
 }
 
 // The tab bar's smoke. Its clear glass takes the brightness of what is behind it, so over a bright

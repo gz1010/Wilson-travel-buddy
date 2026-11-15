@@ -19,6 +19,10 @@ import { MapScreen } from '../MapScreen';
 import { SetupScreen } from '../SetupScreen';
 import { TalkScreen } from '../TalkScreen';
 import { WelcomeScreen } from '../WelcomeScreen';
+import { cityFromPack, findKnownCity, tripCity } from '../../dusk/CityCard';
+import { ImportSheet } from '../../dusk/ImportSheet';
+import type { Trip } from '../../../core/types';
+import type { KnownCity } from '../types';
 import { LookScreen } from '../LookScreen';
 import { TabBar } from '../../dusk/Nav';
 import { FloatingBuddy } from '../../dusk/Buddy';
@@ -60,27 +64,140 @@ function Harness({ screen }: { screen: keyof typeof screens }) {
   return <Screen b={b} nav={nav} />;
 }
 
+/** The home's city list, as DuskRoot builds it (prepared.json's numbers, as the scripts wrote them on Nov 15). */
+const homeCities: KnownCity[] = [cityFromPack(index, { preparedAt: '2026-11-15T01:10:11-05:00', photos: 51, heroes: 4 }, { localName: 'Sevilla', aliases: ['Sevilla', 'Séville'] })];
+
+function HomeHarness({ onOpenCity }: { onOpenCity: (id: string) => void }) {
+  const b = useBuddy(runtime, index);
+  latest = b;
+  return <WelcomeScreen cities={homeCities} onOpenCity={onOpenCity} status="" models={[runtime.llm.name, ...runtime.audio.info.models]} b={b} />;
+}
+
 beforeAll(() => jest.useFakeTimers());
 afterAll(() => jest.useRealTimers());
 
 describe('Dusk screens render', () => {
-  it('welcome', () => {
+  it('welcome', async () => {
+    // The home before the models are connected: Wilson waking, Seville's card, the plan, the import waiting.
+    const opened: string[] = [];
     let r: renderer.ReactTestRenderer | undefined;
     act(() => {
-      r = renderer.create(<WelcomeScreen city="Seville" steps={[{ label: 'Seville guide', state: 'ready' }, { label: 'Bonsai-2', state: 'loading' }]} status="Connecting…" ready={false} onStart={() => {}} />);
+      r = renderer.create(<WelcomeScreen cities={homeCities} onOpenCity={id => opened.push(id)} status="Connecting to Bonsai-2…" />);
     });
-    expect(JSON.stringify(r!.toJSON())).toContain('Welcome');
-    // The panel says how many of the on-device pieces are ready; Get started waits for them.
-    expect(r!.root.findAll(n => n.props.children === '1 of 2 ready').length).toBeGreaterThan(0);
-    expect(r!.root.findAll(n => n.props.accessibilityLabel === 'Get started, available once the models are ready').length).toBeGreaterThan(0);
-    act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" models={['Bonsai-2', 'WhisperKit']} ready onStart={() => {}} />));
-    expect(JSON.stringify(r!.toJSON())).toContain('Bonsai-2 · WhisperKit');
-    expect(r!.root.findAll(n => n.props.accessibilityLabel === 'Get started').length).toBeGreaterThan(0);
-    // The prepared-pack line (after Person B's test): how to prepare it, then what was prepared.
-    act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" ready onStart={() => {}} prepared={{ preparedAt: null, places: 0, facts: 0, photos: 0 }} />));
-    expect(JSON.stringify(r!.toJSON())).toContain('Not prepared yet');
-    act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" ready onStart={() => {}} prepared={{ preparedAt: '2026-11-14T22:00:00-05:00', places: 60, facts: 97, photos: 52 }} />));
-    expect(r!.root.findAll(n => /^Seville guide prepared Nov 14 · 60 places · 97 facts · 52 photos$/.test(String(n.props.accessibilityLabel ?? ''))).length).toBeGreaterThan(0);
+    const text = () => JSON.stringify(r!.toJSON());
+    const byLabel = (label: string | RegExp) =>
+      r!.root.findAll(n => (typeof label === 'string' ? n.props.accessibilityLabel === label : label.test(String(n.props.accessibilityLabel ?? ''))) && typeof n.props.onPress === 'function');
+    expect(text()).toContain('Cities Wilson knows');
+    expect(text()).toContain('Plan your');
+    expect(text()).toContain('Connecting to Bonsai-2…');
+    const card = byLabel(/^Seville \(Sevilla\), Spain\. 60 places · ready offline\. Prepared Nov 15 · \d+ facts · 55 photos$/);
+    expect(card.length).toBeGreaterThan(0);
+    expect(r!.root.findAll(n => n.props.accessibilityLabel === 'Upload itinerary' && n.props.accessibilityState?.disabled === true).length).toBeGreaterThan(0);
+    // Tapping the card opens Seville's guide (DuskRoot waits for Wilson to wake up).
+    act(() => card[0].props.onPress());
+    expect(opened).toEqual(['seville']);
+    // Typing a city: Seville opens; one Wilson hasn't learned gets the note on how he learns a city, never a download.
+    const input = () => r!.root.findAll(n => n.props.accessibilityLabel === 'Where should Wilson explore next?' && typeof n.props.onChangeText === 'function')[0];
+    act(() => input().props.onSubmitEditing({ nativeEvent: { text: 'sevilla' } }));
+    expect(opened).toEqual(['seville', 'seville']);
+    act(() => input().props.onSubmitEditing({ nativeEvent: { text: 'paris' } }));
+    expect(text()).toContain("Wilson hasn't learned Paris yet");
+    expect(text()).toContain('node scripts/prepare-pack.mjs --dest paris');
+    expect(text()).toContain("doesn't check your connection");
+    act(() => input().props.onSubmitEditing({ nativeEvent: { text: "xi'an" } }));
+    expect(text()).toContain('--dest xian');
+    act(() => r!.unmount());
+
+    // Once Wilson is awake: the models by name, and the import sheet. Its Apply comes back to the
+    // home first: a Paris itinerary is not applied (the note says so), a Seville one opens the guide.
+    const opened2: string[] = [];
+    await act(async () => {
+      r = renderer.create(<HomeHarness onOpenCity={id => opened2.push(id)} />);
+    });
+    expect(text()).toContain('On this Mac: ');
+    const upload = byLabel('Upload itinerary');
+    expect(upload.length).toBeGreaterThan(0);
+    act(() => upload[0].props.onPress());
+    expect(text()).toContain('Import an itinerary');
+    const sheetB = () => r!.root.findByType(ImportSheet).props.b as Buddy;
+    const paris: Trip = {
+      startDate: '2026-11-16',
+      days: 2,
+      interests: [],
+      description: 'Day 1: Eiffel Tower at 10, then the Louvre\nDay 2: Montmartre',
+      stops: [
+        { id: 'p1', title: 'Eiffel Tower', day: 1, start: '10:00', fixed: false },
+        { id: 'p2', title: 'Louvre', day: 1, fixed: false },
+        { id: 'p3', title: 'Montmartre', day: 2, fixed: false },
+      ],
+    };
+    await act(async () => {
+      await sheetB().importTrip(paris);
+    });
+    expect(latest!.trip).toBeUndefined();
+    expect(opened2).toEqual([]);
+    expect(text()).toContain('This itinerary looks like Paris');
+    const [p1, p2] = index.pack.places;
+    const sevilleTrip: Trip = {
+      ...paris,
+      description: 'Day 1 in Seville',
+      stops: [
+        { id: 's1', title: p1.name, placeId: p1.id, day: 1, fixed: false },
+        { id: 's2', title: p2.name, placeId: p2.id, day: 1, fixed: false },
+      ],
+    };
+    act(() => byLabel('Upload itinerary')[0].props.onPress());
+    await act(async () => {
+      await sheetB().importTrip(sevilleTrip);
+    });
+    expect(latest!.trip?.stops.map(s => s.placeId)).toEqual([p1.id, p2.id]);
+    expect(opened2).toEqual(['seville']);
+    act(() => r!.unmount());
+  });
+
+  it('home: which city an itinerary is for', () => {
+    const [p1] = index.pack.places;
+    const trip = (description: string, stops: Trip['stops']): Trip => ({ startDate: '2026-11-16', days: 1, interests: [], description, stops });
+    const stop = (title: string, placeId?: string): Trip['stops'][number] => ({ id: title, title, placeId, day: 1, fixed: false });
+    expect(tripCity(trip('Seville weekend', [stop(p1.name, p1.id), stop('Dinner')]), index, homeCities)).toMatchObject({ kind: 'known', city: { id: 'seville' } });
+    expect(tripCity(trip('Sevilla: flight and hotel', [stop('Flight IB123'), stop('Hotel check-in')]), index, homeCities)).toMatchObject({ kind: 'known' });
+    expect(tripCity(trip('', [stop('Terracotta Army'), stop('Muslim Quarter dinner')]), index, homeCities)).toEqual({ kind: 'other', name: "Xi'an" });
+    expect(tripCity(trip('西安 三天', [stop('Day 1')]), index, homeCities)).toEqual({ kind: 'other', name: "Xi'an" });
+    expect(tripCity(trip('Weekend in Paris', [stop('Musée d’Orsay'), stop('Lunch')]), index, homeCities)).toEqual({ kind: 'other', name: 'Paris' });
+    expect(tripCity(trip('', [stop('Meeting'), stop('Lunch')]), index, homeCities)).toEqual({ kind: 'unknown' });
+    expect(findKnownCity('Seville, Spain', homeCities)?.id).toBe('seville');
+    expect(findKnownCity('Séville', homeCities)?.id).toBe('seville');
+    expect(findKnownCity('Lyon', homeCities)).toBeUndefined();
+  });
+
+  it('home: the bubble keeps his answer while he listens on, and offers the wake word only where it works', async () => {
+    function Patched({ patch }: { patch: (b: Buddy) => Buddy }) {
+      const b = useBuddy(runtime, index);
+      latest = b;
+      return <WelcomeScreen cities={homeCities} onOpenCity={() => {}} status="" b={patch(b)} />;
+    }
+    const answer: import('../../useBuddy').ChatLine = { id: 'a-home', who: 'buddy', text: 'The Giralda is 104 metres tall.' };
+    const said = (extra: Partial<Buddy>) => (b: Buddy) => ({ ...b, chat: [...b.chat, answer], ...extra }) as Buddy;
+    let r: renderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      r = renderer.create(<Patched patch={b => b} />);
+    });
+    const text = () => JSON.stringify(r!.toJSON());
+    // Typed audio has no microphone, so no wake word: just a tap.
+    expect(text()).toContain('Tap me to talk.');
+    expect(text()).not.toContain('start with “Wilson, …”');
+    // His spoken answer is over and he listens on for a follow-up: the answer stays until a word is heard.
+    await act(async () => r!.update(<Patched patch={said({ listening: true, followUp: true, partial: '' })} />));
+    expect(text()).toContain(answer.text);
+    expect(text()).toContain('Still listening, in case there’s more…');
+    await act(async () => r!.update(<Patched patch={said({ listening: true, followUp: true, partial: 'And the cathedral' })} />));
+    expect(text()).toContain('And the cathedral');
+    expect(text()).not.toContain(answer.text);
+    // With a helper that has the wake word, switched on: "Wilson, …" is offered; switched off, it isn't.
+    await act(async () => r!.update(<Patched patch={said({ wake: { ...latest!.wake, enabled: true, available: true } })} />));
+    expect(text()).toMatch(/Tap me, or start with “Wilson,\s…”/);
+    await act(async () => r!.update(<Patched patch={said({ wake: { ...latest!.wake, enabled: false, available: true } })} />));
+    expect(text()).toContain('Tap me to talk.');
     act(() => r!.unmount());
   });
 
@@ -146,6 +263,26 @@ describe('Dusk screens render', () => {
         for (const s of ['Offline', runtime.llm.name, 'NOV', 'Sun 15', 'Now']) expect(json).toContain(s);
         expect(dayChips().filter(n => / of the trip$/.test(n.props.accessibilityLabel)).length).toBe(latest!.trip!.days);
         expect(shows('Plan for Sunday 15 November')).toBe(true);
+        // Wilson rides the "now" line: what was said while Now was open shows in his bubble on the
+        // line; once the rows are laid out he sits in the time column. VoiceOver's increment moves
+        // him (and the clock) to the next time, and every other time keeps its place in the day.
+        expect(json).toContain('“Three days, staying in Santa Cruz. We love tapas and markets.”');
+        const host = (n: renderer.ReactTestInstance) => typeof n.type === 'string';
+        await act(async () => {
+          r!.root
+            .findAll(n => host(n) && typeof n.props.testID === 'string' && n.props.testID.startsWith('row-'))
+            .forEach((n, i) => n.props.onLayout({ nativeEvent: { layout: { x: 0, y: i * 150, width: 300, height: 140 } } }));
+        });
+        const wilson = () => r!.root.findAll(n => host(n) && typeof n.props.accessibilityHint === 'string' && n.props.accessibilityHint.startsWith('Drag him to another time'))[0];
+        expect(wilson().props.accessibilityLabel).toBe('Wilson. Tap to write to him in Chat');
+        const timesBefore = times().map(n => n.props.accessibilityLabel as string);
+        const was = latest!.situation.clock.minute;
+        await act(async () => wilson().props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } }));
+        const moved = latest!.situation.clock.minute;
+        expect(moved).toBeGreaterThan(was);
+        expect(timesBefore.map(clockAt)).toContain(moved);
+        const timesAfter = times().map(n => n.props.accessibilityLabel as string);
+        expect(timesBefore.filter(l => clockAt(l) !== moved).every(l => timesAfter.includes(l))).toBe(true);
         const late = times().at(-1)!;
         const lateLabel: string = late.props.accessibilityLabel;
         expect(lateLabel).toMatch(/^\d\d:\d\d, Sunday 15 November$/);
@@ -178,7 +315,7 @@ describe('Dusk screens render', () => {
         const pressable = (test: (label: string) => boolean) =>
           r!.root.findAll(n => typeof n.props.accessibilityLabel === 'string' && test(n.props.accessibilityLabel) && typeof n.props.onPress === 'function');
         const asJson = (text: string) => JSON.stringify(text).slice(1, -1);
-        for (const s of ['"Chat"', 'Offline', runtime.llm.name, 'Your trip', `${latest!.trip!.days} day`]) expect(json()).toContain(s);
+        for (const s of ['"Talk to Wilson"', 'Offline', runtime.llm.name, 'Your trip', `${latest!.trip!.days} day`]) expect(json()).toContain(s);
         const reply = latest!.chat.filter(l => l.who === 'buddy' && !l.pending).at(-1)!;
         expect(json()).toContain(asJson(reply.text.slice(0, 24)));
         // Typed audio has no microphone: the ring is there and says so.
@@ -560,8 +697,8 @@ describe('Tab bar and floating buddy', () => {
       expect(json()).toContain('Tell me about the cathedral');
       expect(latest!.chat.at(-1)!.pending).toBeFalsy();
 
-      // Closing mid-listen still sends what was heard (useBuddy can't cancel a listen) but keeps that
-      // reply quiet; a listen closed before anything was said silences nothing: the next answer speaks.
+      // Closing mid-listen cancels the exchange (b.cancelVoice): what was heard is dropped, nothing is
+      // said; a listen closed before anything was said silences nothing: the next answer speaks.
       const closePanel = () => r!.root.findAll(n => n.props.accessibilityLabel === 'Close' && typeof n.props.onPress === 'function')[0].props.onPress();
       const speak = jest.spyOn(audio, 'speak');
       await act(async () => orb().props.onAccessibilityTap());
@@ -569,7 +706,7 @@ describe('Tab bar and floating buddy', () => {
       await act(async () => closePanel());
       await act(async () => finish!({ text: 'Is the Giralda worth climbing?' }));
       await settle();
-      expect(latest!.chat.at(-2)).toMatchObject({ who: 'you', text: 'Is the Giralda worth climbing?' });
+      expect(latest!.chat.some(l => l.text === 'Is the Giralda worth climbing?')).toBe(false);
       expect(speak).not.toHaveBeenCalled();
       await act(async () => orb().props.onAccessibilityTap());
       await act(async () => closePanel());
@@ -588,5 +725,179 @@ describe('Tab bar and floating buddy', () => {
     } finally {
       jest.restoreAllMocks();
     }
+  });
+});
+
+describe('Wilson on Now, Chat, Place and Translate', () => {
+  /** A screen with the real app state, changed by `patch` (lines added to the chat, a wake switch). */
+  function Patched({ screen, patch }: { screen: keyof typeof screens; patch: (b: Buddy) => Buddy }) {
+    const b = useBuddy(runtime, index);
+    latest = b;
+    const nav: Nav = { screen, placeId: index.pack.places[0].id, go: (_s: ScreenName) => {}, openPlace: () => {} };
+    const Screen = screens[screen];
+    return <Screen b={patch(b)} nav={nav} />;
+  }
+  const { NOT_IN_GUIDE } = require('../../../core/prompts') as typeof import('../../../core/prompts');
+  const { NEARBY_QUESTION, UNSURE_LINE } = require('../WilsonLive') as typeof import('../WilsonLive');
+  type Line = import('../../useBuddy').ChatLine;
+  const declined = (q: string): Line[] => [
+    { id: 'q-off', who: 'you', text: q },
+    { id: 'a-off', who: 'buddy', text: NOT_IN_GUIDE },
+  ];
+  const pressable = (r: renderer.ReactTestRenderer, test: (label: string) => boolean) =>
+    r.root.findAll(n => typeof n.props.accessibilityLabel === 'string' && test(n.props.accessibilityLabel) && typeof n.props.onPress === 'function');
+
+  it('now: what he hears and answers shows on the line, with his guide, or that it is not in it', async () => {
+    const place = index.pack.places[0];
+    const fact = index.facts(place.id)[0];
+    let extra: Line[] = [];
+    let over: Partial<Buddy> = {};
+    const patch = () => (b: Buddy) => ({ ...b, chat: [...b.chat, ...extra], ...over });
+    let r: renderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      r = renderer.create(<Patched screen="now" patch={patch()} />);
+    });
+    const json = () => JSON.stringify(r!.toJSON());
+    extra = [
+      { id: 'q1', who: 'you', text: `Tell me about ${place.name}` },
+      { id: 'a1', who: 'buddy', text: 'Built on the old mosque.', cited: { placeId: place.id, facts: [fact] } },
+    ];
+    await act(async () => r!.update(<Patched screen="now" patch={patch()} />));
+    for (const s of ['Wilson · from your Seville guide', `“Tell me about ${place.name}”`, 'Built on the old mosque.']) expect(json()).toContain(s);
+    expect(pressable(r!, l => l.startsWith('Wilson · from your Seville guide: ')).length).toBeGreaterThan(0); // opens Chat
+    extra = [...extra, ...declined('Who won the World Cup in 2010?')];
+    await act(async () => r!.update(<Patched screen="now" patch={patch()} />));
+    expect(json()).toContain(UNSURE_LINE);
+    // Waiting for a follow-up after his spoken answer: the answer stays until the person talks.
+    over = { listening: true, followUp: true, partial: '' };
+    await act(async () => r!.update(<Patched screen="now" patch={patch()} />));
+    expect(json()).toContain(UNSURE_LINE);
+    over = { listening: true, followUp: true, partial: 'And the cathedral' };
+    await act(async () => r!.update(<Patched screen="now" patch={patch()} />));
+    expect(json()).toContain('“And the cathedral”');
+    expect(json()).not.toContain(UNSURE_LINE);
+    over = {};
+    await act(async () => r!.update(<Patched screen="now" patch={patch()} />));
+    await act(async () => pressable(r!, l => l === 'Close')[0].props.onPress());
+    expect(json()).not.toContain(UNSURE_LINE);
+
+    // Dragged down the day and let go over a later time: "now" (the clock) moves there.
+    const host = (n: renderer.ReactTestInstance) => typeof n.type === 'string';
+    const rows = () => r!.root.findAll(n => host(n) && typeof n.props.testID === 'string' && n.props.testID.startsWith('row-'));
+    await act(async () => {
+      rows().forEach((n, i) => n.props.onLayout({ nativeEvent: { layout: { x: 0, y: i * 150, width: 300, height: 140 } } }));
+    });
+    const keys = rows().map(n => n.props.testID.slice(4) as string);
+    const target = keys[keys.indexOf('now') + 2];
+    const rider = r!.root.findAll(n => host(n) && typeof n.props.accessibilityHint === 'string' && n.props.accessibilityHint.startsWith('Drag him to another time'))[0];
+    const touch = (y: number, t: number, prev: { y: number; t: number }) => ({
+      nativeEvent: { touches: [], changedTouches: [] },
+      touchHistory: {
+        numberActiveTouches: 1,
+        indexOfSingleActiveTouch: 0,
+        mostRecentTimeStamp: t,
+        touchBank: [{ touchActive: true, startPageX: 20, startPageY: 0, startTimeStamp: 1, currentPageX: 20, currentPageY: y, currentTimeStamp: t, previousPageX: 20, previousPageY: prev.y, previousTimeStamp: prev.t }],
+      },
+    });
+    await act(async () => rider.props.onResponderGrant(touch(0, 1, { y: 0, t: 1 })));
+    await act(async () => rider.props.onResponderMove(touch(150, 20, { y: 0, t: 1 })));
+    await act(async () => rider.props.onResponderMove(touch(300, 40, { y: 150, t: 20 })));
+    // Held up while dragged, with the time under him beside him.
+    const lifted = () => r!.root.findAll(n => n.props.lifted === true && n.props.size === 48);
+    expect(lifted().length).toBeGreaterThan(0);
+    await act(async () => rider.props.onResponderRelease(touch(300, 60, { y: 300, t: 40 })));
+    expect(latest!.situation.clock.minute).toBe(Number(target.replace(/^\D+-/, '')));
+    expect(lifted()).toHaveLength(0);
+
+    // Another day: he stays on today's line; talked to from there, his answer shows under him.
+    const otherDay = r!.root.findAll(n => n.props.accessibilityRole === 'radio' && n.props.accessibilityState?.selected === false && typeof n.props.onPress === 'function')[0];
+    await act(async () => otherDay.props.onPress());
+    expect(json()).toContain("I'll move to");
+    extra = [...extra, { id: 'q9', who: 'you', text: 'Where should I eat?' }, { id: 'a9', who: 'buddy', text: 'Try the tapas bar by the river.' }];
+    await act(async () => r!.update(<Patched screen="now" patch={patch()} />));
+    expect(json()).toContain('Try the tapas bar by the river.');
+    act(() => r!.unmount());
+  });
+
+  it('setup: he is the mic, with a switch for his name; a declined answer offers something nearby', async () => {
+    const mic = jest.replaceProperty(runtime.audio, 'info', { ...runtime.audio.info, hasMicrophone: true });
+    const setEnabled = jest.fn();
+    const hold = () => () => {};
+    let wake = { enabled: false, listening: false, available: true, setEnabled, hold };
+    const patch = () => (b: Buddy) => ({ ...b, wake, chat: [...b.chat, ...declined('Who won the World Cup in 2010?')] }) as unknown as Buddy;
+    try {
+      let r: renderer.ReactTestRenderer | undefined;
+      await act(async () => {
+        r = renderer.create(<Patched screen="setup" patch={patch()} />);
+      });
+      const json = () => JSON.stringify(r!.toJSON());
+      expect(json()).toContain('"Talk to Wilson"');
+      expect(pressable(r!, l => l === 'Talk to Wilson').length).toBe(1);
+      const sw = () => r!.root.findAll(n => n.props.accessibilityRole === 'switch' && n.props.accessibilityLabel === 'Listen for “Wilson”' && typeof n.props.onPress === 'function')[0];
+      expect(sw().props.accessibilityState.checked).toBe(false);
+      expect(json()).toContain('Tap me to talk');
+      await act(async () => sw().props.onPress());
+      expect(setEnabled).toHaveBeenCalledWith(true);
+      wake = { enabled: true, listening: true, available: true, setEnabled, hold };
+      await act(async () => r!.update(<Patched screen="setup" patch={patch()} />));
+      expect(sw().props.accessibilityState.checked).toBe(true);
+      expect(sw().props.accessibilityValue).toEqual({ text: 'listening for his name' });
+      expect(json()).toContain('Listening for “Wilson, …” · or tap me');
+      // A helper without the wake word: no switch, and nothing invites "Wilson, …".
+      wake = { enabled: true, listening: false, available: false, setEnabled, hold };
+      await act(async () => r!.update(<Patched screen="setup" patch={patch()} />));
+      expect(r!.root.findAll(n => n.props.accessibilityRole === 'switch')).toHaveLength(0);
+      expect(json()).not.toContain('Wilson, …');
+      expect(json()).toContain('Tap me to talk');
+      // The declined answer is the latest: he offers something nearby, which asks for right-now picks.
+      await act(async () => {
+        pressable(r!, l => l === 'Say: Something nearby instead')[0].props.onPress();
+        jest.advanceTimersByTime(1000);
+      });
+      expect(latest!.chat.some(l => l.who === 'you' && l.text === NEARBY_QUESTION)).toBe(true);
+      act(() => r!.unmount());
+    } finally {
+      mic.restore();
+    }
+  });
+
+  it('place: he heads the guide card, and says when the guide does not cover a question', async () => {
+    const place = index.pack.places[0];
+    let r: renderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      r = renderer.create(<Patched screen="place" patch={b => ({ ...b, chat: [...b.chat, ...declined(`Who won the World Cup? (about ${place.name})`)] })} />);
+    });
+    const json = JSON.stringify(r!.toJSON());
+    for (const s of ['Wilson · from your Seville guide', UNSURE_LINE, 'Yes, something nearby']) expect(json).toContain(s);
+    await act(async () => {
+      pressable(r!, l => l === 'Ask Wilson for something nearby instead')[0].props.onPress();
+      jest.advanceTimersByTime(1000);
+    });
+    expect(latest!.chat.some(l => l.who === 'you' && l.text === NEARBY_QUESTION)).toBe(true);
+    act(() => r!.unmount());
+  });
+
+  it('talk: he starts and stops the conversation from the band, and does not listen for his name meanwhile', async () => {
+    const setEnabled = jest.fn();
+    const release = jest.fn();
+    const hold = jest.fn((_reason: string) => release);
+    const wake = { enabled: true, listening: true, available: true, setEnabled, hold };
+    let r: renderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      r = renderer.create(<Patched screen="talk" patch={b => ({ ...b, wake }) as unknown as Buddy} />);
+    });
+    // Held off while Translate is open (the switch itself stays as it was).
+    expect(hold).toHaveBeenCalledWith('translate');
+    expect(setEnabled).not.toHaveBeenCalled();
+    const wilson = () => pressable(r!, l => l.startsWith('Wilson'))[0];
+    expect(wilson().props.accessibilityLabel).toBe('Wilson. Start translating');
+    await act(async () => wilson().props.onPress());
+    expect(JSON.stringify(r!.toJSON())).toContain('Listening');
+    expect(wilson().props.accessibilityLabel).toMatch(/^Wilson, (listening|thinking|speaking)\. Stop translating$/);
+    await act(async () => wilson().props.onPress());
+    expect(wilson().props.accessibilityLabel).toBe('Wilson. Start translating');
+    expect(release).not.toHaveBeenCalled();
+    act(() => r!.unmount());
+    expect(release).toHaveBeenCalledTimes(1);
   });
 });

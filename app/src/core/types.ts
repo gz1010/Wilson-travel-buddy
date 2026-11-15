@@ -1,4 +1,5 @@
 // Shared types and contracts for Travel Buddy.
+import type { NearbyFile } from './nearby';
 //
 // Everything in src/core is plain TypeScript with no React or React Native
 // imports, so `npm test` runs it in Node on any machine. Change these types
@@ -191,6 +192,8 @@ export interface Pack {
   facts: Fact[];
   phrases: Phrase[];
   forecast: Forecast;
+  /** Every cinema, pharmacy, cash machine… on the city's offline map, for "find X near me" (scripts/build-nearby.mjs). */
+  nearby?: NearbyFile;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,12 +314,29 @@ export interface AudioInfo {
   liveSpeakers: boolean;
   /** True when the helper says it serves the camera; undefined for older helper builds. */
   camera?: boolean;
+  /** True when the helper has the wake word ("Wilson, …") and voice levels; undefined for older builds. */
+  wake?: boolean;
 }
+
+/** From the wake word (AudioClient.wake). */
+export type WakeEvent =
+  /** Listening for "Wilson" now (true), or not (stopped, the microphone is in use, the voice is playing). */
+  | { type: 'state'; listening: boolean }
+  /** "Wilson" began a sentence that is still going on; text: the words after it so far. */
+  | { type: 'heard'; text: string }
+  /** A sentence that began with "Wilson". text: the words after it ('' for the name alone); heard: all of it; endedAt: Date.now() when it ended. */
+  | { type: 'wake'; text: string; heard: string; endedAt?: number };
+
+/** Which level: the microphone (while listening) or the voice (while speech plays). */
+export type LevelKind = 'mic' | 'voice';
 
 export interface AudioClient {
   readonly info: AudioInfo;
-  /** Listens for one utterance; resolves when the speaker stops. */
-  listen(onPartial: (text: string) => void, language?: Lang): Promise<Heard>;
+  /**
+   * Listens for one utterance; resolves when the speaker stops. options.quietMs: give up if nobody
+   * starts speaking within this long (default about 8 s).
+   */
+  listen(onPartial: (text: string) => void, language?: Lang, options?: { quietMs?: number }): Promise<Heard>;
   /** Ends the current listen early; the pending listen resolves with what was heard. */
   stopListening(): void;
   /** Speaks and resolves when finished. onStart fires when its first audio is ready. */
@@ -347,6 +367,17 @@ export interface AudioClient {
    * about 10 s; onError, if given, gets the helper's reason.
    */
   locate(onError?: (message: string) => void): Promise<LocationFix | undefined>;
+  /**
+   * The wake word, fully offline (Argmax Whisper on speech segments): while on, the helper listens
+   * for "Wilson, …" / "Hey Wilson" whenever the microphone is free. Returns stop(). Optional: the
+   * typed stand-in and older helpers have none (info.wake says).
+   */
+  wake?(onEvent: (e: WakeEvent) => void): () => void;
+  /**
+   * Levels as they arrive, 0-1: 'mic' about ten a second while the helper listens, 'voice' about
+   * twenty a second while speech plays. Returns unsubscribe.
+   */
+  subscribeLevels?(onLevel: (kind: LevelKind, value: number) => void): () => void;
 }
 
 /** A position fix from macOS Location (or the last one saved). */
