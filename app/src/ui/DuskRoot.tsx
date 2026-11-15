@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { StatusBar } from 'react-native';
 import type { PackIndex } from '../core/pack';
+import packPrepared from '../pack/seville/prepared.json';
 import { connectRuntime, type Runtime } from '../services/runtime';
 import { TabBar, type Nav, type ScreenName } from './dusk/Nav';
 import { ScreenSizeProvider } from './dusk/Screen';
@@ -9,6 +10,7 @@ import { MapScreen } from './screens/MapScreen';
 import { NowScreen } from './screens/NowScreen';
 import { PlaceScreen } from './screens/PlaceScreen';
 import { SetupScreen } from './screens/SetupScreen';
+import { LookScreen } from './screens/LookScreen';
 import { TalkScreen } from './screens/TalkScreen';
 import type { WelcomeProps } from './screens/types';
 import { WelcomeScreen } from './screens/WelcomeScreen';
@@ -44,6 +46,7 @@ export function DuskRoot({ index }: { index: PackIndex }) {
           models={runtime ? [runtime.llm.name, ...runtime.audio.info.models] : undefined}
           ready={!!runtime}
           onStart={() => setStarted(true)}
+          prepared={{ ...packPrepared, places: index.pack.places.length, facts: index.pack.facts.length }}
         />
       </ScreenSizeProvider>
     );
@@ -51,7 +54,8 @@ export function DuskRoot({ index }: { index: PackIndex }) {
   return <DuskApp runtime={runtime} index={index} />;
 }
 
-const TAB_BAR_SCREENS: ScreenName[] = ['now', 'map'];
+/** Screens that show the floating tab bar; each leaves its bottom ~100 px free for it. */
+const TAB_BAR_SCREENS: ScreenName[] = ['now', 'map', 'talk', 'look'];
 
 function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
   const b = useBuddy(runtime, index);
@@ -96,7 +100,9 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
       {screen === 'place' && <PlaceScreen b={b} nav={nav} />}
       {screen === 'map' && <MapScreen b={b} nav={nav} />}
       {screen === 'talk' && <TalkScreen b={b} nav={nav} />}
-      {TAB_BAR_SCREENS.includes(screen) && <TabBar nav={nav} listening={b.listening} onMic={b.talk} />}
+      {screen === 'look' && <LookScreen b={b} nav={nav} />}
+      {/* Translate runs its own Argmax conversation: a voice-loop listen from the orb would take its microphone. */}
+      {TAB_BAR_SCREENS.includes(screen) && <TabBar nav={nav} listening={b.listening} onMic={screen === 'talk' ? undefined : b.talk} />}
     </ScreenSizeProvider>
   );
 }

@@ -24,7 +24,16 @@ export type AppToHelper =
   /** Drop microphone audio while the app's own voice is playing. */
   | { type: 'mute'; muted: boolean }
   | { type: 'speak'; id: string; text: string; language: Lang }
-  | { type: 'speak.stop' };
+  | { type: 'speak.stop' }
+  /**
+   * Camera (the helper owns it, as it owns the microphone). camera.start begins the preview
+   * frames; camera.snap asks for one sharper still, answered by camera.snapped with the same id.
+   */
+  | { type: 'camera.start' }
+  | { type: 'camera.snap'; id: string }
+  | { type: 'camera.stop' }
+  /** Sent every few seconds while the preview shows; without any message for 15 s the helper turns the camera off. */
+  | { type: 'camera.alive' };
 
 export type HelperToApp =
   | {
@@ -45,4 +54,10 @@ export type HelperToApp =
   /** The first audio of this request is ready to play (for latency measurement). */
   | { type: 'speak.started'; id: string }
   | { type: 'speak.done'; id: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** A live preview frame: base64 JPEG, ~480 px wide, at most 6 a second. */
+  | { type: 'camera.frame'; jpeg: string }
+  /** The answer to camera.snap: base64 JPEG, ~1024 px wide; no jpeg when the camera is not running. */
+  | { type: 'camera.snapped'; id: string; jpeg?: string }
+  /** No camera, permission refused, or the session failed. The camera is off after this. */
+  | { type: 'camera.error'; message: string };

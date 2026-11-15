@@ -36,6 +36,8 @@ if args.contains("--prepare") {
 let server = try WebSocketServer(port: port)
 let (inbox, inboxContinuation) = AsyncStream<Incoming>.makeStream()
 var service: AudioService?
+// The camera needs no models, so it works while the speech models are still loading.
+let camera = CameraService { server.send($0) }
 var readyMessage: Outgoing?
 var lastStatus = Outgoing.status("Starting the audio helper…")
 
@@ -43,8 +45,13 @@ var lastStatus = Outgoing.status("Starting the audio helper…")
 // Sending both made clients act on "ready" twice (the test script spoke twice).
 server.onMessage = { data in
     guard let m = try? JSONDecoder().decode(Incoming.self, from: data) else { return }
+    camera.heardFromApp()
     if m.type == "hello" {
         server.send(readyMessage ?? lastStatus)
+        return
+    }
+    if m.type.hasPrefix("camera.") {
+        inboxContinuation.yield(m)
         return
     }
     guard service != nil else {
@@ -54,9 +61,13 @@ server.onMessage = { data in
     }
     inboxContinuation.yield(m)
 }
-// One consumer, so messages reach the audio service in the order the app sent them.
+// A new client (the app reloading or relaunching) replaces the old one: turn off its camera.
+server.onConnect = { inboxContinuation.yield(Incoming(type: "camera.stop")) }
+// One consumer, so messages reach the audio service and the camera in the order the app sent them.
 Task {
-    for await m in inbox { await service?.handle(m) }
+    for await m in inbox {
+        if m.type.hasPrefix("camera.") { camera.handle(m) } else { await service?.handle(m) }
+    }
 }
 server.start()
 log("Listening on ws://127.0.0.1:\(port)")

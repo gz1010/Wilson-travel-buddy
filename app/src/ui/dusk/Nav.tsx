@@ -1,10 +1,11 @@
 import React from 'react';
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Glass, onGlass } from './Glass';
+import { axPress, Glass, onGlass } from './Glass';
 import { MicIcon } from './Icons';
+import { useScreenSize } from './Screen';
 import { dusk, font, white } from './tokens';
 
-export type ScreenName = 'welcome' | 'setup' | 'now' | 'place' | 'map' | 'talk';
+export type ScreenName = 'welcome' | 'setup' | 'now' | 'place' | 'map' | 'talk' | 'look';
 
 export interface Nav {
   screen: ScreenName;
@@ -18,7 +19,7 @@ export interface Nav {
 export function MicOrb({ listening, onPress, size = dusk.size.orb, style }: { listening: boolean; onPress: () => void; size?: number; style?: StyleProp<ViewStyle> }) {
   const bar = (h: number) => <View style={{ width: Math.max(3, size / 16), height: h, borderRadius: 3, backgroundColor: '#fff' }} />;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={listening ? 'Stop listening' : 'Ask your buddy'} onPress={onPress} style={style}>
+    <Pressable accessibilityRole="button" accessibilityLabel={listening ? 'Stop listening' : 'Ask your buddy'} onPress={onPress} {...axPress(onPress)} style={style}>
       <Glass
         kind="orb"
         radius={size / 2}
@@ -45,11 +46,17 @@ const TABS: { screen: ScreenName; label: string }[] = [
   { screen: 'now', label: 'Now' },
   { screen: 'map', label: 'Map' },
   { screen: 'setup', label: 'Plan' },
-  { screen: 'talk', label: 'Talk' },
+  { screen: 'talk', label: 'Translate' },
+  { screen: 'look', label: 'Look' },
 ];
 
-/** The floating glass tab bar: Now · Map · Plan · Talk, and the mic orb. */
-export function TabBar({ nav, listening, onMic, style }: { nav: Nav; listening: boolean; onMic: () => void; style?: StyleProp<ViewStyle> }) {
+/**
+ * The floating glass tab bar: Now · Map · Plan · Translate · Look, and the mic orb. About 345 px
+ * wide on a 390 px window (tighter tab padding below 420 px), so it fits with room to spare.
+ */
+export function TabBar({ nav, listening, onMic, style }: { nav: Nav; listening: boolean; onMic?: () => void; style?: StyleProp<ViewStyle> }) {
+  const { width } = useScreenSize();
+  const pad = width < 420 ? 10 : 14;
   return (
     <View pointerEvents="box-none" style={[{ position: 'absolute', left: 0, right: 0, bottom: 26, alignItems: 'center' }, style]}>
       <Glass kind="clear" radius={999} style={{ flexDirection: 'row', alignItems: 'center', padding: 6, gap: 2 }}>
@@ -61,12 +68,14 @@ export function TabBar({ nav, listening, onMic, style }: { nav: Nav; listening: 
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
               onPress={() => nav.go(t.screen)}
-              style={{ minHeight: dusk.size.touch, justifyContent: 'center', paddingHorizontal: on ? 16 : 14, borderRadius: 999, backgroundColor: on ? white(0.18) : 'transparent', borderTopWidth: on ? 1 : 0, borderTopColor: white(0.55) }}>
+              {...axPress(() => nav.go(t.screen))}
+              style={{ minHeight: dusk.size.touch, justifyContent: 'center', paddingHorizontal: on ? pad + 2 : pad, borderRadius: 999, backgroundColor: on ? white(0.18) : 'transparent', borderTopWidth: on ? 1 : 0, borderTopColor: white(0.55) }}>
               <Text style={[on ? onGlass : { color: dusk.color.textSoft }, font(on ? '700' : '600'), { fontSize: 13 }]}>{t.label}</Text>
             </Pressable>
           );
         })}
-        <MicOrb listening={listening} onPress={onMic} />
+        {/* No orb without onMic (Translate: its own conversation already holds the microphone). */}
+        {onMic && <MicOrb listening={listening} onPress={onMic} />}
       </Glass>
     </View>
   );

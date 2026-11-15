@@ -1,4 +1,4 @@
-import type { ChatRequest, JSONSchema, LLMClient } from '../../core/types';
+import type { ChatMessage, ChatRequest, JSONSchema, LLMClient } from '../../core/types';
 import { SSEParser } from './sse';
 
 /**
@@ -80,7 +80,7 @@ export class LlamaClient implements LLMClient {
 export function buildBody(req: ChatRequest, schema?: JSONSchema): Record<string, unknown> {
   return {
     model: 'bonsai',
-    messages: req.messages,
+    messages: req.messages.map(wireMessage),
     stream: true,
     max_tokens: req.maxTokens ?? 300,
     // Bonsai-2 small-model profile with thinking off (PrismML's SMALL-MODELS.md).
@@ -91,6 +91,22 @@ export function buildBody(req: ChatRequest, schema?: JSONSchema): Record<string,
     presence_penalty: schema ? 0 : 1.5,
     chat_template_kwargs: { enable_thinking: false },
     ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: req.tag.replace(/\W/g, '_'), schema, strict: true } } } : {}),
+  };
+}
+
+/**
+ * A message as llama-server takes it. With images, the content becomes OpenAI-style parts (the
+ * text, then each image as a data URI), which Bonsai-2 4B reads through its vision projector
+ * (--mmproj). Without images it stays a plain string, exactly as before.
+ */
+export function wireMessage(m: ChatMessage): Record<string, unknown> {
+  if (!m.images?.length) return { role: m.role, content: m.content };
+  return {
+    role: m.role,
+    content: [
+      { type: 'text', text: m.content },
+      ...m.images.map(jpeg => ({ type: 'image_url', image_url: { url: jpeg.startsWith('data:') ? jpeg : `data:image/jpeg;base64,${jpeg}` } })),
+    ],
   };
 }
 

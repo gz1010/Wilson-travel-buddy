@@ -19,6 +19,7 @@ import { MapScreen } from '../MapScreen';
 import { SetupScreen } from '../SetupScreen';
 import { TalkScreen } from '../TalkScreen';
 import { WelcomeScreen } from '../WelcomeScreen';
+import { LookScreen } from '../LookScreen';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(async () => null),
@@ -40,7 +41,7 @@ const runtime: Runtime = {
   live: { llm: false, audio: false },
 };
 
-const screens = { now: NowScreen, place: PlaceScreen, map: MapScreen, setup: SetupScreen, talk: TalkScreen };
+const screens = { now: NowScreen, place: PlaceScreen, map: MapScreen, setup: SetupScreen, talk: TalkScreen, look: LookScreen };
 
 let latest: Buddy | undefined;
 function Harness({ screen }: { screen: keyof typeof screens }) {
@@ -91,6 +92,8 @@ describe('Dusk screens render', () => {
         await act(async () => pill.props.onPress());
         expect(JSON.stringify(r!.toJSON())).toContain('Listening');
       }
+      // Look: typed audio has no camera, so the screen says so instead of a preview.
+      if (screen === 'look') expect(JSON.stringify(r!.toJSON())).toContain('No camera right now');
       expect(r!.toJSON()).toBeTruthy();
       expect(latest!.chat.some(l => l.who === 'buddy' && !l.pending)).toBe(true);
       expect(latest!.trip).toBeDefined();

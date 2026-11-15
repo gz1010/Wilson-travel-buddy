@@ -134,6 +134,10 @@ export interface Fact {
   title: string;
   body: string;
   tags: Interest[];
+  /** Where the text comes from, e.g. the Wikipedia article URL (scripts/fetch-facts.mjs). Hand-written facts have none. */
+  source?: string;
+  /** The text's licence when it is not ours, e.g. "CC BY-SA 4.0". */
+  license?: string;
 }
 
 export interface Phrase {
@@ -174,6 +178,11 @@ export interface Destination {
   bounds: [number, number, number, number];
   /** City photos for the Now screen, one per time of day. */
   heroes?: Partial<Record<TimeOfDay, PhotoRef>>;
+  /**
+   * Local dishes Look may name from a photo: "local name (what it looks like)". Without these
+   * Bonsai-2 4B calls salmorejo or espinacas con garbanzos "gazpacho".
+   */
+  dishes?: string[];
 }
 
 export interface Pack {
@@ -249,6 +258,12 @@ export interface Recommendation {
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /**
+   * Base64 JPEGs (no data: prefix) shown to the model with this message. Bonsai-2 4B reads them
+   * through llama-server's vision projector; FixtureLLM ignores them. Code picks the images,
+   * never the model.
+   */
+  images?: string[];
 }
 
 export interface ChatRequest {
@@ -315,6 +330,14 @@ export interface AudioClient {
   turnEnd(turn: string): void;
   /** Ignore the microphone while our own voice is playing. */
   setMuted(muted: boolean): void;
+  /**
+   * Starts the camera preview: onFrame gets each frame as a base64 JPEG (~480 px wide, at most
+   * 6 a second). onError gets why there is no camera (none, permission refused, it failed); the
+   * camera is off after that. Returns stop().
+   */
+  startCamera(onFrame: (jpeg: string) => void, onError?: (message: string) => void): () => void;
+  /** A sharper still (base64 JPEG, ~1024 px) from the running camera; undefined if there is none. */
+  snap(): Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------

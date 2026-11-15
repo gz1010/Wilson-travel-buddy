@@ -4,6 +4,8 @@ import Foundation
 
 let protocolVersion = 1
 
+/// From the app. Camera messages: camera.start, camera.snap {id}, camera.stop, and
+/// camera.alive (sent every few seconds while the preview shows; see Camera.swift).
 struct Incoming: Decodable {
     let type: String
     var version: Int?
@@ -27,6 +29,11 @@ enum Outgoing {
     case speakStarted(id: String)
     case speakDone(id: String)
     case error(String)
+    /// A live preview frame: base64 JPEG, ~480 px wide.
+    case cameraFrame(jpeg: String)
+    /// The answer to camera.snap: base64 JPEG, ~1024 px wide; nil when the camera is not running.
+    case cameraSnapped(id: String, jpeg: String?)
+    case cameraError(String)
 
     var json: Data {
         var d: [String: Any]
@@ -46,6 +53,9 @@ enum Outgoing {
         case let .speakStarted(id): d = ["type": "speak.started", "id": id]
         case let .speakDone(id): d = ["type": "speak.done", "id": id]
         case let .error(m): d = ["type": "error", "message": m]
+        case let .cameraFrame(jpeg): d = ["type": "camera.frame", "jpeg": jpeg]
+        case let .cameraSnapped(id, jpeg): d = ["type": "camera.snapped", "id": id]; if let jpeg { d["jpeg"] = jpeg }
+        case let .cameraError(m): d = ["type": "camera.error", "message": m]
         }
         return (try? JSONSerialization.data(withJSONObject: d)) ?? Data()
     }

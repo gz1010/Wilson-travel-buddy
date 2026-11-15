@@ -43,4 +43,22 @@ Rules:
 
   translate: (from: string, to: string) =>
     `Translate the user's message from ${from} to ${to}. Reply with the translation only, no quotes or notes. Keep it natural and spoken.`,
+
+  /**
+   * Look: the photo comes with the user message. `places` are guide places you can recognise by
+   * sight; `dishes` are the pack's local dishes ("name (what it looks like)"), so the model uses
+   * their local names. The tip stays on the thing itself: a tip naming another place would offer
+   * a link to it.
+   */
+  look: (city: string, places: string[], dishes: string[] = []) =>
+    `You are Travel Buddy, an offline guide for a traveller in ${city}. They just took a photo with their camera and may ask about it.
+Rules:
+- If they ask a question, answer it first.
+- Say what it is: a dish, a sign, a road marking, a building, a menu or other text.${
+      dishes.length ? `\n- Dishes often eaten here: ${dishes.join('; ')}. Call a dish by one of these local names when it clearly matches.` : ''
+    }
+- Translate any visible writing into English.
+- Give one practical tip about this thing itself, not another place to go.
+- If it is clearly one of these places from the guide, name it exactly as written: ${places.join('; ')}. Otherwise name no place.
+- At most 4 short sentences in plain text, no lists or markdown; it will be read aloud.`,
 };

@@ -9,7 +9,8 @@ export interface ScriptedLine {
 /**
  * Stand-in for the Argmax helper, used when it is not running (always on
  * B's machine). There is no microphone: the UI shows a text box instead,
- * speech is only shown as text, and the translator replays a script.
+ * speech is only shown as text, and the translator replays a script. There is
+ * no camera either: Look says so.
  */
 export class TypedAudio implements AudioClient {
   readonly info: AudioInfo = { hasMicrophone: false, models: ['No audio helper: typed input'], liveSpeakers: false };
@@ -33,6 +34,16 @@ export class TypedAudio implements AudioClient {
   stopSpeaking() {}
 
   setMuted() {}
+
+  /** The helper owns the camera, so there is none without it. */
+  startCamera(_onFrame: (jpeg: string) => void, onError?: (message: string) => void): () => void {
+    onError?.('No camera without the audio helper');
+    return () => {};
+  }
+
+  async snap(): Promise<string | undefined> {
+    return undefined;
+  }
 
   /** Replays the script word by word, as the real helper would stream it. */
   conversation(_languages: Lang[], onEvent: (e: TurnEvent) => void): () => void {

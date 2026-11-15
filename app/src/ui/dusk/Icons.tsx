@@ -29,10 +29,13 @@ export const WaveIcon = ({ size = 14, color = '#fff', strokeWidth = 2 }: IconPro
   </Svg>
 );
 
-/** An arrow pointing to a compass bearing (0 = north, up). */
+/**
+ * An arrow pointing to a compass bearing (0 = north, up). The SVG turns the path itself: on macOS
+ * AppKit resets a view's layer transform, so a `transform` style on the Svg view is lost.
+ */
 export const ArrowIcon = ({ size = 30, color = '#fff', strokeWidth = 2, bearing = 0 }: IconProps & { bearing?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" style={{ transform: [{ rotate: `${bearing}deg` }] }}>
-    <Path d="M12 3v18M12 3l-5 5M12 3l5 5" />
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round">
+    <Path d="M12 3v18M12 3l-5 5M12 3l5 5" transform={bearing ? `rotate(${bearing} 12 12)` : undefined} />
   </Svg>
 );
 

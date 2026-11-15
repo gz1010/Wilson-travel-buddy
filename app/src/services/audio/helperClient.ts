@@ -3,8 +3,8 @@ import { AUDIO_HELPER_URL, PROTOCOL_VERSION, type AppToHelper, type HelperToApp 
 
 /**
  * AudioClient backed by buddy-audio, the Argmax helper, over a local
- * WebSocket. Only one listen, one conversation and one queue of speech run
- * at a time.
+ * WebSocket. Only one listen, one conversation, one queue of speech and one
+ * camera preview run at a time. The helper also owns the camera.
  */
 export class HelperAudioClient implements AudioClient {
   info: AudioInfo = { hasMicrophone: true, models: [], liveSpeakers: false };
@@ -18,6 +18,9 @@ export class HelperAudioClient implements AudioClient {
   private startWaiters = new Map<string, () => void>();
   private conversationHandler?: (e: TurnEvent) => void;
   private counter = 0;
+  /** The running camera preview, if any. A new startCamera replaces it. */
+  private camera?: { onFrame: (jpeg: string) => void; onError?: (message: string) => void; alive: ReturnType<typeof setInterval> };
+  private snapWaiters = new Map<string, (jpeg: string | undefined) => void>();
 
   /** Connects and waits for "ready" (the helper may still be loading models). */
   connect(url = AUDIO_HELPER_URL, timeoutMs = 2000, readyTimeoutMs = 120_000): Promise<boolean> {
@@ -61,6 +64,7 @@ export class HelperAudioClient implements AudioClient {
         for (const done of this.speakWaiters.values()) done();
         this.speakWaiters.clear();
         this.conversationHandler = undefined;
+        this.endCamera('Audio helper disconnected');
         this.onDisconnect?.();
       };
       ws.onmessage = ev => {
@@ -125,6 +129,18 @@ export class HelperAudioClient implements AudioClient {
       case 'error':
         this.onStatus?.(`Audio helper: ${m.message}`);
         break;
+      case 'camera.frame':
+        this.camera?.onFrame(m.jpeg);
+        return; // up to 6 a second: nothing else wants them
+      case 'camera.snapped': {
+        const done = this.snapWaiters.get(m.id);
+        this.snapWaiters.delete(m.id);
+        done?.(m.jpeg || undefined);
+        return;
+      }
+      case 'camera.error':
+        this.endCamera(m.message); // the helper has already turned the camera off
+        return;
     }
     this.listener?.(m);
   }
@@ -188,5 +204,49 @@ export class HelperAudioClient implements AudioClient {
 
   setMuted(muted: boolean) {
     this.send({ type: 'mute', muted });
+  }
+
+  startCamera(onFrame: (jpeg: string) => void, onError?: (message: string) => void, aliveMs = 4000): () => void {
+    this.endCamera(); // one preview at a time: a new one replaces the old
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      onError?.('Audio helper not connected');
+      return () => {};
+    }
+    // The helper turns the camera off when it hears nothing from us for 15 s (the app quit).
+    const alive = setInterval(() => this.send({ type: 'camera.alive' }), aliveMs);
+    const camera = { onFrame, onError, alive };
+    this.camera = camera;
+    this.send({ type: 'camera.start' });
+    return () => {
+      if (this.camera !== camera) return; // already stopped or replaced
+      this.endCamera();
+      this.send({ type: 'camera.stop' });
+    };
+  }
+
+  snap(timeoutMs = 5000): Promise<string | undefined> {
+    if (this.ws?.readyState !== WebSocket.OPEN || !this.camera) return Promise.resolve(undefined);
+    const id = `c${++this.counter}`;
+    return new Promise(resolve => {
+      const timer = setTimeout(() => {
+        this.snapWaiters.delete(id);
+        resolve(undefined);
+      }, timeoutMs);
+      this.snapWaiters.set(id, jpeg => {
+        clearTimeout(timer);
+        resolve(jpeg);
+      });
+      this.send({ type: 'camera.snap', id });
+    });
+  }
+
+  /** Forgets the preview's callbacks and releases waiting snaps; reports `error` to the preview, if given. */
+  private endCamera(error?: string) {
+    const camera = this.camera;
+    this.camera = undefined;
+    if (camera) clearInterval(camera.alive);
+    for (const done of this.snapWaiters.values()) done(undefined);
+    this.snapWaiters.clear();
+    if (camera && error) camera.onError?.(error);
   }
 }

@@ -12,6 +12,31 @@ mkdir -p "$LOGS"
 export BONSAI_MODEL="${BONSAI_MODEL:-4B}"
 # M5 Macs on macOS 26.2-26.4 need this for llama.cpp's Metal backend; harmless elsewhere.
 export GGML_METAL_TENSOR_DISABLE="${GGML_METAL_TENSOR_DISABLE:-1}"
+# Look (the camera) needs Bonsai-2's vision projector, *mmproj*.gguf, next to the model.
+# PrismML's start_llama_server.sh loads any it finds there (and caps images at 1024 tokens on Metal).
+MODEL_DIR="$DEMO/models/bonsai2-gguf/$BONSAI_MODEL"
+MMPROJ="$(ls "$MODEL_DIR"/*mmproj*.gguf 2>/dev/null | head -n 1 || true)"
+
+# Says whether the running llama-server can see images, and what to do when it can't.
+check_vision() {
+  # Read the whole reply first: with pipefail, grep -q closing the pipe early could fail curl.
+  local props
+  props="$(curl -s --max-time 2 http://127.0.0.1:8080/props || true)"
+  case "$props" in
+    *'"vision":true'* | *'"vision": true'*)
+      echo "Bonsai-2 vision is on ($(basename "${MMPROJ:-mmproj}")): Look can read photos."
+      return
+      ;;
+  esac
+  echo "WARNING: Bonsai-2 is running WITHOUT vision, so Look cannot read photos."
+  if [ -n "$MMPROJ" ]; then
+    echo "  $(basename "$MMPROJ") is in $MODEL_DIR, but this llama-server did not load it."
+    echo "  Stop it (kill \$(lsof -ti TCP:8080)) and run scripts/start.sh again."
+  else
+    echo "  There is no *mmproj*.gguf in $MODEL_DIR. While online, run:"
+    echo "    cd \"$DEMO\" && BONSAI_FAMILY=bonsai2 BONSAI_MODEL=$BONSAI_MODEL ./scripts/download_models.sh"
+  fi
+}
 
 # The app's setup must be done before anything else starts.
 if [ "${1:-}" != "--app" ]; then
@@ -35,6 +60,11 @@ if curl -s --max-time 1 http://127.0.0.1:8080/health >/dev/null; then
   echo "llama-server already running on :8080"
 else
   echo "Starting Bonsai-2 $BONSAI_MODEL (log: $LOGS/llama-server.log)"
+  if [ -n "$MMPROJ" ]; then
+    echo "  with its vision projector $(basename "$MMPROJ") (for Look)"
+  else
+    echo "  WARNING: no vision projector (*mmproj*.gguf) in $MODEL_DIR: Look will not be able to read photos."
+  fi
   # exec, so the PID we keep is llama-server itself and Ctrl-C really stops it.
   ( cd "$DEMO" && BONSAI_FAMILY=bonsai2 BONSAI_THINKING=0 PORT=8080 exec ./scripts/start_llama_server.sh ) >"$LOGS/llama-server.log" 2>&1 &
   LLAMA_PID=$!
@@ -42,7 +72,11 @@ else
 fi
 
 HELPER="$ROOT/audio-helper/.build/release/BuddyAudio"
-if [ "$(uname -m)" = "arm64" ] && [ -x "$HELPER" ]; then
+# Checked with lsof, not by connecting: the helper serves one client, and a new one replaces the app's.
+# A second helper could not bind :8765 anyway, and its log redirect would clobber the running one's.
+if lsof -nP -iTCP:8765 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Audio helper already running on :8765 (camera access belongs to the terminal that started it)"
+elif [ "$(uname -m)" = "arm64" ] && [ -x "$HELPER" ]; then
   echo "Starting the Argmax audio helper (log: $LOGS/buddy-audio.log)"
   "$HELPER" ${BUDDY_AUDIO_ARGS:-} >"$LOGS/buddy-audio.log" 2>&1 &
   pids+=($!)
@@ -65,6 +99,7 @@ if [ "$llm_ok" = 1 ]; then
   curl -s --max-time 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' \
     -d '{"messages":[{"role":"user","content":"Hi"}],"max_tokens":4,"chat_template_kwargs":{"enable_thinking":false}}' >/dev/null || true
   echo "Bonsai-2 is warm."
+  check_vision
 else
   echo "Bonsai-2 is not available; the app will use recorded answers."
 fi
