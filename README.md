@@ -184,7 +184,7 @@ node scripts/prepare-pack.mjs --itinerary ~/Downloads/seville-trip.ics   # or a 
 
 ```bash
 cd app
-npm test            # Jest: the core logic in Node, plus screen tests (511 tests in 31 suites)
+npm test            # Jest: the core logic in Node, plus screen tests (512 tests in 31 suites)
 npm run typecheck   # tsc --noEmit
 npm run lint        # ESLint
 ```

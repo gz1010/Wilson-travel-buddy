@@ -93,4 +93,23 @@ describe('the nearby index', () => {
     const text = nearbyAnswer(now, found, { city: 'Seville', covered: true });
     if (!found[0].open) expect(text).toContain("can't promise it's open now");
   });
+
+  it('says "right here" instead of "0 m north" when you are next to it (seen live)', () => {
+    const q = nearbyQuery('find a pharmacy near me')!;
+    const tiny = new NearbyIndex({
+      source: 'test',
+      builtAt: '2026-11-15',
+      bounds: [-6.02, 37.37, -5.97, 37.41],
+      items: [
+        ['Farmacia Francos 17', 'pharmacy', plazaNueva.lat + 0.0001, plazaNueva.lon],
+        ['Farmacia de la Esquina', 'pharmacy', plazaNueva.lat + 0.0002, plazaNueva.lon],
+        ['Farmacia Lejana', 'pharmacy', plazaNueva.lat + 0.003, plazaNueva.lon],
+      ],
+    });
+    const text = nearbyAnswer(q, tiny.search(q, plazaNueva), { city: 'Seville', covered: true });
+    expect(text).toMatch(/^The nearest pharmacy is Farmacia Francos 17, right here, less than 30 m away\./);
+    expect(text).toContain('Farmacia de la Esquina (right here)');
+    expect(text).toContain('Farmacia Lejana (330 m)');
+    expect(text).not.toMatch(/\b0 m\b/);
+  });
 });

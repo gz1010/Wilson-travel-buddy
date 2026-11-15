@@ -153,7 +153,8 @@ export class NearbyIndex {
 
   constructor(file: NearbyFile) {
     this.bounds = file.bounds;
-    this.places = file.items.map(([name, kind, lat, lon, extra]) => ({ name, kind, point: { lat, lon }, ...(extra ?? {}) }));
+    // Names as OpenStreetMap has them, spaces tidied ("Farmacia  Alfalfa").
+    this.places = file.items.map(([name, kind, lat, lon, extra]) => ({ name: name.replace(/\s+/g, ' ').trim(), kind, point: { lat, lon }, ...(extra ?? {}) }));
   }
 
   /** True when `p` is on (or within about a kilometre of) the area the index covers. */
@@ -211,6 +212,9 @@ function openWords(open: OpenState | undefined): string {
   return open.opensAt ? `, closed now (opens at ${open.opensAt})` : ', closed now';
 }
 
+/** Closer than this, a place is "right here" (GPS and the map's positions are no finer). */
+const HERE_M = 30;
+
 /**
  * Wilson's answer, in code: names, distances and hours come straight from the index, so nothing is
  * made up. Spoken as it is (or given to the model to say warmly, with these facts only).
@@ -226,10 +230,13 @@ export function nearbyAnswer(query: NearbyQuery, results: NearbyResult[], opts: 
   const [first, ...rest] = results;
   const name = nearbyName(first, query.category);
   const lead = first.place.name ? `The nearest ${what} is ${name}` : `The nearest ${what} is`;
-  const where = `${formatDistance(first.meters)} ${first.direction}, about ${first.minutes} min on foot`;
+  // Under ~30 m a distance and direction mean nothing ("0 m north", seen live): it's right here.
+  const where =
+    first.meters < HERE_M ? `right here, less than ${HERE_M} m away` : `${formatDistance(first.meters)} ${first.direction}, about ${first.minutes} min on foot`;
   let text = first.place.name ? `${lead}, ${where}${openWords(first.open)}.` : `${lead} ${where}${openWords(first.open)}.`;
   const named = rest.filter(r => r.place.name);
-  if (named.length) text += ` Also close: ${named.map(r => `${r.place.name} (${formatDistance(r.meters)}${openWords(r.open)})`).join(' and ')}.`;
+  const howFar = (m: number) => (m < HERE_M ? 'right here' : formatDistance(m));
+  if (named.length) text += ` Also close: ${named.map(r => `${r.place.name} (${howFar(r.meters)}${openWords(r.open)})`).join(' and ')}.`;
   if (query.openNow && !first.open) text += " I don't have its opening hours, so I can't promise it's open now.";
   if (query.category.id === 'cinema' || query.category.id === 'theatre') text += ' I have no showtimes offline, so check at the door.';
   return text;
