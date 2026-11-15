@@ -143,6 +143,56 @@ final class Flag: @unchecked Sendable {
     }
 }
 
+/// One speech stream's timeline: where each sentence's audio starts and ends among the seconds of
+/// audio handed to the player, and which speak.started / speak.done have been sent.
+final class SpeechTimeline: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [(id: String, start: Double, end: Double?)] = []
+    private var told: Set<String> = []
+    private var finished: Set<String> = []
+    private var seconds = 0.0
+    private var _flushed = false
+
+    /// True once the pre-buffer has been released and audio plays as it arrives.
+    var flushed: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return _flushed }
+        set { lock.lock(); _flushed = newValue; lock.unlock() }
+    }
+    var audioSeconds: Double { lock.lock(); defer { lock.unlock() }; return seconds }
+    func add(seconds s: Double) { lock.lock(); seconds += s; lock.unlock() }
+    func begin(_ id: String) { lock.lock(); entries.append((id, seconds, nil)); lock.unlock() }
+    func end(_ id: String) {
+        lock.lock()
+        if let i = entries.firstIndex(where: { $0.id == id }) { entries[i].end = seconds }
+        lock.unlock()
+    }
+    /// What to report now that the playhead is at `t` seconds.
+    func due(at t: Double) -> (started: [String], done: [String]) {
+        lock.lock(); defer { lock.unlock() }
+        var started: [String] = []
+        var done: [String] = []
+        guard t > 0 else { return (started, done) }
+        for e in entries {
+            if !told.contains(e.id), t >= e.start {
+                told.insert(e.id)
+                started.append(e.id)
+            }
+            if let end = e.end, end > e.start, told.contains(e.id), !finished.contains(e.id), t >= end - 0.03 {
+                finished.insert(e.id)
+                done.append(e.id)
+            }
+        }
+        return (started, done)
+    }
+    /// Every sentence not reported done yet (the stream has ended).
+    func remaining() -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        let ids = entries.map(\.id).filter { !finished.contains($0) }
+        finished.formUnion(ids)
+        return ids
+    }
+}
+
 /// Everything audio, driven by messages from the app. One listen or one
 /// conversation at a time; speech is queued.
 actor AudioService {
@@ -245,8 +295,9 @@ actor AudioService {
         case "speak.stop":
             speechGeneration += 1
             cancelSpeech.value = true
-            let out = models.tts.audioOutput
-            Task { await out.stopPlayback(waitForCompletion: false) }
+            for s in sentences { sendDone(s.id) }
+            sentences.removeAll()
+            await models.tts.audioOutput.stopPlayback(waitForCompletion: false)
         default: break
         }
     }
@@ -608,41 +659,123 @@ actor AudioService {
 
     // MARK: Voice
 
+    // Sentences are spoken back to back. Each one is generated (TTSKit's generate) as soon as the one
+    // before it has been *generated*, not played, and its audio joins one continuous playback stream,
+    // so the next sentence is ready before the current one ends: Qwen3-TTS runs faster than real time
+    // on Apple Silicon. Before, every sentence waited for the previous one to finish playing and only
+    // then started generating, which left 2-3 s of silence between sentences.
+    private struct Sentence {
+        let id: String
+        let text: String
+        let language: String
+        let generation: Int
+    }
+    private var sentences: [Sentence] = []
+    private var speaking = false
+
     private func speak(id: String, text: String, language: String) {
-        let generation = speechGeneration
-        let previous = speech
+        sentences.append(Sentence(id: id, text: text, language: language, generation: speechGeneration))
+        guard !speaking else { return } // the running stream takes it
+        speaking = true
+        speech = Task { [weak self] in await self?.speakQueued() }
+    }
+
+    private func speakQueued() async {
+        while !sentences.isEmpty { await speakStream() }
+        speaking = false
+    }
+
+    /// One playback stream: generates the queued sentences one after another into it, takes the
+    /// ones that arrive while it plays, and ends when it has played out (or speak.stop).
+    private func speakStream() async {
         let tts = models.tts
+        let out = tts.audioOutput
         let flag = cancelSpeech
-        let voice = self.voice(for: language)
-        let sendStarted = send
-        let audioOut = tts.audioOutput
-        speech = Task { [weak self] in
-            await previous.value
-            let current = await self?.speechGeneration ?? -1
-            if current == generation {
-                flag.value = false
-                // speak.started fires when sound is actually playing (the player's clock moves),
-                // not when the first audio is generated: TTSKit pre-buffers before playing.
-                let watcher = Task {
-                    while !Task.isCancelled {
-                        if audioOut.currentPlaybackTime > 0 {
-                            sendStarted(.speakStarted(id: id))
-                            return
-                        }
-                        try? await Task.sleep(nanoseconds: 20_000_000)
-                    }
+        flag.value = false
+        let timeline = SpeechTimeline()
+        let sendOut = send
+        let format: any SpeechGenerating
+        do {
+            format = try tts.createTask()
+            try out.startPlayback(deferEngineStart: true)
+        } catch {
+            log("Speech failed to start: \(error)")
+            for s in sentences { sendDone(s.id) }
+            sentences.removeAll()
+            return
+        }
+        let samplesPerFrame = format.samplesPerFrame
+        let rate = format.sampleRate
+        let minBuffer = format.minimumBufferDuration
+        var options = GenerationOptions()
+        options.concurrentWorkerCount = 1 // chunks must arrive in order
+        let maxTokens = options.maxNewTokens
+
+        // speak.started when the playhead reaches a sentence (sound is actually playing), speak.done
+        // when it passes its end.
+        let watcher = Task {
+            while !Task.isCancelled {
+                let t = out.currentPlaybackTime
+                let due = timeline.due(at: t)
+                for id in due.started { sendOut(.speakStarted(id: id)) }
+                for id in due.done { sendOut(.speakDone(id: id)) }
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+        }
+
+        stream: while true {
+            while !sentences.isEmpty {
+                let s = sentences.removeFirst()
+                guard s.generation == speechGeneration, !flag.value else {
+                    sendDone(s.id)
+                    continue
                 }
+                timeline.begin(s.id)
+                let speaker = voice(for: s.language)
                 do {
-                    _ = try await tts.play(text: text, speaker: voice, language: ttsLanguage(language), playbackStrategy: .auto) { _ in
-                        flag.value ? false : nil
+                    _ = try await tts.generate(text: s.text, speaker: speaker, language: ttsLanguage(s.language), options: options) { progress in
+                        if flag.value { return false }
+                        // Until the stream is playing, pre-buffer as TTSKit's own play(.auto) does, sized
+                        // from the measured step time so slow generation doesn't stutter.
+                        if !timeline.flushed, let step = progress.stepTime {
+                            out.setBufferDuration(PlaybackStrategy.requiredBuffer(
+                                stepTime: step, maxNewTokens: maxTokens, samplesPerFrame: samplesPerFrame,
+                                sampleRate: rate, minimumBuffer: minBuffer))
+                        }
+                        out.enqueueAudioChunk(progress.audio)
+                        timeline.add(seconds: Double(progress.audio.count) / Double(rate))
+                        return nil
                     }
                 } catch {
-                    log("Speech failed: \(error)")
+                    if !flag.value { log("Speech failed: \(error)") }
                 }
-                watcher.cancel()
+                timeline.end(s.id)
+                if !timeline.flushed {
+                    // The first sentence is fully generated: play whatever is held back, then stream.
+                    out.setBufferDuration(0)
+                    timeline.flushed = true
+                }
+                if flag.value { break stream }
             }
-            await self?.sendDone(id)
+            // Nothing queued: let the stream play out, but take any sentence that arrives meanwhile.
+            var last = -1.0
+            var still = 0
+            while sentences.isEmpty, !flag.value {
+                let t = out.currentPlaybackTime
+                let left = timeline.audioSeconds - t
+                if left <= 0.03 { break }
+                if t == last { still += 1 } else { still = 0; last = t }
+                // The player keeps the very last chunk back for its fade-out until the stream stops:
+                // once the playhead has stopped just short of the end, stop, which plays it out.
+                if still >= 5, left < 0.5 { break }
+                if still > 150 { break } // 3 s without the playhead moving: don't wait forever
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+            if sentences.isEmpty || flag.value { break stream }
         }
+        if !flag.value { await out.stopPlayback(waitForCompletion: true) }
+        watcher.cancel()
+        for id in timeline.remaining() { sendDone(id) }
     }
 
     private func sendDone(_ id: String) { send(.speakDone(id: id)) }

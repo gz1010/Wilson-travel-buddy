@@ -102,8 +102,10 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
   // silence wait and the final transcription) to when the reply's voice is actually playing.
   const [latency, setLatency] = useState<{ ms: number; voice: boolean } | undefined>();
 
-  // --- Voice output: one sentence at a time, microphone muted while speaking.
-  // speechGen goes up on every stop, so sentences queued before a stop are dropped.
+  // --- Voice output: microphone muted while speaking. Each sentence goes to the helper the moment
+  // it is complete: the helper generates it while the one before is still playing, so sentences
+  // follow each other without a gap (it used to wait for the previous one to finish first).
+  // speechGen goes up on every stop; the helper drops what it had queued (speak.stop).
   const speechQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingSpeech = useRef(0);
   const speechGen = useRef(0);
@@ -114,8 +116,10 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
       pendingSpeech.current++;
       setSpeaking(true);
       rt.audio.setMuted(true);
+      // Resolves when this sentence has finished playing; sentences finish in the order they were sent.
+      const spoken = rt.audio.speak(text, lang, onStart);
       speechQueue.current = speechQueue.current
-        .then(() => (gen === speechGen.current ? rt.audio.speak(text, lang, onStart) : undefined))
+        .then(() => spoken)
         .catch(() => {})
         .finally(() => {
           if (gen !== speechGen.current) return; // cancelled by stopSpeaking
