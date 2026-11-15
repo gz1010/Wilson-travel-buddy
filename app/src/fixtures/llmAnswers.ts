@@ -71,3 +71,81 @@ function guideAnswer(user: string): string {
 // allowed place IDs change with the clock, so a recorded pick could name a closed place.
 const replayable = Object.entries(recorded as Record<string, string>).filter(([tag]) => tag !== 'recommend' && tag !== 'trip.revise');
 export const llmAnswers: Record<string, FixtureAnswer> = { ...handWritten, ...Object.fromEntries(replayable) };
+
+// ---------------------------------------------------------------------------
+// Itinerary import (core/itineraryImport.ts): pasted text is read one day per trip.extract call.
+
+/** A pasted itinerary: a short intro, then three days with headings. */
+export const SAMPLE_ITINERARY = `Seville, staying at Hotel Casa 1800 in Santa Cruz. We love tapas and flamenco.
+
+Day 1 - Sunday 15 Nov
+14:00 Check in
+18:00 Walk through Santa Cruz
+21:00 Dinner at Casa Román
+
+Day 2 - Monday 16 Nov
+09:30 Real Alcázar (tickets booked)
+13:00 Lunch at El Rinconcillo
+16:00 Cathedral and Giralda
+21:00 Flamenco at Casa de la Memoria
+
+Day 3 - Tuesday 17 Nov
+10:00 Plaza de España
+12:00 Parque de María Luisa
+15:00 Museo de Bellas Artes`;
+
+const itineraryStop = (title: string, place_name: string | null, start: string, day: number, weekday: string | null = null) => ({
+  title,
+  place_name,
+  weekday,
+  day,
+  start,
+  duration_minutes: null,
+  fixed: true,
+});
+
+/**
+ * Real Bonsai-2 4B answers (15 Nov 2026, llama-server) for each day of SAMPLE_ITINERARY, keyed by
+ * its heading. The model's day numbers drift (day 3's stops came back as days 2, 3 and 4, with
+ * "days": 3); the import pins each stop to its heading's day.
+ */
+const ITINERARY_DAYS: Record<string, unknown> = {
+  'Day 1': {
+    days: 1,
+    base_area: 'Hotel Casa 1800 in Santa Cruz',
+    interests: ['tapas', 'flamenco'],
+    stops: [
+      itineraryStop('Check in', null, '14:00', 1),
+      itineraryStop('Walk through Santa Cruz', 'Santa Cruz', '18:00', 1),
+      itineraryStop('Dinner at Casa Román', 'Casa Román', '21:00', 1),
+    ],
+  },
+  'Day 2': {
+    days: 1,
+    base_area: null,
+    interests: [],
+    stops: [
+      itineraryStop('Real Alcázar', 'Real Alcázar', '09:30', 2, 'Monday'),
+      itineraryStop('Lunch at El Rinconcillo', 'El Rinconcillo', '13:00', 2),
+      itineraryStop('Cathedral and Giralda', 'Cathedral and Giralda', '16:00', 2),
+      itineraryStop('Flamenco at Casa de la Memoria', 'Casa de la Memoria', '21:00', 2),
+    ],
+  },
+  'Day 3': {
+    days: 3,
+    base_area: null,
+    interests: [],
+    stops: [
+      itineraryStop('Plaza de España', 'Plaza de España', '10:00', 2, 'Tuesday'),
+      itineraryStop('Parque de María Luisa', 'Parque de María Luisa', '12:00', 3),
+      itineraryStop('Museo de Bellas Artes', 'Museo de Bellas Artes', '15:00', 4),
+    ],
+  },
+};
+
+/** trip.extract for SAMPLE_ITINERARY's days: the recorded answer for the day heading in the request. */
+export function itineraryAnswer(req: Parameters<Exclude<FixtureAnswer, string>>[0]): string {
+  const user = req.messages[1]?.content ?? '';
+  const key = Object.keys(ITINERARY_DAYS).find(k => new RegExp(`(^|\\n)${k}\\b`).test(user));
+  return JSON.stringify(key ? ITINERARY_DAYS[key] : { days: 1, base_area: null, interests: [], stops: [] });
+}
