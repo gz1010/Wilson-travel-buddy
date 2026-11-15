@@ -18,6 +18,11 @@ interface GlassProps {
   radius?: number;
   /** Turn the blur off where nothing is behind (saves GPU). */
   blur?: boolean;
+  /**
+   * Colour the glass, e.g. while someone is speaking: any CSS colour, used at the alpha it
+   * carries ('rgba(255,170,90,0.35)'). Leave it out for clear glass.
+   */
+  tint?: string;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 }
@@ -43,7 +48,7 @@ function Rim({ width, height, radius, strength }: { width: number; height: numbe
   );
 }
 
-export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, style, children }: GlassProps) {
+export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, tint, style, children }: GlassProps) {
   const g = glass[kind];
   const [size, setSize] = useState({ width: 0, height: 0 });
   const prominent = kind === 'prominent';
@@ -76,6 +81,7 @@ export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, 
         ) : body > 0 ? (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(255,255,255,${body})` }]} />
         ) : null}
+        {tint ? <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} /> : null}
       </View>
       {/* Apple's Liquid Glass draws its own edge light; elsewhere, draw the rim. */}
       {!native && <Rim width={size.width} height={size.height} radius={radius} strength={prominent || kind === 'orb' ? 1.4 : 1} />}
