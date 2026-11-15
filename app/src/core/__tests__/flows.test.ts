@@ -207,10 +207,15 @@ describe('"I\'m staying two more days" reaches the trip and Now', () => {
 // ---------------------------------------------------------------------------
 describe('answers carry the guide facts they come from (b.cited)', () => {
   /** Answers like Bonsai-2 does with the answer prompt: sentences with source numbers. */
-  const citing = (factId: string, text: string): FixtureAnswer => req => {
-    const n = new RegExp(`^\\[(\\d+)\\] ${index.pack.facts.find(f => f.id === factId)!.title}:`, 'm').exec(req.messages[1].content)?.[1];
-    return text.replace(/\[n\]/g, `[${n}]`);
+  /** The prompt's number for a fact: matched on title and text, as several facts share an article title. */
+  const sourceNumber = (prompt: string, factId: string) => {
+    const f = index.pack.facts.find(x => x.id === factId)!;
+    return prompt
+      .split('\n')
+      .find(l => l.includes(`] ${f.title}: ${f.body.slice(0, 40)}`))
+      ?.match(/^\[(\d+)\]/)?.[1];
   };
+  const citing = (factId: string, text: string): FixtureAnswer => req => text.replace(/\[n\]/g, `[${sourceNumber(req.messages[1].content, factId)}]`);
 
   test('"tell me the history of the Torre del Oro": the cited Wikipedia fact first, then the place\'s others', async () => {
     const { run, llm } = setup({
@@ -221,7 +226,12 @@ describe('answers carry the guide facts they come from (b.cited)', () => {
     expect(d.text).toBe('The Torre del Oro was built by the Almohad Caliphate to guard the river. It later served as a prison.');
     expect(tokens(events)).toBe(d.text); // the numbers are never shown or spoken
     expect(d.cited?.placeId).toBe('torre-oro');
-    expect(d.cited?.facts.map(f => f.id)).toEqual(['wiki-torre-oro', 'torre-oro-name']);
+    // The cited fact first, then the facts the answer repeats ("served as a prison") and the rest
+    // of the place's, the hand-written one among them (deepen-facts.mjs adds more per place).
+    const ids = d.cited!.facts.map(f => f.id);
+    expect(ids[0]).toBe('wiki-torre-oro');
+    expect(ids).toContain('torre-oro-name');
+    expect(d.cited?.facts.every(f => f.placeId === 'torre-oro')).toBe(true);
     expect(d.cited?.facts[0]).toMatchObject({ source: 'https://en.wikipedia.org/wiki/Torre_del_Oro', license: 'CC BY-SA 4.0' });
     expect(events.find(e => e.type === 'focus')).toEqual({ type: 'focus', placeId: 'torre-oro' });
     // The answer prompt asks for the numbers; the sources carry the new Wikipedia facts.
@@ -234,18 +244,23 @@ describe('answers carry the guide facts they come from (b.cited)', () => {
     const d = done(await run('Is the cathedral worth it?'));
     expect(d.cited?.placeId).toBe('catedral');
     const ids = d.cited!.facts.map(f => f.id);
-    expect(ids.slice(0, 2).sort()).toEqual(['cathedral-dress', 'wiki-catedral']);
+    // The answer repeats the Wikipedia lead ("largest", "World Heritage"), so it comes first; then
+    // the rest of the cathedral's facts, and nothing about another place.
+    expect(ids.slice(0, 2)).toContain('wiki-catedral');
+    expect(d.cited!.facts.every(f => f.placeId === 'catedral')).toBe(true);
     expect(ids).toEqual(expect.arrayContaining(['giralda-ramps', 'columbus-tomb']));
   });
 
   test('a source number the answer does not bear out is left out (seen live: Columbus cited to El Salvador)', async () => {
     const { run, llm } = setup({
       guide: req => {
-        const n = (title: string) => req.messages[1].content.split('\n').find(l => l.includes(`] ${title}:`))?.match(/^\[(\d+)\]/)?.[1];
-        return `You can see Columbus's tomb [${n('Church of San Salvador (Seville)')}]. It is a UNESCO World Heritage Site and the largest Gothic cathedral [${n('Seville Cathedral')}].`;
+        const p = req.messages[1].content;
+        return `You can see Columbus's tomb [${sourceNumber(p, 'wiki-salvador')}]. It is a UNESCO World Heritage Site and the largest Gothic cathedral [${sourceNumber(p, 'wiki-catedral')}].`;
       },
     });
-    const d = done(await run('Is the Seville Cathedral worth it?'));
+    // The cathedral has so many facts now that a plain "is it worth it?" brings no other place's;
+    // naming El Salvador puts its fact among the sources, as in the live case.
+    const d = done(await run('Is the cathedral worth it compared with El Salvador?'));
     expect(llm.calls[0].req.messages[1].content).toContain('] Church of San Salvador (Seville):'); // it was among the sources
     expect(d.cited?.facts[0].id).toBe('wiki-catedral');
     expect(d.cited?.facts.map(f => f.id)).not.toContain('wiki-salvador');
@@ -418,5 +433,28 @@ describe('useBuddy end to end', () => {
     expect(b!.trip!.days).toBe(3);
 
     act(() => r!.unmount());
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('"find X near me" answers from the offline map of everything (nearby index)', () => {
+  test('"find movie theatre in sevilla": the nearest cinemas by name and walk, with no model call', async () => {
+    const { run, llm } = setup();
+    const d = done(await run('find movie theatre in sevilla'));
+    expect(d.text).toMatch(/^The nearest cinema is (Cines Avenida|Odeon Multicines Plaza de Armas|Cine Cervantes|Alameda)/);
+    expect(d.text).toMatch(/about \d+ min on foot/);
+    expect(llm.calls.length).toBe(0);
+  });
+
+  test('"a pharmacy near the cathedral" is measured from the cathedral', async () => {
+    const { run } = setup();
+    const d = done(await run('Is there a pharmacy near the cathedral?'));
+    expect(d.text).toMatch(/^Near Seville Cathedral: the nearest pharmacy is /);
+  });
+
+  test('guide questions, phrases and trip edits are not caught', async () => {
+    const { run } = setup();
+    expect(done(await run('Tell me the history of the Torre del Oro')).text).not.toMatch(/nearest/);
+    expect(done(await run('How do I say where is the pharmacy in Spanish?')).text).not.toMatch(/nearest pharmacy/);
   });
 });

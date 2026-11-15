@@ -1,5 +1,6 @@
 import { DeclineFilter, Guide } from './guide';
 import { hotelOf, normalize, onlyStayChange, routeIntent, stayChangeOf, stayDays, type HotelChange } from './intent';
+import { NearbyIndex, nearbyAnswer, nearbyQuery } from './nearby';
 import { fold, type PackIndex, type SearchHit } from './pack';
 import { NOT_IN_GUIDE, prompts } from './prompts';
 import { Recommender, spokenSummary } from './recommend';
@@ -42,6 +43,33 @@ export class DefaultCompanion implements Companion {
     this.guide = new Guide(llm, index);
     this.translator = new Translator(llm, index.pack.phrases, 'en', index.destination.language);
     this.factsById = new Map(index.pack.facts.map(f => [f.id, f]));
+    this.nearby = index.pack.nearby ? new NearbyIndex(index.pack.nearby) : undefined;
+  }
+
+  /** The city's offline map of everything (cinemas, pharmacies…), when the pack has one. */
+  private readonly nearby?: NearbyIndex;
+
+  /**
+   * Answers "is there a pharmacy near the cathedral?" or "find a movie theatre" from the nearby
+   * index, measured from the place named or else from where the traveller is. False when the
+   * question is not one of those (the guide answers it).
+   */
+  private answerNearby(text: string, named: Place | undefined, sit: Situation, emit: (e: CompanionEvent) => void): boolean {
+    if (!this.nearby) return false;
+    const query = nearbyQuery(text);
+    // "Is the Museum of Fine Arts nearby?" is about that museum: the guide answers.
+    if (!query || (named && query.category.guide)) return false;
+    const from = named?.point ?? sit.location;
+    const results = this.nearby.search(query, from, sit.clock);
+    let answer = nearbyAnswer(query, results, { city: this.index.destination.name, covered: this.nearby.covers(from) });
+    if (named && results.length) answer = `Near ${named.name}: ${answer.charAt(0).toLowerCase()}${answer.slice(1)}`;
+    const placeId = results[0]?.place.placeId;
+    if (placeId && this.index.place(placeId)) {
+      this.lastPlaceId = placeId;
+      emit({ type: 'focus', placeId });
+    }
+    emit({ type: 'done', text: answer });
+    return true;
   }
 
   async handle(text: string, emit: (e: CompanionEvent) => void): Promise<void> {
@@ -55,6 +83,9 @@ export class DefaultCompanion implements Companion {
       // "how do I say this is my room?" or "translate…", which are phrases to say.
       const hotel = intent === 'translator' || intent === 'phrase' ? undefined : hotelOf(text);
       if (hotel && (await this.setHotel(hotel, trip, sit, emit))) return;
+      // "Find a cinema / pharmacy / cash machine near me": every place on the city's offline map,
+      // not only the guide's. Code finds and ranks them, so nothing is invented (core/nearby.ts).
+      if ((intent === 'guide' || intent === 'recommend') && this.answerNearby(text, named, sit, emit)) return;
 
       switch (intent) {
         case 'translator': {
