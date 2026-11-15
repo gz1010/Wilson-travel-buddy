@@ -56,5 +56,16 @@ export const sceneColors = {
   river: { ground: '#1F3D44', back: '#2E5A63', front: '#5B8E98' },
 } as const;
 
+/** Manrope by weight: iOS resolves the PostScript name of each bundled file reliably. */
+const MANROPE: Record<string, string> = {
+  '300': 'Manrope-Light',
+  '400': 'Manrope-Regular',
+  '500': 'Manrope-Medium',
+  '600': 'Manrope-SemiBold',
+  '700': 'Manrope-Bold',
+  '800': 'Manrope-ExtraBold',
+};
+export const font = (weight: '300' | '400' | '500' | '600' | '700' | '800') => ({ fontFamily: MANROPE[weight] });
+
 export const white = (a: number) => `rgba(255,255,255,${a})`;
 export const ground = (a: number) => `rgba(14,15,20,${a})`;
