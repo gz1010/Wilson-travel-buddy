@@ -121,9 +121,13 @@ at this size (100 places, a few hundred facts) no database is needed.
 The app is three local processes that talk over 127.0.0.1, which works with
 Wi-Fi off:
 
-- **The app:** React Native for macOS (react-native-macos 0.81) in
-  TypeScript. All screens and all logic live here: trip extraction,
-  scoring, recommendations, the guide, translation prompts.
+- **The app:** React Native 0.81 in TypeScript. All screens and all logic
+  live here: trip extraction, scoring, recommendations, the guide,
+  translation prompts. The "Dusk · liquid glass" design is a phone design,
+  so it runs as an iOS app in the iPhone Simulator on the Mac (Wi-Fi off;
+  the Simulator shares the Mac's localhost with the helpers). The earlier
+  three-column layout still builds as a macOS app (react-native-macos) and
+  stays the fallback until the iOS screens are verified.
 - **Bonsai-2:** PrismML's `llama-server` with the GGUF model, called over
   its OpenAI-compatible HTTP API with streaming. Benchmark the 2B, 4B, and
   9B variants on the Apple Silicon Mac early and report the numbers.
@@ -137,7 +141,12 @@ Wi-Fi off:
   the Argmax Pro SDK if its licence works offline, otherwise the
   open-source WhisperKit and SpeakerKit; the voice is TTSKit.
 - **Map:** MapLibre GL JS inside `react-native-webview`, with OpenStreetMap
-  vector tiles bundled into the app.
+  vector tiles bundled into the app; a dark style in the Dusk design.
+- **Photos:** one photo per place and four time-of-day city photos, from
+  Wikimedia Commons with reusable licences, downloaded once by
+  `scripts/build-photos.mjs` and bundled with their credits. Code picks the
+  city photo from the clock and the on-device sunrise and sunset; places with
+  no photo get a drawn scene tile. The model never chooses images.
 
 The Argmax Pro key never goes in the repository. The helper reads it from
 the `ARGMAX_API_KEY` environment variable or from `~/.travelbuddy/argmax-key`.

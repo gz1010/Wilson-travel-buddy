@@ -77,7 +77,8 @@ After that they do not change.
 
 | Decision | Choice | Why |
 |---|---|---|
-| Framework | react-native-macos **0.81** (with react-native 0.81.6), TypeScript | 0.83.0 is a six-week-old dot-zero release. 0.81 still allows old-style native modules if anything needs one. |
+| Framework | React Native **0.81** (old architecture), TypeScript | 0.81 still allows old-style native modules if anything needs one. |
+| Platform | **iOS in the iPhone Simulator on the Mac** for the Dusk design; macOS (react-native-macos 0.81) keeps the classic layout as the fallback | The liquid-glass design needs native blur, masking and gradients, which exist for iOS but not for react-native-macos. `UI_DESIGN` in `app/src/config.ts` switches between them. |
 | Destination | Seville, Spanish ↔ English | Argmax's voice speaks only ten languages (English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish, Italian). Spanish is the safest of them for a small model. One of you has to speak it on camera; if neither can, pick a language from that list that one of you speaks. |
 | Argmax | Start on the **open-source SDK** (what the base code uses); try **Pro** for live speaker labels as a stretch | The open-source path is written; Pro needs its models wired (see `audio-helper/README.md`). |
 | Diarization floor | SpeakerKit runs in the judged build however turns are taken, and its labels are on screen and in the video | It is a hard rule. Turn-taking can fall back; diarization cannot. |

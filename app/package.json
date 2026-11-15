@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "postinstall": "node ../scripts/build-map-assets.mjs",
     "eval": "tsx src/eval/evalBonsai.ts",
-    "ios": "react-native run-ios --simulator \"iPhone 16 Pro\""
+    "ios": "react-native run-ios"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
