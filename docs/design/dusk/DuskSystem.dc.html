@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dusk design system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0;background:#0E0F14}
+a{color:#E9C9A0}a:hover{color:#F4EFE8}
+button{font:inherit}
+</style>
+</helmet>
+<div style="min-height: 1640px; background: #0E0F14; color: #F4EFE8; font-family: 'Manrope', system-ui, sans-serif; padding: 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px;">
+
+  <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 20px;">
+    <div>
+      <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #B9B0A6;">DUSK · DESIGN SYSTEM v0.1</div>
+      <h1 style="margin: 6px 0 0; font-size: 72px; font-weight: 300; letter-spacing: -0.05em; line-height: 0.95;">The sky is the clock.</h1>
+    </div>
+    <p style="margin: 0; max-width: 430px; font-size: 15px; line-height: 1.55; color: #E4DCD2;">A night-dark app under a live sky. The sky gradient comes from the time, the on-device sunrise and sunset, and the saved forecast. Everything else stays quiet: one sand accent, glass for controls, and huge place names cut off by their cards.</p>
+  </header>
+
+  <section aria-label="Sky by situation">
+    <h2 style="margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #B9B0A6;">SKY · ONE GRADIENT PER SITUATION, CROSSFADED 600 MS</h2>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px;">
+      <div><div style="height: 150px; border-radius: 22px; background: linear-gradient(180deg, #3A4D6E 0%, #B88E8A 60%, #F0B48A 100%);"></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Dawn · sunrise ±1h</div><div style="font-size: 12px; color: #B9B0A6;">#3A4D6E #B88E8A #F0B48A</div></div>
+      <div><div style="height: 150px; border-radius: 22px; background: linear-gradient(180deg, #557895 0%, #A9A08F 60%, #E2B285 100%);"></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Morning</div><div style="font-size: 12px; color: #B9B0A6;">#557895 #A9A08F #E2B285</div></div>
+      <div><div style="height: 150px; border-radius: 22px; background: linear-gradient(180deg, #24507E 0%, #5F86AC 55%, #D8B48A 100%);"></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Afternoon</div><div style="font-size: 12px; color: #B9B0A6;">#24507E #5F86AC #D8B48A</div></div>
+      <div><div style="height: 150px; border-radius: 22px; background: linear-gradient(180deg, #172036 0%, #3B3550 45%, #A4614A 82%, #D58D58 100%);"></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Sunset ±1h</div><div style="font-size: 12px; color: #B9B0A6;">#172036 #3B3550 #A4614A #D58D58</div></div>
+      <div><div style="height: 150px; border-radius: 22px; background: linear-gradient(180deg, #272C38 0%, #444A58 55%, #6A6C74 100%);"></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Rain ≥ 50%</div><div style="font-size: 12px; color: #B9B0A6;">#272C38 #444A58 #6A6C74 + streaks</div></div>
+      <div><div style="height: 150px; border-radius: 22px; background: linear-gradient(180deg, #090D20 0%, #1B2142 55%, #3B3550 100%);"></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Night</div><div style="font-size: 12px; color: #B9B0A6;">#090D20 #1B2142 #3B3550 + moon</div></div>
+    </div>
+    <p style="margin: 12px 0 0; font-size: 13px; color: #B9B0A6;">Rain overrides time of day. Cards get the same mood as a veil: rgba(38,42,54,.45) in rain, rgba(8,10,28,.4) at night. Text over sky always carries a soft shadow (0 1px 12px rgba(0,0,0,.35)).</p>
+  </section>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 40px;">
+    <section aria-label="Colour" style="flex: 1 1 520px;">
+      <h2 style="margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #B9B0A6;">COLOUR</h2>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+        <div><div style="height: 72px; border-radius: 16px; background: #0E0F14; border: 1px solid rgba(255,255,255,0.18);"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">night #0E0F14</div><div style="font-size: 12px; color: #B9B0A6;">Ground</div></div>
+        <div><div style="height: 72px; border-radius: 16px; background: #1A1B22;"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">raised #1A1B22</div><div style="font-size: 12px; color: #B9B0A6;">Sheets</div></div>
+        <div><div style="height: 72px; border-radius: 16px; background: #F4EFE8;"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">text #F4EFE8</div><div style="font-size: 12px; color: #B9B0A6;">Also primary button</div></div>
+        <div><div style="height: 72px; border-radius: 16px; background: #B9B0A6;"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">text-2 #B9B0A6</div><div style="font-size: 12px; color: #B9B0A6;">8.6:1 on night</div></div>
+        <div><div style="height: 72px; border-radius: 16px; background: #E9C9A0;"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">sand #E9C9A0</div><div style="font-size: 12px; color: #B9B0A6;">Mic, chosen pin, heard words</div></div>
+        <div><div style="height: 72px; border-radius: 16px; background: #8FB8FF;"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">you #8FB8FF</div><div style="font-size: 12px; color: #B9B0A6;">Only the location dot</div></div>
+        <div><div style="height: 72px; border-radius: 16px; background: #6E6A70;"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">pending #6E6A70</div><div style="font-size: 12px; color: #B9B0A6;">Words still streaming, 27 px+ only</div></div>
+        <div><div style="height: 72px; border-radius: 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);"></div><div style="font-size: 13px; font-weight: 700; margin-top: 6px;">glass</div><div style="font-size: 12px; color: #B9B0A6;">white 6–10% + 14–30% stroke + blur 20</div></div>
+      </div>
+    </section>
+
+    <section aria-label="Type" style="flex: 1 1 520px;">
+      <h2 style="margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #B9B0A6;">TYPE · MANROPE, TWO VOICES</h2>
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; align-items: baseline; gap: 16px; padding: 6px 0; border-top: 1px solid #23242C;"><span style="width: 120px; font-size: 12px; color: #B9B0A6;">quiet 300 · 64</span><span style="font-size: 64px; font-weight: 300; letter-spacing: -0.05em; line-height: 1;">14:00</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px; padding: 6px 0; border-top: 1px solid #23242C; overflow: hidden;"><span style="flex: none; width: 120px; font-size: 12px; color: #B9B0A6;">loud 800 · 66/58/50</span><span style="font-size: 58px; font-weight: 800; letter-spacing: -0.055em; line-height: 1; white-space: nowrap;">Triana Market</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px; padding: 6px 0; border-top: 1px solid #23242C;"><span style="width: 120px; font-size: 12px; color: #B9B0A6;">title 600 · 44</span><span style="font-size: 44px; font-weight: 600; letter-spacing: -0.04em;">Plaza de España</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px; padding: 6px 0; border-top: 1px solid #23242C;"><span style="width: 120px; font-size: 12px; color: #B9B0A6;">body 500 · 14–15</span><span style="font-size: 15px; font-weight: 500;">Bright until 16:00, then rain. See the tiles now.</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px; padding: 6px 0; border-top: 1px solid #23242C; border-bottom: 1px solid #23242C;"><span style="width: 120px; font-size: 12px; color: #B9B0A6;">label 800 · 11</span><span style="font-size: 11px; font-weight: 800; letter-spacing: 0.12em;">THE LOCAL SAYS · FROM YOUR SEVILLE GUIDE</span></div>
+      </div>
+      <p style="margin: 10px 0 0; font-size: 13px; color: #B9B0A6;">Quiet light weight for anything the app says (time, translations, transcripts); loud heavy weight only for place names. Clipped names step down 66 → 58 → 50 px by length, so the first word always stays readable.</p>
+    </section>
+  </div>
+
+  <section aria-label="Scene tiles">
+    <h2 style="margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #B9B0A6;">SCENE TILES · DRAWN IN CODE, ONE PER CATEGORY, NO PHOTOS</h2>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+      <div><div style="position: relative; height: 110px; border-radius: 22px; overflow: hidden; background: #2D4A63;"><svg aria-hidden="true" viewBox="0 0 220 110" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%;"><path d="M0 70 C60 58 120 66 220 60 L220 110 L0 110 Z" fill="#3E6587"></path><g fill="#5C86A8"><path d="M16 110 L16 80 A18 18 0 0 1 52 80 L52 110 Z"></path><path d="M92 110 L92 80 A18 18 0 0 1 128 80 L128 110 Z"></path><path d="M168 110 L168 80 A18 18 0 0 1 204 80 L204 110 Z"></path></g></svg></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Arches</div><div style="font-size: 12px; color: #B9B0A6;">landmarks, plazas, palaces</div></div>
+      <div><div style="position: relative; height: 110px; border-radius: 22px; overflow: hidden; background: #5A3A2A;"><svg aria-hidden="true" viewBox="0 0 220 110" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%;"><g fill="#7A4E36"><path d="M0 58 L36 38 L72 58 Z"></path><path d="M74 58 L110 38 L146 58 Z"></path><path d="M148 58 L184 38 L220 58 Z"></path></g><rect x="0" y="58" width="220" height="52" fill="#6B4430"></rect></svg></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Awnings</div><div style="font-size: 12px; color: #B9B0A6;">markets, tapas, bars</div></div>
+      <div><div style="position: relative; height: 110px; border-radius: 22px; overflow: hidden; background: #3F3A2B;"><svg aria-hidden="true" viewBox="0 0 220 110" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%;"><circle cx="170" cy="36" r="22" fill="#5E563D"></circle><rect x="0" y="84" width="220" height="26" fill="#4E4733"></rect><path d="M60 84 L63 60 L95 60 L98 84 Z" fill="#5E563D"></path><path d="M96 65 C108 65 108 78 96 78" fill="none" stroke="#5E563D" stroke-width="4"></path></svg></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Cup</div><div style="font-size: 12px; color: #B9B0A6;">cafés, bakeries</div></div>
+      <div><div style="position: relative; height: 110px; border-radius: 22px; overflow: hidden; background: #3D2F45;"><svg aria-hidden="true" viewBox="0 0 220 110" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%;"><rect x="0" y="84" width="220" height="26" fill="#4C3B56"></rect><path d="M150 84 L150 30 L155 30 L155 20 L160 12 L165 20 L165 30 L170 30 L170 84 Z" fill="#6D5577"></path><path d="M70 84 L70 66 C78 54 98 54 106 66 L106 84 Z" fill="#6D5577"></path></svg></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">Tower</div><div style="font-size: 12px; color: #B9B0A6;">churches, museums</div></div>
+      <div><div style="position: relative; height: 110px; border-radius: 22px; overflow: hidden; background: #1F3D44;"><svg aria-hidden="true" viewBox="0 0 220 110" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%;"><path d="M0 66 C50 56 100 76 150 66 C190 58 210 70 220 66 L220 110 L0 110 Z" fill="#2E5A63"></path><path d="M0 88 C50 78 100 98 150 88 C190 80 210 92 220 88" fill="none" stroke="#5B8E98" stroke-width="3"></path></svg></div><div style="font-size: 14px; font-weight: 700; margin-top: 8px;">River</div><div style="font-size: 12px; color: #B9B0A6;">riverside, bridges, views</div></div>
+    </div>
+  </section>
+
+  <section aria-label="Components">
+    <h2 style="margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #B9B0A6;">COMPONENTS</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+
+      <div style="background: #1A1B22; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 16px; font-weight: 700;">PlaceCard</div>
+        <div style="position: relative; height: 148px; border-radius: 28px; overflow: hidden; background: #5A3A2A;">
+          <svg aria-hidden="true" viewBox="0 0 340 148" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%;"><g fill="#7A4E36"><path d="M0 76 L42 52 L84 76 Z"></path><path d="M86 76 L128 52 L170 76 Z"></path><path d="M172 76 L214 52 L256 76 Z"></path><path d="M258 76 L300 52 L342 76 Z"></path></g><rect x="0" y="76" width="340" height="72" fill="#6B4430"></rect></svg>
+          <span style="position: absolute; left: 14px; top: 14px; padding: 6px 12px; border-radius: 999px; background: rgba(14,15,20,0.5); border: 1px solid rgba(255,255,255,0.28); font-size: 12px; font-weight: 700;">16 min walk</span>
+          <span style="position: absolute; left: 16px; right: 40px; top: 50px; font-size: 13px; line-height: 1.35; font-weight: 600;">You said street food. Covered if it rains.</span>
+          <span style="position: absolute; left: 10px; bottom: -12px; font-size: 58px; font-weight: 800; letter-spacing: -0.055em; line-height: 1; white-space: nowrap; color: rgba(255,255,255,0.9);">Triana Market</span>
+        </div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #B9B0A6;">Parts: tile · walk pill · rank · reason · name. Walk time and name come from code instantly; the reason streams from Bonsai-2, or code writes one if the model fails. Whole card is a link to the place.</p>
+      </div>
+
+      <div style="background: #1A1B22; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 16px; font-weight: 700;">TimeChips + TabBar</div>
+        <div style="display: flex; gap: 6px; padding: 12px; border-radius: 18px; background: linear-gradient(180deg, #24507E, #5F86AC);">
+          <span style="flex: 1; height: 38px; border-radius: 999px; background: rgba(14,15,20,0.38); border: 1px solid rgba(255,255,255,0.28); display: grid; place-items: center; font-size: 12px; font-weight: 700;">Morning</span>
+          <span style="flex: 1; height: 38px; border-radius: 999px; background: #F4EFE8; color: #0E0F14; display: grid; place-items: center; font-size: 12px; font-weight: 700;">Afternoon</span>
+          <span style="flex: 1; height: 38px; border-radius: 999px; background: rgba(14,15,20,0.38); border: 1px solid rgba(255,255,255,0.28); display: grid; place-items: center; font-size: 12px; font-weight: 700;">Rain</span>
+        </div>
+        <div style="align-self: center; display: flex; align-items: center; gap: 2px; padding: 6px; border-radius: 999px; background: rgba(30,31,38,0.8); border: 1px solid rgba(255,255,255,0.18);">
+          <span style="padding: 12px 14px; border-radius: 999px; background: rgba(255,255,255,0.16); font-size: 12px; font-weight: 700;">Now</span>
+          <span style="padding: 12px 10px; font-size: 12px; font-weight: 600; color: #E4DCD2;">Map</span>
+          <span style="padding: 12px 10px; font-size: 12px; font-weight: 600; color: #E4DCD2;">Plan</span>
+          <span style="padding: 12px 10px; font-size: 12px; font-weight: 600; color: #E4DCD2;">Talk</span>
+          <span style="width: 42px; height: 42px; border-radius: 50%; background: #E9C9A0;"></span>
+        </div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #B9B0A6;">Time chips are a radiogroup and the spec’s “set the time” control: picking one re-scores and repaints the sky. In the real app it is a scrubber with the same four stops. Tab bar floats 26 px up, glass, mic always last.</p>
+      </div>
+
+      <div style="background: #1A1B22; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 16px; font-weight: 700;">Mic</div>
+        <div style="display: flex; gap: 22px; align-items: flex-end; justify-content: center; padding: 14px 0;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;"><span style="width: 52px; height: 52px; border-radius: 50%; background: #E9C9A0;"></span><span style="font-size: 12px; color: #B9B0A6;">idle</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;"><span style="width: 52px; height: 52px; border-radius: 50%; background: #E9C9A0; box-shadow: 0 0 0 9px rgba(233,201,160,0.16), 0 0 0 18px rgba(233,201,160,0.07);"></span><span style="font-size: 12px; color: #B9B0A6;">listening</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;"><span style="width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid #E9C9A0; box-sizing: border-box;"></span><span style="font-size: 12px; color: #B9B0A6;">thinking</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;"><span style="width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; gap: 3px;"><span style="width: 4px; height: 10px; border-radius: 2px; background: #E9C9A0;"></span><span style="width: 4px; height: 20px; border-radius: 2px; background: #E9C9A0;"></span><span style="width: 4px; height: 14px; border-radius: 2px; background: #E9C9A0;"></span></span><span style="font-size: 12px; color: #B9B0A6;">speaking</span></div>
+        </div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #B9B0A6;">Hold to talk. Words appear as they are heard: understood ones turn sand and bold, pending ones stay dim. Muted while speaking. No audio helper: becomes a text field.</p>
+      </div>
+
+      <div style="background: #1A1B22; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 16px; font-weight: 700;">Buttons</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+          <button type="button" style="height: 50px; padding: 0 24px; border-radius: 999px; border: 0; background: #F4EFE8; color: #0E0F14; font-size: 14px; font-weight: 800;">Add to day</button>
+          <button type="button" style="height: 50px; padding: 0 24px; border-radius: 999px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.32); color: #F4EFE8; font-size: 14px; font-weight: 700;">Get started</button>
+          <button type="button" aria-label="Show on map" style="width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.22); color: #F4EFE8; display: grid; place-items: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"></path></svg></button>
+        </div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #B9B0A6;">One white primary per screen. Glass for secondary. Icon circles always labelled. All targets 44 px or more.</p>
+      </div>
+
+      <div style="background: #1A1B22; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 16px; font-weight: 700;">MapPin</div>
+        <div style="display: flex; gap: 26px; align-items: center; justify-content: center; padding: 14px; border-radius: 18px; background: #12141B;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><span style="width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid #E9C9A0; box-sizing: border-box;"></span><span style="font-size: 11px; color: #B9B0A6;">plan</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><span style="width: 28px; height: 28px; border-radius: 50%; background: rgba(233,201,160,0.25); border: 1.5px solid #E9C9A0; box-sizing: border-box; display: grid; place-items: center; font-size: 12px; font-weight: 800;">2</span><span style="font-size: 11px; color: #B9B0A6;">suggested</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><span style="width: 38px; height: 38px; border-radius: 50%; background: #E9C9A0; color: #0E0F14; box-shadow: 0 0 24px 4px rgba(233,201,160,0.35); display: grid; place-items: center; font-size: 13px; font-weight: 800;">1</span><span style="font-size: 11px; color: #B9B0A6;">chosen</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><span style="width: 18px; height: 18px; border-radius: 50%; background: #8FB8FF; box-shadow: 0 0 0 8px rgba(143,184,255,0.18);"></span><span style="font-size: 11px; color: #B9B0A6;">you</span></div>
+        </div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #B9B0A6;">Dark map tiles with low-contrast streets so pins glow. Dashed sand path to the chosen place; no turn-by-turn.</p>
+      </div>
+
+      <div style="background: #1A1B22; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 16px; font-weight: 700;">GuideAnswer + Offline chip</div>
+        <div style="padding: 14px; border-radius: 20px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 12px; color: #B9B0A6;">You asked: <span style="color: #F4EFE8; font-weight: 600;">“Is it open now?”</span></div>
+          <div style="font-size: 14px; font-weight: 500;">My guide doesn’t say. I only answer from what’s on this phone.</div>
+          <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: #B9B0A6;">NOT IN YOUR SEVILLE GUIDE</div>
+        </div>
+        <span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.24); font-size: 11px; font-weight: 700;"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: #E9C9A0;"></span>Offline</span>
+        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #B9B0A6;">Every answer shows its source line, including the honest “not in your guide”. The Offline chip sits top-right on every screen.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Motion" style="display: flex; flex-wrap: wrap; gap: 24px; font-size: 14px; line-height: 1.6; color: #E4DCD2;">
+    <div style="flex: 1 1 260px;"><b style="color: #F4EFE8;">Sky · 600 ms</b><br>Crossfade gradients; sun and moon glide along an arc from sunrise to sunset.</div>
+    <div style="flex: 1 1 260px;"><b style="color: #F4EFE8;">Re-plan · 240 ms</b><br>Old cards sink and fade, new ones rise in order. The demo’s money shot.</div>
+    <div style="flex: 1 1 260px;"><b style="color: #F4EFE8;">Streaming</b><br>Whole words land; never per-letter. Pending words dim, then brighten.</div>
+    <div style="flex: 1 1 260px;"><b style="color: #F4EFE8;">Reduce motion</b><br>Sky snaps, cards swap in place, nothing glides.</div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
