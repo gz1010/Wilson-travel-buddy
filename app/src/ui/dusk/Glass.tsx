@@ -1,7 +1,7 @@
-import { BlurView } from '@react-native-community/blur';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import { Blur } from './Blur';
+import { LinearGradient } from './Gradient';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useReduceMotion } from './motion';
 import { dusk, font, glass, white, type GlassKind } from './tokens';
@@ -28,7 +28,7 @@ export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, 
   return (
     <View style={[{ borderRadius: radius, shadowColor: '#000', shadowOpacity: g.shadow, shadowRadius: 16, shadowOffset: { width: 0, height: 12 } }, style]}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
-        {blur && <BlurView style={StyleSheet.absoluteFill} blurType="ultraThinMaterialDark" blurAmount={g.blur} reducedTransparencyFallbackColor={dusk.color.raised} />}
+        {blur && <Blur style={StyleSheet.absoluteFill} />}
         {kind === 'orb' ? (
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
             <Defs>

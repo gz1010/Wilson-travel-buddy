@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, View, type ImageStyle, type StyleProp, type ViewStyle } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import { LinearGradient } from './Gradient';
 import { sceneFor, TIMES_OF_DAY } from '../../core/look';
 import type { Place, TimeOfDay } from '../../core/types';
 import { heroPhotos, placePhotos } from '../../pack/seville/photos';

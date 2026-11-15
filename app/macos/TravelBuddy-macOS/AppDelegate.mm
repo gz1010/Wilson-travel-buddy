@@ -1,7 +1,27 @@
 #import "AppDelegate.h"
 
 #import <React/RCTBundleURLProvider.h>
+#import <React/RCTViewManager.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
+
+// BuddyBlurView: the Mac's own blur (NSVisualEffectView), for the Dusk liquid-glass design.
+// It blurs whatever is behind it inside the window. Used by src/ui/dusk/Glass.tsx; no
+// React Native blur library supports macOS.
+@interface BuddyBlurViewManager : RCTViewManager
+@end
+
+@implementation BuddyBlurViewManager
+RCT_EXPORT_MODULE(BuddyBlurView)
+- (NSView *)view
+{
+  NSVisualEffectView *view = [NSVisualEffectView new];
+  view.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+  view.material = NSVisualEffectMaterialHUDWindow;
+  view.state = NSVisualEffectStateActive;
+  view.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+  return view;
+}
+@end
 
 @implementation AppDelegate
 
@@ -13,7 +33,20 @@
   self.initialProps = @{};
   self.dependencyProvider = [RCTAppDependencyProvider new];
   
-  return [super applicationDidFinishLaunching:notification];
+  [super applicationDidFinishLaunching:notification];
+
+  // The Dusk design is laid out for a phone: open a phone-shaped window.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSWindow *window = NSApplication.sharedApplication.windows.firstObject;
+    if (window == nil) {
+      return;
+    }
+    [window setContentSize:NSMakeSize(430, 900)];
+    window.contentMinSize = NSMakeSize(390, 700);
+    window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+    window.backgroundColor = [NSColor colorWithRed:14 / 255.0 green:15 / 255.0 blue:20 / 255.0 alpha:1];
+    [window center];
+  });
 }
 
 - (NSURL *)sourceURLForBridge:(RCTBridge *)bridge
