@@ -121,13 +121,14 @@ at this size (100 places, a few hundred facts) no database is needed.
 The app is three local processes that talk over 127.0.0.1, which works with
 Wi-Fi off:
 
-- **The app:** React Native 0.81 in TypeScript. All screens and all logic
+- **The app:** React Native for macOS (react-native-macos 0.81) in
+  TypeScript, reaching both helpers on 127.0.0.1. All screens and all logic
   live here: trip extraction, scoring, recommendations, the guide,
-  translation prompts. The "Dusk · liquid glass" design is a phone design,
-  so it runs as an iOS app in the iPhone Simulator on the Mac (Wi-Fi off;
-  the Simulator shares the Mac's localhost with the helpers). The earlier
-  three-column layout still builds as a macOS app (react-native-macos) and
-  stays the fallback until the iOS screens are verified.
+  translation prompts. The "Dusk · liquid glass" design is drawn for a
+  phone; on the Mac it opens in a phone-shaped window. Its blur is the Mac's
+  own (NSVisualEffectView, a small native view in the app), gradients and
+  glass letters are SVG. The earlier three-column layout stays as the
+  fallback (`UI_DESIGN` in `app/src/config.ts`).
 - **Bonsai-2:** PrismML's `llama-server` with the GGUF model, called over
   its OpenAI-compatible HTTP API with streaming. Benchmark the 2B, 4B, and
   9B variants on the Apple Silicon Mac early and report the numbers.

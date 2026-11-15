@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Starts the two local helpers, then the app. This is what runs on camera.
 #   scripts/start.sh                # helpers, then Metro and the Mac app in debug (Metro must be running for a debug build)
-#   scripts/start.sh --ios          # helpers, then Metro and the Dusk design in the iPhone Simulator
-#                                   #   (set UI_DESIGN = 'dusk' in app/src/config.ts; SIM="iPhone 17 Pro" picks a simulator)
 #   scripts/start.sh --app PATH     # helpers, then a built TravelBuddy.app
 # Ctrl-C stops the helpers.
 set -euo pipefail
@@ -22,10 +20,9 @@ if [ "${1:-}" != "--app" ]; then
     echo "  cd \"$ROOT/app\" && npm install && cd macos && pod install"
     exit 1
   fi
-  PODS_DIR="$ROOT/app/macos/Pods"; [ "${1:-}" = "--ios" ] && PODS_DIR="$ROOT/app/ios/Pods"
-  if [ ! -d "$PODS_DIR" ]; then
+  if [ ! -d "$ROOT/app/macos/Pods" ]; then
     echo "CocoaPods have not been installed for the app. Run once:"
-    echo "  cd \"$(dirname "$PODS_DIR")\" && pod install"
+    echo "  cd \"$ROOT/app/macos\" && pod install"
     exit 1
   fi
 fi
@@ -89,12 +86,7 @@ else
       sleep 1
     done
   fi
-  if [ "${1:-}" = "--ios" ]; then
-    # The Simulator shares the Mac's localhost, so the app reaches both helpers as on macOS.
-    cd "$ROOT/app" && if [ -n "${SIM:-}" ]; then npx react-native run-ios --simulator "$SIM"; else npm run ios; fi
-  else
-    cd "$ROOT/app" && npm run macos
-  fi
+  cd "$ROOT/app" && npm run macos
   echo "App opened. Press Ctrl-C here to stop Metro and the helpers when done."
   wait
 fi
