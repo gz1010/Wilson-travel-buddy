@@ -10,9 +10,10 @@ import { dusk, font, ground } from '../dusk/tokens';
 import type { ScreenProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
 
-// AntTalk: the conversation translator. The phone lies flat between two people. The top half
-// is the local's, rotated 180° so it reads the right way up for them; the bottom half is the
-// traveller's. Argmax hears both and labels who is speaking; Bonsai-2 translates each finished
+// AntTalk: Translate, the conversation translator. The phone lies flat between two people. The
+// top half is the local's, rotated 180° so it reads the right way up for them; the bottom half is
+// the traveller's. A fixed band between them holds the status pill, and the bottom ~100 px is
+// left for the tab bar (DuskRoot draws it). Argmax hears both and labels who is speaking; Bonsai-2 translates each finished
 // sentence and Argmax speaks it in the other language. The logic is adapted from the classic
 // src/ui/translator/TranslatorScreen.tsx (SideAssigner, turn ids, push-to-talk, muting).
 
@@ -33,10 +34,23 @@ type Mode = 'auto' | 'push';
 
 const HOME: Lang = 'en';
 const PHONE_W = dusk.layout.phoneWidth;
-const PHONE_H = dusk.layout.phoneHeight;
-/** The status pill's centre in the mockup (390×844). */
-const PILL_Y = 385;
 const PILL_H = 52;
+/** The band between the halves that the status pill sits in; neither half's text goes into it. */
+const BAND_H = 72;
+/** Room left at the bottom for the floating tab bar. */
+const TAB_BAR_ROOM = 100;
+const LOCAL_SIZE = 38;
+const TRAVELER_SIZE = 32;
+
+/**
+ * The local's half, flipped. On macOS a layer's anchor point is its top-left corner, and
+ * RCTView's redisplay corrects for that by re-reading layer.transform and recentring it every
+ * time it redraws (RCTView.m displayLayer). After a resize that correction is applied a second
+ * time, so a plain rotate drifts out of the half. With an explicit transformOrigin, UIView+React
+ * resets the transform on every frame change first (reactSetFrame → updateTransform), so each
+ * redraw corrects it exactly once. The opaque background keeps it one simple, constant layer.
+ */
+const FLIPPED = { transform: [{ rotate: '180deg' }], transformOrigin: '50% 50%' } as const;
 
 /** Copy for the local's half: Spanish when the local language is Spanish, English otherwise. */
 function localCopy(local: Lang) {
@@ -253,7 +267,7 @@ export function TalkScreen({ b, nav }: ScreenProps) {
   const talking = holding ?? live?.side;
   const code = (l: Lang) => l.toUpperCase();
   const status = !running
-    ? 'Tap to start'
+    ? 'Tap to start translating'
     : talking
       ? `${talking === 'traveler' ? 'Traveller' : 'Receiver'} is talking · ${talking === 'traveler' ? `${code(HOME)} → ${code(local)}` : `${code(local)} → ${code(HOME)}`}`
       : playing
@@ -263,7 +277,14 @@ export function TalkScreen({ b, nav }: ScreenProps) {
           : 'Listening…';
 
   const audioModel = audio.info.models[0];
-  const pillTop = Math.round((height * PILL_Y) / PHONE_H - PILL_H / 2);
+  // Each half's height, and how many lines of the big text fit in it after its other rows (label,
+  // the original in quotes, the speaker label, and the hold button or footer). Long translations
+  // shrink to fit (adjustsFontSizeToFit) and are cut at that many lines instead of overlapping.
+  const halfH = Math.max(0, (height - BAND_H - TAB_BAR_ROOM) / 2);
+  const holdRoom = mode === 'push' ? dusk.size.button + 10 : 0;
+  const fit = (size: number, reserved: number) => Math.max(1, Math.min(4, Math.floor((halfH - reserved) / Math.round(size * 1.1))));
+  const localLines = fit(LOCAL_SIZE, 24 + 26 + 40 + 16 + holdRoom);
+  const travelerLines = fit(TRAVELER_SIZE, 16 + 26 + 40 + 16 + 52 + holdRoom);
   const holdLabel = (who: Side) => {
     const mine = holding === who;
     if (who === 'traveler') return mine ? (playing ? 'Wait: playing the translation…' : 'Listening… release when done') : `Hold to speak ${LANG_NAMES[HOME]}`;
@@ -271,16 +292,18 @@ export function TalkScreen({ b, nav }: ScreenProps) {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingBottom: TAB_BAR_ROOM }]}>
       {/* The local's half, upside down so it faces them across the phone. */}
-      <View accessibilityLabel={copy.half} style={[styles.half, { transform: [{ rotate: '180deg' }] }]}>
-        <View style={{ position: 'absolute', left: side, right: side, bottom: mode === 'push' ? 36 : 56, gap: 10 }}>
+      <View style={styles.half}>
+        <View accessibilityLabel={copy.half} style={[styles.flipped, FLIPPED]}>
+        <View style={{ position: 'absolute', left: side, right: side, bottom: 24, gap: 10 }}>
           <Text style={[styles.label, { color: dusk.color.textSoft }]}>{copy.label}</Text>
           <Utterance
             turn={traveler}
             live={live?.side === 'traveler' ? live.text : undefined}
             empty={copy.empty}
-            size={38}
+            size={LOCAL_SIZE}
+            lines={localLines}
             lang={local}
             originalLang={HOME}
             originalColor={dusk.color.textSoft}
@@ -290,17 +313,41 @@ export function TalkScreen({ b, nav }: ScreenProps) {
             <HoldButton label={holdLabel('local')} active={holding === 'local'} disabled={!running} onPressIn={() => press('local')} onPressOut={() => release('local')} />
           )}
         </View>
+        </View>
+      </View>
+
+      {/* The band between the halves: a hairline divider with the status pill on it. Tap the
+          pill to start or stop; the orb ends the conversation. */}
+      <View style={styles.band}>
+        <View style={styles.divider} />
+        <Glass kind="clear" radius={dusk.radius.pill} style={[styles.pill, { maxWidth: width - 2 * side }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={running ? `${status}. Stop translating` : 'Start translating'}
+            onPress={toggle}
+            hitSlop={8}
+            style={styles.pillTap}>
+            <Wave level={level} active={running} />
+            <Text style={[onGlass, font('700'), styles.pillText]} numberOfLines={1}>
+              {status}
+            </Text>
+          </Pressable>
+          <GlassIconButton accessibilityLabel="End translation" onPress={close} size={36} blur={false}>
+            <CloseIcon size={13} strokeWidth={2.6} />
+          </GlassIconButton>
+        </Glass>
       </View>
 
       {/* The traveller's half. */}
-      <View accessibilityLabel="For you" style={[styles.half, { paddingTop: 56, paddingHorizontal: side, paddingBottom: 34, gap: 10 }]}>
+      <View accessibilityLabel="For you" style={[styles.half, { paddingTop: 16, paddingHorizontal: side, paddingBottom: 12, gap: 10 }]}>
         <Glow />
         <Text style={[styles.label, { color: dusk.color.text2 }]}>THE LOCAL SAYS</Text>
         <Utterance
           turn={localTurn}
           live={live?.side === 'local' ? live.text : undefined}
           empty="What the local says appears here, in English."
-          size={32}
+          size={TRAVELER_SIZE}
+          lines={travelerLines}
           lang={HOME}
           originalLang={local}
           originalColor={dusk.color.text2}
@@ -324,26 +371,6 @@ export function TalkScreen({ b, nav }: ScreenProps) {
           </View>
         </View>
       </View>
-
-      {/* The glass status pill between the halves: tap to start or stop; the orb ends the conversation. */}
-      <View pointerEvents="box-none" style={[styles.pillRow, { top: pillTop }]}>
-        <Glass kind="clear" radius={dusk.radius.pill} style={[styles.pill, { maxWidth: width - 2 * side }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={running ? `${status}. Stop listening` : 'Start the conversation'}
-            onPress={toggle}
-            hitSlop={8}
-            style={styles.pillTap}>
-            <Wave level={level} active={running} />
-            <Text style={[onGlass, font('700'), styles.pillText]} numberOfLines={1}>
-              {status}
-            </Text>
-          </Pressable>
-          <GlassIconButton accessibilityLabel="End conversation" onPress={close} size={36} blur={false}>
-            <CloseIcon size={13} strokeWidth={2.6} />
-          </GlassIconButton>
-        </Glass>
-      </View>
     </View>
   );
 }
@@ -358,6 +385,7 @@ function Utterance({
   live,
   empty,
   size,
+  lines,
   lang,
   originalLang,
   originalColor,
@@ -367,6 +395,8 @@ function Utterance({
   live?: string;
   empty: string;
   size: number;
+  /** How many lines of the big text fit in this half. */
+  lines: number;
   lang: Lang;
   originalLang?: Lang;
   originalColor: string;
@@ -391,7 +421,7 @@ function Utterance({
   }
   return (
     <>
-      <Text accessibilityLiveRegion="polite" accessibilityLanguage={live || !turn?.translation ? originalLang : lang} style={big} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.6}>
+      <Text accessibilityLiveRegion="polite" accessibilityLanguage={live || !turn?.translation ? originalLang : lang} style={big} numberOfLines={lines} adjustsFontSizeToFit minimumFontScale={0.5}>
         {main}
       </Text>
       {turn && !live && (
@@ -471,6 +501,9 @@ function Glow() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: dusk.color.ground },
   half: { flex: 1, overflow: 'hidden' },
+  flipped: { ...StyleSheet.absoluteFillObject, backgroundColor: dusk.color.ground },
+  band: { height: BAND_H, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  divider: { position: 'absolute', left: 0, right: 0, top: BAND_H / 2, height: StyleSheet.hairlineWidth, backgroundColor: dusk.color.text2, opacity: 0.35 },
   label: { ...font('800'), fontSize: dusk.font.label.size, letterSpacing: dusk.font.label.letterSpacing },
   big: {
     ...font('300'),
@@ -483,7 +516,6 @@ const styles = StyleSheet.create({
   speaker: { ...font('700'), fontSize: 11, color: dusk.color.text2, letterSpacing: 0.4 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   footerText: { ...font('600'), flex: 1, fontSize: 11, color: dusk.color.text2 },
-  pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 1 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingLeft: 16, paddingRight: 8, height: PILL_H },
   pillTap: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, minHeight: 36 },
   pillText: { fontSize: 12, flexShrink: 1 },
