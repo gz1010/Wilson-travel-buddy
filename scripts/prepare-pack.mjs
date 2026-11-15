@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Prepares a city pack in one go while you have Wi-Fi, so the app can then run with it off:
-// Wikipedia facts, Commons photos, the Open-Meteo forecast, the OpenStreetMap tiles and IGN's
-// aerial photos.
+// Wikipedia facts (and more from the articles' sections), Commons photos, the Open-Meteo
+// forecast, the OpenStreetMap tiles, the nearby places made from them, and IGN's aerial photos.
 //
 //   node scripts/prepare-pack.mjs                     # Seville
 //   node scripts/prepare-pack.mjs --dest seville
-//   node scripts/prepare-pack.mjs --skip tiles        # any of: facts, photos, forecast, tiles, aerial
-//   node scripts/prepare-pack.mjs --cache /tmp/wm     # reuse Wikimedia answers (and aerial tiles, in aerial/) saved there by an earlier run
+//   node scripts/prepare-pack.mjs --skip tiles        # any of: facts, more-facts, photos, forecast, tiles, nearby, aerial
+//   node scripts/prepare-pack.mjs --cache /tmp/wm     # reuse Wikimedia answers (and OSM answers in osm/, aerial tiles in aerial/) saved there by an earlier run
 //   node scripts/prepare-pack.mjs --itinerary trip.ics   # add the places a trip names that the pack lacks (.ics or text)
 //
 // It runs fetch-facts.mjs, deepen-facts.mjs, build-photos.mjs, fetch-forecast.mjs, build-tiles.mjs,
@@ -15,7 +15,7 @@
 // step, carries on past a step that fails, and then writes app/src/pack/<dest>/prepared.json,
 // counted from what is actually in the pack: { preparedAt, places, facts, wikiFacts, photos,
 // heroes, tiles, aerial, forecastFrom, forecastTo, steps } (aerial: photo tiles for the map's
-// Aerial layer). The Welcome screen shows it ("Seville guide prepared Nov 14 · …").
+// Aerial layer). The home's city card shows it ("60 places · ready offline", "Prepared Nov 15 · …").
 // preparedAt only moves when at least one step succeeded.
 //
 // --itinerary reads an iCalendar file or a plain-text itinerary (scripts/itinerary.mjs; dry run:
@@ -24,13 +24,16 @@
 // indoor, visit length and hours from OSM's tags and needsReview: true, then runs the facts and
 // photos steps for those places only (--only) and makes each one's summary the first sentence or
 // two of its Wikipedia fact. A name that is a pack place under another name only becomes an alias
-// of it. The forecast, tiles and aerial steps do not run (new places lie inside the map already).
+// of it. The more-facts, forecast, tiles, nearby and aerial steps do not run (new places lie
+// inside the map already).
 // prepared.json gets { itinerary: { file, at, added, notFound, aliased, steps } }; its other
 // steps and preparedAt stay as the last full run left them.
 //
-// Wikimedia allows 10 API requests a minute to clients without contact details, so the facts
-// and photos steps pace themselves (about 20 minutes for Seville). Set WIKIMEDIA_CONTACT to an
-// email or URL to go faster; see fetch-facts.mjs.
+// Wikimedia allows 10 API requests a minute to clients without contact details, so the facts,
+// more-facts and photos steps pace themselves (about 26 minutes for Seville's 60 places). Set
+// WIKIMEDIA_CONTACT to an email or URL to go faster; see fetch-facts.mjs and the README's
+// "Prepare before you travel". Outside Spain the aerial step fails (IGN covers Spain only) and the
+// run reports it; the other steps still run.
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

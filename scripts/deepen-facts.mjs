@@ -54,6 +54,8 @@ let gapMs = contact ? 200 : 6500;
 let lastRequest = 0;
 let requests = 0;
 let answered = 0;
+/** True after a request gave up on the network; reset by the next answer. */
+let lostNetwork = false;
 
 async function getJson(url) {
   const cached = cacheDir && join(cacheDir, createHash('sha1').update(url).digest('hex') + '.json');
@@ -74,10 +76,17 @@ async function getJson(url) {
         console.log(`Cannot reach Wikipedia (${e.cause?.code ?? e.message}). Nothing changed; run this again while online.`);
         process.exit(1);
       }
+      // Wi-Fi gone mid-run: give up on this request after a few tries instead of waiting forever,
+      // and after that try each request once (it carries on if the connection comes back).
+      if (attempt >= (lostNetwork ? 0 : 4)) {
+        lostNetwork = true;
+        throw new Error(`cannot reach ${new URL(url).host} (${e.cause?.code ?? e.message})`);
+      }
       await sleep(2000 * (attempt + 1));
       continue;
     }
     answered++;
+    lostNetwork = false;
     if (res.ok) {
       const body = await res.json();
       if (cached) {
