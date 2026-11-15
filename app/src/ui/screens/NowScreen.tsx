@@ -3,7 +3,7 @@ import { Animated, Easing, PanResponder, Pressable, ScrollView, StyleSheet, Text
 import { dayTimeline, forecastDates, pickDistinct, placeBefore, planDays, reasonWithoutWalk, stopSpan, type PlanDay, type TimelineRow } from '../../core/dayplan';
 import { timeOfDay } from '../../core/look';
 import { templateReason } from '../../core/scoring';
-import { formatHHMM } from '../../core/time';
+import { addDays, formatHHMM } from '../../core/time';
 import { stopsOn, tripDay } from '../../core/trip';
 import type { Place, Recommendation, Situation, Stop } from '../../core/types';
 import { heroPhotos } from '../../pack/seville/photos';
@@ -19,6 +19,7 @@ import { PhotoFade, PlacePhoto, placePhotoSource } from '../dusk/Photos';
 import { useScreenSize } from '../dusk/Screen';
 import { HomeLink } from '../dusk/Nav';
 import { CloseIcon } from '../dusk/Icons';
+import { UndoToast, useUndo } from '../dusk/UndoToast';
 import { dusk, font, ground, white } from '../dusk/tokens';
 import type { Buddy, ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
@@ -176,6 +177,14 @@ export function NowScreen({ b, nav }: ScreenProps) {
             {weather}
           </Text>
         </View>
+        {/* The clock is Seville's real time; after Wilson or the time controls move it, one tap goes back. */}
+        {b.clockMoved ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Back to the real time in the city" onPress={b.clockToNow} {...axPress(b.clockToNow)} style={({ pressed }) => [styles.nowPillWrap, { marginLeft: 22 * sx, opacity: pressed ? 0.75 : 1 }]}>
+            <Glass kind="clear" radius={999} style={styles.nowPill}>
+              <Text style={[onGlass, font('700'), { fontSize: 12 }]}>Back to real time</Text>
+            </Glass>
+          </Pressable>
+        ) : null}
         <Text style={[styles.models, font('500'), { marginHorizontal: 22 * sx }]} numberOfLines={2}>
           {models}
         </Text>
@@ -291,6 +300,30 @@ function DayTimeline({ b, onOpen, onChat, day, sx, width }: { b: Buddy; onOpen: 
   const { clock, location, visited } = b.situation;
   const trip = b.trip;
   const today = day.date === clock.date;
+
+  // Changing the plan for the day on screen: a suggestion's Add puts it at its row's time (or the
+  // first free time from now), a planned stop's ✕ takes it off; both say what happened, with Undo.
+  const undo = useUndo(b.trip);
+  const addToDay = (place: Place, minute?: number) => {
+    const before = b.trip;
+    b.addToTrip(place.id, { date: day.date, start: minute === undefined ? undefined : formatHHMM(minute) })
+      .then(t => {
+        // A trip can only stretch so far: a day it can't take is said, not quietly moved.
+        if (!t?.stops.some(s => s.placeId === place.id && addDays(t.startDate, s.day - 1) === day.date)) {
+          if (t !== before) b.restoreTrip(before).catch(() => {});
+          undo.show(`${day.label} is too far from your trip to add ${place.name}`);
+          return;
+        }
+        undo.show(`Added ${place.name} to ${day.label}`, () => b.restoreTrip(before).catch(() => {}), t);
+      })
+      .catch(() => {});
+  };
+  const removeFromDay = (stop: Stop) => {
+    const before = b.trip;
+    b.removeStop(stop.id)
+      .then(t => undo.show(`Removed ${stop.title} from ${day.label}`, () => b.restoreTrip(before).catch(() => {}), t))
+      .catch(() => {});
+  };
   const reduce = useReduceMotion();
   const stops = useMemo(() => (trip ? stopsOn(trip, day.date) : []), [trip, day.date]);
   const rows = useMemo(() => dayRows(stops, today ? clock.minute : undefined), [stops, today, clock.minute]);
@@ -356,8 +389,8 @@ function DayTimeline({ b, onOpen, onChat, day, sx, width }: { b: Buddy; onOpen: 
     setBoxes(prev => (prev[row.key]?.y === y && prev[row.key]?.h === height ? prev : { ...prev, [row.key]: { y, h: height } }));
     // On today, open at "now" (stops earlier in the day stay above it), and follow it when the
     // clock is set elsewhere. The glass names follow too, in case the scroll sends no event.
-    if (row.now && scrolledTo.current !== clock.minute) {
-      scrolledTo.current = clock.minute;
+    if (row.now && scrolledTo.current !== b.clockGen) {
+      scrolledTo.current = b.clockGen;
       const to = Math.max(0, y - 8);
       if (Date.now() - movedAt.current < MOVE_SETTLE) {
         // Wilson moved along the day: the view stays, unless his new time is out of it.
@@ -501,6 +534,17 @@ function DayTimeline({ b, onOpen, onChat, day, sx, width }: { b: Buddy; onOpen: 
             <WilsonSays b={b} from={from} intro={false} onChat={onChat} onClose={() => setFrom(b.chat.length)} style={styles.awaySays} />
           </>
         ) : null}
+        {/* Which is which: what you planned, and ideas Wilson suggests that you can add. */}
+        {!empty ? (
+          <View style={styles.legend} accessible accessibilityLabel="Your plan has a tick; suggestions have an Add button">
+            <View style={styles.legendTick}>
+              <Text style={[styles.legendTickText, font('800')]}>✓</Text>
+            </View>
+            <Text style={[styles.legendText, font('600')]}>Your plan</Text>
+            <Text style={[styles.legendText, styles.legendGap, font('800')]}>+</Text>
+            <Text style={[styles.legendText, font('600')]}>Suggestions you can add</Text>
+          </View>
+        ) : null}
         {empty ? (
           <Glass kind="clear" style={styles.empty}>
             <Text style={[onGlass, font('700'), { fontSize: 15 }]}>Nothing planned or open on {day.label}</Text>
@@ -521,11 +565,20 @@ function DayTimeline({ b, onOpen, onChat, day, sx, width }: { b: Buddy; onOpen: 
                     {row.now ? <WilsonSays b={b} from={from} intro={intro} onChat={onChat} onClose={() => setFrom(b.chat.length)} /> : null}
                     {row.stops.map(s => {
                       const place = s.placeId ? b.index.place(s.placeId) : undefined;
-                      return <StopCard key={s.id} stop={s} place={place} onPress={place ? () => onOpen(place.id) : undefined} />;
+                      return <StopCard key={s.id} stop={s} place={place} onPress={place ? () => onOpen(place.id) : undefined} onRemove={() => removeFromDay(s)} />;
                     })}
                     {recs.map(r => (
                       <FadeIn key={r.placeId}>
-                        <SuggestionCard rec={r} width={cardW} height={row.now ? NOW_CARD_H : CARD_H} reasonLines={row.now ? 3 : 2} glass={glassIds.has(r.placeId)} onPress={() => onOpen(r.placeId)} />
+                        <SuggestionCard
+                          rec={r}
+                          width={cardW}
+                          height={row.now ? NOW_CARD_H : CARD_H}
+                          reasonLines={row.now ? 3 : 2}
+                          glass={glassIds.has(r.placeId)}
+                          onPress={() => onOpen(r.placeId)}
+                          onAdd={() => addToDay(r.candidate.place, row.now ? undefined : minute)}
+                          addLabel={`Add ${r.candidate.place.name} to ${day.label}${row.now || minute === undefined ? '' : ` at ${formatHHMM(minute)}`}`}
+                        />
                       </FadeIn>
                     ))}
                     {row.open && recs.length === 0 ? (
@@ -540,6 +593,7 @@ function DayTimeline({ b, onOpen, onChat, day, sx, width }: { b: Buddy; onOpen: 
         )}
       </ScrollView>
       <EdgeShade shown={under} />
+      <UndoToast undo={undo} bottom={TAB_BAR_RESERVE} />
     </View>
   );
 }
@@ -889,8 +943,8 @@ function TimeCell({ row, weather, day, onPress }: { row: TimelineRow; weather: s
 }
 
 /** A planned stop: glass with the place's photo, its times, and whether it is booked. */
-function StopCard({ stop, place, onPress }: { stop: Stop; place?: Place; onPress?: () => void }) {
-  const sub = [stopSpan(stop), stop.fixed ? 'Booked' : 'Planned', place && place.name !== stop.title ? place.name : undefined].filter(Boolean).join(' · ');
+function StopCard({ stop, place, onPress, onRemove }: { stop: Stop; place?: Place; onPress?: () => void; onRemove?: () => void }) {
+  const sub = [stop.fixed ? 'Booked' : 'In your plan', stopSpan(stop), place && place.name !== stop.title ? place.name : undefined].filter(Boolean).join(' · ');
   return (
     <Pressable
       disabled={!onPress}
@@ -901,8 +955,14 @@ function StopCard({ stop, place, onPress }: { stop: Stop; place?: Place; onPress
       {...axPress(onPress)}
       style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
     >
-      <Glass kind="clear" radius={20} style={[styles.stopCard, styles.softShadow]}>
-        {place ? <PlacePhoto place={place} style={styles.stopThumb} /> : <View style={[styles.stopThumb, styles.stopThumbEmpty]} />}
+      <Glass kind="clear" radius={20} wash={ground(0.35)} style={[styles.stopCard, styles.softShadow]}>
+        <View>
+          {place ? <PlacePhoto place={place} style={styles.stopThumb} /> : <View style={[styles.stopThumb, styles.stopThumbEmpty]} />}
+          {/* The tick says "planned", so a stop never reads as a suggestion. */}
+          <View style={styles.planTick} pointerEvents="none">
+            <Text style={[styles.planTickText, font('800')]}>✓</Text>
+          </View>
+        </View>
         <View style={styles.stopText}>
           <Text style={[onGlass, font('700'), { fontSize: 14, lineHeight: 18 }]} numberOfLines={2}>
             {stop.title}
@@ -911,12 +971,24 @@ function StopCard({ stop, place, onPress }: { stop: Stop; place?: Place; onPress
             {sub}
           </Text>
         </View>
+        {onRemove ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${stop.title} from your plan`}
+            onPress={onRemove}
+            {...axPress(onRemove)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.stopRemove, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <CloseIcon size={12} color={white(0.85)} />
+          </Pressable>
+        ) : null}
       </Glass>
     </Pressable>
   );
 }
 
-function SuggestionCard({ rec, width, height, reasonLines, glass, onPress }: { rec: Recommendation; width: number; height: number; reasonLines: number; glass: boolean; onPress: () => void }) {
+function SuggestionCard({ rec, width, height, reasonLines, glass, onPress, onAdd, addLabel }: { rec: Recommendation; width: number; height: number; reasonLines: number; glass: boolean; onPress: () => void; onAdd?: () => void; addLabel?: string }) {
   const place = rec.candidate.place;
   const walk = `${rec.candidate.walkMinutes} min walk`;
   // The walk has its own pill; a reason written by code starts with it too.
@@ -969,6 +1041,14 @@ function SuggestionCard({ rec, width, height, reasonLines, glass, onPress }: { r
         <Glass kind="clear" radius={999} style={styles.walkPill}>
           <Text style={[onGlass, font('700'), { fontSize: 11.5 }]}>{walk}</Text>
         </Glass>
+        {/* A suggestion is not in the plan until you add it: "+ Add" puts it in the day on screen. */}
+        {onAdd ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={addLabel ?? `Add ${place.name} to your plan`} onPress={onAdd} {...axPress(onAdd)} hitSlop={6} style={({ pressed }) => [styles.addPillWrap, { opacity: pressed ? 0.75 : 1 }]}>
+            <Glass kind="clear" radius={999} wash={ground(0.3)} style={styles.addPill}>
+              <Text style={[onGlass, font('800'), { fontSize: 12 }]}>+ Add</Text>
+            </Glass>
+          </Pressable>
+        ) : null}
         {reason ? (
           <Text
             style={[styles.reason, font('600')]}
@@ -1048,6 +1128,8 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   thinking: { fontSize: 11, color: dusk.color.text2, ...shadowText(3, 0.6) },
   clockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: 8 },
+  nowPillWrap: { alignSelf: 'flex-start', marginTop: 6 },
+  nowPill: { height: 28, paddingHorizontal: 13, justifyContent: 'center' },
   clock: { fontSize: CLOCK_SIZE, lineHeight: Math.round(CLOCK_SIZE * 1.05), letterSpacing: dusk.font.clock.letterSpacing * 0.8, color: dusk.color.text, ...shadowText(5, 0.4) },
   weather: { flex: 1, fontSize: 13.5, lineHeight: 18, paddingBottom: 7, color: dusk.color.text, ...shadowText(4, 0.55) },
   models: { fontSize: 11, lineHeight: 15, marginTop: 2, color: dusk.color.textSoft, ...shadowText(3, 0.65) },
@@ -1082,6 +1164,16 @@ const styles = StyleSheet.create({
   stopThumbEmpty: { backgroundColor: white(0.08) },
   stopText: { flex: 1, gap: 2 },
   stopSub: { fontSize: 11.5, lineHeight: 15, color: dusk.color.textSoft },
+  stopRemove: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: white(0.1) },
+  planTick: { position: 'absolute', right: -5, bottom: -5, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: white(0.95), borderWidth: 2, borderColor: ground(0.85) },
+  planTickText: { fontSize: 10.5, lineHeight: 13, color: ground(1) },
+  addPillWrap: { position: 'absolute', right: 10, top: 10 },
+  addPill: { height: 28, paddingHorizontal: 13, justifyContent: 'center' },
+  legend: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 2 },
+  legendTick: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: white(0.95) },
+  legendTickText: { fontSize: 9, lineHeight: 11, color: ground(1) },
+  legendText: { fontSize: 11.5, color: dusk.color.textSoft },
+  legendGap: { marginLeft: 10 },
   cardShadow: { borderRadius: dusk.radius.card - 4, backgroundColor: dusk.color.raised, shadowColor: dusk.color.ground, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
   card: { borderRadius: dusk.radius.card - 4, overflow: 'hidden', backgroundColor: dusk.color.raised },
   cardRim: { position: 'absolute', left: 16, right: 16, top: 0, height: 1, backgroundColor: white(0.35) },

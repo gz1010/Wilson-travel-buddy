@@ -27,6 +27,27 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((parseDate(to).getTime() - parseDate(from).getTime()) / 86_400_000);
 }
 
+/** Day of the month of the last Sunday in `month` (1–12). */
+function lastSunday(year: number, month: number): number {
+  const last = new Date(Date.UTC(year, month, 0));
+  return last.getUTCDate() - last.getUTCDay();
+}
+
+/** True in EU summer time: 01:00 UTC on the last Sunday of March until 01:00 UTC on the last Sunday of October. */
+export function euSummerTime(ms: number): boolean {
+  const year = new Date(ms).getUTCFullYear();
+  return ms >= Date.UTC(year, 2, lastSunday(year, 3), 1) && ms < Date.UTC(year, 9, lastSunday(year, 10), 1);
+}
+
+/**
+ * The destination's wall clock at `ms` (the Mac's own clock, milliseconds since 1970): its
+ * standard UTC offset (destination.json's utcOffsetMinutes), plus an hour in summer time.
+ */
+export function cityClock(ms: number, utcOffsetMinutes: number, summerTime: (ms: number) => boolean = euSummerTime): Clock {
+  const t = new Date(ms + (utcOffsetMinutes + (summerTime(ms) ? 60 : 0)) * 60_000);
+  return { date: t.toISOString().slice(0, 10), minute: t.getUTCHours() * 60 + t.getUTCMinutes() };
+}
+
 export function parseHHMM(s: string): number {
   const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
   if (!m) throw new Error(`Bad time "${s}"`);

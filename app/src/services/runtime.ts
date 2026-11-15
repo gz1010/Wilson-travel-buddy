@@ -12,6 +12,8 @@ export interface Runtime {
   audio: AudioClient;
   /** True when the real model and the real audio helper are both connected. */
   live: { llm: boolean; audio: boolean };
+  /** The Mac's clock, for the city's real time. Without it (tests) the clock is the fixed demo clock. */
+  now?: () => number;
 }
 
 /**
@@ -32,6 +34,7 @@ export async function connectRuntime(onStatus: (s: string) => void): Promise<Run
     llm: llmOk ? llama : new FixtureLLM(llmAnswers),
     audio: audioOk ? helper : new TypedAudio(scriptedConversation as ScriptedLine[]),
     live: { llm: llmOk, audio: audioOk },
+    now: () => Date.now(),
   };
 }
 

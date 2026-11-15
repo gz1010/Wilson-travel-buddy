@@ -4,7 +4,7 @@ import { DefaultCompanion, withStop } from '../core/companion';
 import { distanceMeters, formatDistance } from '../core/geo';
 import type { PackIndex } from '../core/pack';
 import { SentenceChunker } from '../core/sentences';
-import { parseHHMM, shiftClock } from '../core/time';
+import { cityClock, minutesBetween, parseHHMM, shiftClock } from '../core/time';
 import type { Cited, Clock, GeoPoint, Heard, Lang, LocationFix, Recommendation, Situation, Trip, WakeEvent } from '../core/types';
 import { LevelFeed } from '../services/audio/wake';
 import type { Runtime } from '../services/runtime';
@@ -24,10 +24,14 @@ export interface ChatLine {
 let lineCounter = 0;
 const lineId = () => `l${++lineCounter}`;
 
-/** Where the demo starts: the first forecast day at 10:00, in the city centre. */
-function initialSituation(index: PackIndex): Situation {
+/**
+ * Where the app starts, in the city centre: the city's real time now when there is a real clock,
+ * otherwise (tests) the first forecast day at 10:00.
+ */
+function initialSituation(index: PackIndex, now?: () => number): Situation {
   const first = index.pack.forecast.hours[0]?.time.slice(0, 10) ?? '2026-11-15';
-  return { clock: { date: first, minute: 10 * 60 }, location: index.destination.center, locationLabel: 'the city centre', visited: [] };
+  const clock = now ? cityClock(now(), index.destination.utcOffsetMinutes) : { date: first, minute: 10 * 60 };
+  return { clock, location: index.destination.center, locationLabel: 'the city centre', visited: [] };
 }
 
 function labelFor(index: PackIndex, point: GeoPoint): string {
@@ -44,7 +48,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
   const [tripIsNew, setTripIsNew] = useState(false);
   /** True once the saved trip (if any) has been read from storage. */
   const [tripLoaded, setTripLoaded] = useState(false);
-  const [situation, setSituation] = useState<Situation>(() => initialSituation(index));
+  const [situation, setSituation] = useState<Situation>(() => initialSituation(index, rt.now));
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [recsThinking, setRecsThinking] = useState(false);
   const [chat, setChat] = useState<ChatLine[]>([]);
@@ -449,23 +453,84 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     if (!speaking) levels.push('voice', 0);
   }, [speaking, levels]);
 
-  // --- Recommendations refresh whenever the trip or the situation changes.
-  const refineToken = useRef(0);
+  // --- The clock: the city's real time, ticking each minute. The time controls (Wilson dragged to
+  // 17:00, +15 min, another day) move it by an offset, and it keeps ticking from there.
+  const clockOffset = useRef(0);
+  const [clockMoved, setClockMoved] = useState(false);
+  /** Goes up when the clock is set on purpose (not on the minute tick): Now follows it then. */
+  const [clockGen, setClockGen] = useState(0);
   useEffect(() => {
-    setRecs(companion.recommender.quick(trip, situation));
+    const now = rt.now;
+    if (!now) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = () => {
+      const clock = shiftClock(cityClock(now(), index.destination.utcOffsetMinutes), clockOffset.current);
+      setSituation(s => (s.clock.date === clock.date && s.clock.minute === clock.minute ? s : { ...s, clock }));
+      timer = setTimeout(tick, 60_000 - (now() % 60_000) + 50);
+    };
+    tick();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [rt, index]);
+
+  // --- Recommendations refresh when the trip, where you are or what you've seen changes, and each
+  // quarter hour of the clock (not every tick, so the model isn't rewriting reasons every minute).
+  const refineToken = useRef(0);
+  const recQuarter = `${situation.clock.date} ${Math.floor(situation.clock.minute / 15)}`;
+  useEffect(() => {
+    const sit = sitRef.current;
+    setRecs(companion.recommender.quick(trip, sit));
     const token = ++refineToken.current;
-    const timer = setTimeout(async () => {
+    // The model is shared: while Wilson is answering, the picks wait for him.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refine = async () => {
+      if (busyRef.current) {
+        timer = setTimeout(refine, 3000);
+        return;
+      }
       setRecsThinking(true);
-      const refined = await companion.recommender.refine(trip, situation);
+      const refined = await companion.recommender.refine(trip, sit);
       if (token === refineToken.current) setRecs(refined);
       if (token === refineToken.current) setRecsThinking(false);
-    }, 700);
-    return () => clearTimeout(timer);
-  }, [companion, trip, situation]);
+    };
+    timer = setTimeout(refine, 700);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [companion, trip, situation.location, situation.locationLabel, situation.visited, recQuarter]);
 
   // --- Situation controls.
-  const setClock = useCallback((clock: Clock) => setSituation(s => ({ ...s, clock })), []);
-  const shiftMinutes = useCallback((m: number) => setSituation(s => ({ ...s, clock: shiftClock(s.clock, m) })), []);
+  const setClock = useCallback(
+    (clock: Clock) => {
+      if (rt.now) {
+        clockOffset.current = minutesBetween(cityClock(rt.now(), index.destination.utcOffsetMinutes), clock);
+        setClockMoved(clockOffset.current !== 0);
+      }
+      setClockGen(g => g + 1);
+      setSituation(s => ({ ...s, clock }));
+    },
+    [rt, index],
+  );
+  const shiftMinutes = useCallback(
+    (m: number) => {
+      clockOffset.current += m;
+      if (rt.now) setClockMoved(clockOffset.current !== 0);
+      setClockGen(g => g + 1);
+      setSituation(s => ({ ...s, clock: shiftClock(s.clock, m) }));
+    },
+    [rt],
+  );
+  /** Back to the city's real time after the clock was moved. */
+  const clockToNow = useCallback(() => {
+    clockOffset.current = 0;
+    setClockMoved(false);
+    setClockGen(g => g + 1);
+    if (rt.now) {
+      const clock = cityClock(rt.now(), index.destination.utcOffsetMinutes);
+      setSituation(s => ({ ...s, clock }));
+    }
+  }, [rt, index]);
   /** Goes up whenever "you" move, so the startup locate never overrides a tap made meanwhile. */
   const locationGen = useRef(0);
   const setLocation = useCallback(
@@ -537,17 +602,23 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
   const addToTrip = useCallback(
     async (placeId: string, at?: { date?: string; start?: string }) => {
       const place = index.place(placeId);
-      if (!place) return;
+      if (!place) return tripRef.current;
       const before = tripRef.current;
       const next = withStop(before, place, sitRef.current.clock, at);
       if (next !== before) await setTrip(next);
+      return next;
     },
     [index, setTrip],
   );
   const removeStop = useCallback(async (id: string) => {
     const t = tripRef.current;
-    if (t) await setTrip({ ...t, stops: t.stops.filter(s => s.id !== id) });
+    if (!t) return t;
+    const next = { ...t, stops: t.stops.filter(s => s.id !== id) };
+    await setTrip(next);
+    return next;
   }, [setTrip]);
+  /** Puts back a trip as it was (Undo after adding or removing a stop). */
+  const restoreTrip = useCallback(async (t: Trip | undefined) => setTrip(t), [setTrip]);
   const markVisited = useCallback((placeId: string) => {
     setSituation(s => {
       const visited = [...new Set([...s.visited, placeId])];
@@ -611,6 +682,10 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     levels,
     setClock,
     shiftMinutes,
+    clockToNow,
+    clockGen,
+    /** True while the clock shows a time other than the city's real time (and there is a real clock). */
+    clockMoved,
     setLocation,
     setLocationByName,
     /** macOS Location, else the last saved fix: { point, accuracy?, source: 'macos' | 'saved', at, label } or undefined. */
@@ -621,6 +696,7 @@ export function useBuddy(rt: Runtime, index: PackIndex) {
     locateNote,
     addToTrip,
     removeStop,
+    restoreTrip,
     markVisited,
     clearTrip,
     importTrip,

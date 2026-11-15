@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { formatHHMM, openState } from '../../core/time';
+import { dayLabel, forecastDates, planDays } from '../../core/dayplan';
+import { addDays, formatHHMM, openState } from '../../core/time';
 import type { Fact, Place } from '../../core/types';
 import { AmbientBackdrop, MeltingPhoto } from '../dusk/AmbientBackdrop';
 import { CATEGORY_LABEL, directions } from '../dusk/format';
@@ -12,6 +13,7 @@ import { dusk, font, ground, white } from '../dusk/tokens';
 import type { ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
+import { UndoToast, useUndo } from '../dusk/UndoToast';
 import { isDeclined, levelFor, NEARBY_QUESTION, UNSURE_LINE, useLevel, useMood, WilsonFace, type WilsonMood } from './WilsonLive';
 
 // AntPlace: one place. Its pack photo on top, sharp, melting into a blurred and darkened copy of
@@ -159,6 +161,9 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
 
   // The chat length when the user asked from this screen: anything from there on is about this place.
   const [askedFrom, setAskedFrom] = useState<number>();
+  // "Add to day" on a trip of several days first asks which day; every change says so, with Undo.
+  const [pickingDay, setPickingDay] = useState(false);
+  const undo = useUndo(b.trip);
   // Wilson heads the guide card: his mood (happy when this place is added to the day) and his level.
   const wilsonNow = useMood(b);
   const wilsonLevel = useLevel(b);
@@ -178,7 +183,43 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
 
   // "350 m north · 4 min walk · outdoor · open until 20:00"
   const dir = directions(location, place.point, b.metersTo(place.point));
-  const inDay = !!b.trip?.stops.some(s => s.placeId === place.id);
+  // Is it in the plan, and on which day ("Today", or "Mon 16")?
+  const planned = b.trip?.stops.find(s => s.placeId === place.id);
+  const dayName = (date: string) => (date === clock.date ? 'Today' : dayLabel(date));
+  const plannedDay = planned && b.trip ? dayName(addDays(b.trip.startDate, planned.day - 1)) : undefined;
+  const pickDays = planDays(b.trip, clock.date, forecastDates(b.index.pack.forecast.hours));
+  const addOn = (date: string) => {
+    setPickingDay(false);
+    const before = b.trip;
+    b.addToTrip(place.id, { date })
+      .then(t => {
+        // A trip can only stretch so far: a day it can't take is said, not quietly moved.
+        if (!t?.stops.some(s => s.placeId === place.id && addDays(t.startDate, s.day - 1) === date)) {
+          if (t !== before) b.restoreTrip(before).catch(() => {});
+          undo.show(`${dayName(date)} is too far from your trip to add ${place.name}`);
+          return;
+        }
+        undo.show(`Added ${place.name} to ${dayName(date)}`, () => b.restoreTrip(before).catch(() => {}), t);
+      })
+      .catch(() => {});
+  };
+  const removePlanned = () => {
+    if (!planned) return;
+    const before = b.trip;
+    b.removeStop(planned.id)
+      .then(t => undo.show(`Removed ${place.name} from ${plannedDay}`, () => b.restoreTrip(before).catch(() => {}), t))
+      .catch(() => {});
+  };
+  const addPressed = () => {
+    if (planned) removePlanned();
+    else if (pickingDay) setPickingDay(false);
+    else if (pickDays.length > 1) {
+      // The note would sit over the day chips.
+      undo.hide();
+      setPickingDay(true);
+    }
+    else addOn(pickDays[0]?.date ?? clock.date);
+  };
   const open = openState(place.hours, clock);
   const openText = open.open
     ? open.closesAt
@@ -401,21 +442,39 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
         <View style={[styles.edge, { height: actionsH + EDGE_FADE }]} pointerEvents="none">
           <PhotoFade stops={ACTIONS_SHADE} />
         </View>
-        {/* Once added it is a settled state, not a faded button: a see-through (0.45) button let
-            the facts scrolled under it show through its label. */}
+        {/* Planned: says which day, and the same button takes it off again (with Undo). A
+            see-through (0.45) disabled button let the facts scrolled under it show through. */}
         <GlassButton
-          label={inDay ? '✓ In your day' : 'Add to day'}
-          disabled={inDay}
-          accessibilityLabel={inDay ? `${place.name} is in your day` : `Add ${place.name} to your day`}
-          onPress={() => b.addToTrip(place.id)}
-          style={inDay ? styles.settled : styles.grow}
-          textStyle={inDay ? styles.settledText : undefined}
+          label={planned ? `✓ ${plannedDay} · Remove` : pickingDay ? 'Cancel' : 'Add to day'}
+          accessibilityLabel={planned ? `${place.name} is in your plan for ${plannedDay}. Remove it` : pickingDay ? 'Cancel adding' : `Add ${place.name} to a day`}
+          onPress={addPressed}
+          style={planned ? styles.settled : styles.grow}
+          textStyle={planned ? styles.settledText : undefined}
         />
         <GlassIconButton accessibilityLabel="Show on map" onPress={showMap} size={BTN} kind="clear">
           <MapIcon size={20} />
         </GlassIconButton>
         <MicOrb listening={b.listening} onPress={ask} size={BTN} />
       </View>
+
+      {/* Which day: the trip's days (and the forecast's), today first in its place. */}
+      {pickingDay && !planned ? (
+        <View pointerEvents="box-none" style={[styles.pickerWrap, { left: 22 * sx, right: 22 * sx, bottom: actionsH + 4 }]}>
+          <Glass kind="clear" radius={22} wash={ground(0.82)} style={styles.picker}>
+            <Text style={[styles.label, font('700')]}>ADD {place.name.toUpperCase()} TO</Text>
+            <View style={styles.chips}>
+              {pickDays.map(d => (
+                <Pressable key={d.date} accessibilityRole="button" accessibilityLabel={`Add to ${d.spoken}`} onPress={() => addOn(d.date)} {...axPress(() => addOn(d.date))} style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}>
+                  <Glass kind="clear" radius={999} style={styles.chip}>
+                    <Text style={[onGlass, font('700'), styles.chipText]}>{dayName(d.date)}</Text>
+                  </Glass>
+                </Pressable>
+              ))}
+            </View>
+          </Glass>
+        </View>
+      ) : null}
+      <UndoToast undo={undo} bottom={actionsH + 8} />
 
       {/* Top row: what this place is to you, and the close orb back to Now. */}
       <Animated.View style={[styles.topFade, { opacity: topFade }]} pointerEvents="none">
@@ -476,6 +535,8 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   settled: { flex: 1, opacity: 1 },
   settledText: { color: dusk.color.text2 },
+  pickerWrap: { position: 'absolute' },
+  picker: { padding: 16, gap: 12 },
   topFade: { position: 'absolute', left: 0, right: 0, top: 0, height: TOP + CLOSE + 40 },
   pill: { position: 'absolute', top: TOP + 5, paddingVertical: 8, paddingHorizontal: 13 },
   close: { position: 'absolute', top: TOP },
