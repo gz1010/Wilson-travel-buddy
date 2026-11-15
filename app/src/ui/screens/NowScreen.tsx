@@ -4,10 +4,12 @@ import { clockFor, placeNameSize, timeOfDay, TIME_OF_DAY_LABEL, TIMES_OF_DAY } f
 import { formatHHMM } from '../../core/time';
 import { tripDay } from '../../core/trip';
 import type { Recommendation } from '../../core/types';
-import { Glass, GlassChip, OfflineChip, onGlass } from '../dusk/Glass';
-import { GlassText } from '../dusk/GlassText';
+import { axPress, Glass, GlassChip, OfflineChip, onGlass } from '../dusk/Glass';
+import { GlassText, NAME_CUT } from '../dusk/GlassText';
+import { glassWordSink } from '../dusk/GlassWord';
+import { LiquidGlass } from '../dusk/LiquidGlass';
 import { useReduceMotion } from '../dusk/motion';
-import { HeroPhoto, PhotoFade, PlacePhoto } from '../dusk/Photos';
+import { HeroPhoto, PhotoFade, PlacePhoto, placePhotoSource } from '../dusk/Photos';
 import { dusk, font, ground, white } from '../dusk/tokens';
 import type { ScreenProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
@@ -18,6 +20,12 @@ import { useScreenSize } from '../dusk/Screen';
 const W = dusk.layout.phoneWidth;
 const CARDS_TOP = 318;
 const CARD_GAP = 10;
+/** Dark behind the pills at the top and behind the glass name at the bottom. */
+const CARD_FADE: [number, number][] = [
+  [0, 0.55],
+  [0.45, 0.08],
+  [1, 0.42],
+];
 /** The tab bar's top edge above the bottom of the screen (DuskRoot: bottom 26 + 58 tall). */
 const TAB_BAR_RESERVE = 26 + dusk.size.tabBar + 2;
 const MAX_CARDS = 3;
@@ -138,10 +146,20 @@ function SuggestionCard({ rec, rank, sx, onPress }: { rec: Recommendation; rank:
       accessibilityLabel={`${rank}. ${place.name}, ${walk}. ${rec.reason}`}
       accessibilityHint="Opens the place"
       onPress={onPress}
+      {...axPress(onPress)}
       style={({ pressed }) => [styles.cardShadow, { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] }]}>
       <View style={styles.card}>
         <PlacePhoto place={place} style={StyleSheet.absoluteFill} />
-        <PhotoFade stops={[[0, 0.55], [0.45, 0.08], [1, 0.42]]} />
+        <PhotoFade stops={CARD_FADE} />
+        {/* The photo again with the name in 3D liquid glass, a quarter sunk below the card's edge. */}
+        <LiquidGlass
+          photo={placePhotoSource(place.id)}
+          lines={[{ text: place.name, size: nameSize, baseline: -glassWordSink(nameSize, NAME_CUT) }]}
+          align="left"
+          inset={10}
+          fade={CARD_FADE}
+          fallback={<GlassText place={place} size={nameSize} />}
+        />
         <View pointerEvents="none" style={styles.cardRim} />
 
         <Glass kind="clear" radius={999} style={styles.walkPill}>
@@ -154,7 +172,6 @@ function SuggestionCard({ rec, rank, sx, onPress }: { rec: Recommendation; rank:
         <Text style={[styles.reason, font('600')]} numberOfLines={3}>
           {rec.reason}
         </Text>
-        <GlassText place={place} size={nameSize} />
       </View>
     </Pressable>
   );

@@ -2,7 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Glass, GlassButton, OfflineChip } from '../dusk/Glass';
 import { useReduceMotion } from '../dusk/motion';
+import { GlassWord, glassWordSink, glassWordSize, glassWordVisible } from '../dusk/GlassWord';
+import { LiquidGlass } from '../dusk/LiquidGlass';
 import { HeroPhoto, PhotoFade } from '../dusk/Photos';
+import { heroPhotos } from '../../pack/seville/photos';
 import { dusk, font, white } from '../dusk/tokens';
 import type { WelcomeProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
@@ -16,41 +19,123 @@ const H = dusk.layout.phoneHeight;
 
 type Step = WelcomeProps['steps'][number];
 
-export function WelcomeScreen({ city, steps, status, models, ready, onStart }: WelcomeProps) {
+/** Room the prepared line takes under the subtitle (up to two 15 px lines and its margin). */
+const PREPARED_ROOM = 36;
+/** The subtitle: up to two 22 px lines. */
+const SUBTITLE_ROOM = 44;
+/** Between the text under the card and the glass grid of models. */
+const TEXT_GAP = 16;
+/** Between the photo card's bottom edge and the subtitle. */
+const CARD_GAP = 14;
+/** The photo card starts below the window's traffic lights and runs nearly edge to edge. */
+const CARD_TOP = 44;
+const CARD_INSET = 14;
+/** Share of the city name's capital height sunk below the card's edge: three quarters show. */
+const CITY_CUT = 0.25;
+/** Dark behind the chip at the top and behind the letters at the bottom. */
+const WELCOME_FADE: [number, number][] = [
+  [0, 0.3],
+  [0.2, 0],
+  [0.5, 0],
+  [0.8, 0.3],
+  [1, 0.55],
+];
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const NBSP = ' ';
+
+/**
+ * "Seville guide prepared Nov 14 · 60 places · 247 facts · 62 photos", from prepared.json, or how to
+ * prepare it. The date is the preparer's own calendar day, read straight from the ISO string.
+ * Photos count the place photos and the time-of-day city photos together.
+ */
+export function preparedLine(city: string, p: NonNullable<WelcomeProps['prepared']>): string {
+  const m = p.preparedAt ? /^(\d{4})-(\d{2})-(\d{2})/.exec(p.preparedAt) : null;
+  if (!m) return 'Not prepared yet: run node scripts/prepare-pack.mjs while online';
+  const day = `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${Number(m[3])}`;
+  const photos = p.photos + (p.heroes ?? 0);
+  const n = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  return `${city} guide prepared ${day} · ${n(p.places, 'place')} · ${n(p.facts, 'fact')} · ${n(photos, 'photo')}`;
+}
+
+/** The prepared line, allowed to break only after the date, so a narrow screen shows the counts together. */
+function wrapAfterDate(line: string): string {
+  const cut = line.indexOf(' · ');
+  if (cut < 0 || !/ prepared /.test(line)) return line;
+  const keep = (s: string) => s.replace(/ /g, NBSP);
+  return `${keep(line.slice(0, cut))}${NBSP}· ${keep(line.slice(cut + 3))}`;
+}
+
+export function WelcomeScreen({ city, steps, status, models, ready, onStart, prepared }: WelcomeProps) {
   const { width, height } = useScreenSize();
   const sx = width / W;
   // Shift for everything below the photo's middle: positive on taller phones, negative on shorter.
   const dy = height - H;
+  const preparedText = prepared ? preparedLine(city, prepared) : undefined;
+  const gridTop = 640 + dy;
+
+  // The dusk photo is a rounded card from under the Offline chip down to the subtitle, and the
+  // welcome is written across its bottom in 3D glass letters, the city name sunk a quarter of its
+  // capital height below the card's edge so three quarters of it show (GlassWord).
+  const inset = CARD_INSET * sx;
+  const cardW = width - 2 * inset;
+  const textTop = gridTop - TEXT_GAP - SUBTITLE_ROOM - (preparedText ? PREPARED_ROOM : 0);
+  const cardH = Math.max(0, textTop - CARD_GAP - CARD_TOP);
+  const word = glassWordSize(city, cardW - 24, 150 * sx);
+  const lead = Math.round(word * 0.36);
+  const wordShows = glassWordVisible(word, CITY_CUT);
+  const leadBottom = wordShows + Math.round(word * 0.08);
 
   return (
     <View style={styles.root}>
-      {/* Full-bleed dusk photo, about 700 px tall, with the mockup's dark fades. */}
-      <HeroPhoto tod="dusk" style={{ position: 'absolute', left: 0, top: 0, width, height: Math.max(0, 700 + dy) }} />
-      <PhotoFade
-        stops={[
-          [0, 0.35],
-          [0.18, 0],
-          [0.48, 0],
-          [0.66, 0.75],
-          [0.82, 1],
-          [1, 1],
-        ]}
-      />
-
-      <View style={[styles.chipRow, { top: 58 }]} pointerEvents="none">
-        <OfflineChip />
+      {/* Keyed on its size: on macOS the photo and the SVG inside keep their first layout when the
+          window settles at its real size after launch, so the card is rebuilt at each new size. */}
+      <View key={`${Math.round(cardW)}x${Math.round(cardH)}`} style={[styles.card, { left: inset, width: cardW, top: CARD_TOP, height: cardH }]}>
+        <HeroPhoto tod="dusk" style={StyleSheet.absoluteFill} />
+        {/* Dark behind the chip at the top and behind the letters at the bottom. */}
+        <PhotoFade stops={WELCOME_FADE} />
+        {/* The photo again with the welcome in 3D liquid glass (WebGL); the SVG letters show until it has drawn. */}
+        <LiquidGlass
+          photo={heroPhotos.dusk}
+          lines={[
+            { text: 'Welcome to', size: lead, baseline: leadBottom },
+            { text: city, size: word, baseline: -glassWordSink(word, CITY_CUT) },
+          ]}
+          fade={WELCOME_FADE}
+          interactive
+          fallback={
+            <View style={[styles.titleBox, { height: leadBottom + lead * 1.2 }]}>
+              <View style={{ position: 'absolute', left: 0, right: 0, bottom: leadBottom, height: lead * 1.2 }}>
+                <GlassWord text="Welcome to" size={lead} label={null} />
+              </View>
+              <GlassWord text={city} size={word} cut={CITY_CUT} label={null} />
+            </View>
+          }
+        />
+        <View style={[styles.chipRow, { top: 58 - CARD_TOP }]} pointerEvents="none">
+          <OfflineChip />
+        </View>
+        <View
+          pointerEvents="none"
+          style={[styles.titleBox, { height: leadBottom + lead * 1.2 }]}
+          accessible
+          accessibilityRole="header"
+          accessibilityLabel={`Welcome to ${city}`}
+        />
       </View>
 
-      <View style={{ position: 'absolute', left: 28 * sx, right: 28 * sx, top: 470 + dy, alignItems: 'center' }}>
-        <Text accessibilityRole="header" style={styles.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
-          {`Welcome\nto ${city}`}
-        </Text>
+      <View style={{ position: 'absolute', left: 28 * sx, right: 28 * sx, top: textTop, alignItems: 'center' }}>
         <Text style={[styles.subtitle, { maxWidth: 300 * sx }]}>
           {`All of ${city} on this phone, and a guide that never needs a signal.`}
         </Text>
+        {preparedText ? (
+          <Text numberOfLines={2} style={[styles.prepared, { maxWidth: 320 * sx }]} accessibilityLabel={preparedText}>
+            {wrapAfterDate(preparedText)}
+          </Text>
+        ) : null}
       </View>
 
-      <View style={{ position: 'absolute', left: 22 * sx, right: 22 * sx, top: 640 + dy }}>
+      <View style={{ position: 'absolute', left: 22 * sx, right: 22 * sx, top: gridTop }}>
         <Glass kind="clear" radius={22} style={styles.grid}>
           <View accessible accessibilityLabel={`Getting ready: ${steps.map(describe).join(', ')}`} style={styles.gridInner}>
             {steps.map(s => (
@@ -125,22 +210,23 @@ function StepDot({ state }: { state: Step['state'] }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: dusk.color.ground, overflow: 'hidden' },
   chipRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  title: {
-    ...font('300'),
-    fontSize: dusk.font.welcome.size,
-    letterSpacing: dusk.font.welcome.letterSpacing,
-    lineHeight: dusk.font.welcome.size,
-    color: dusk.color.text,
-    textAlign: 'center',
+  card: {
+    position: 'absolute',
+    borderRadius: dusk.radius.sheet,
+    overflow: 'hidden',
+    backgroundColor: dusk.color.raised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: white(0.1),
   },
+  titleBox: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   subtitle: {
     ...font('500'),
-    marginTop: 14,
     fontSize: 15,
     lineHeight: 22,
     color: dusk.color.textSoft,
     textAlign: 'center',
   },
+  prepared: { ...font('500'), marginTop: 6, fontSize: 12, lineHeight: 15, color: dusk.color.text2, textAlign: 'center' },
   grid: { paddingVertical: 12, paddingHorizontal: 16 },
   gridInner: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8, columnGap: 14 },
   // Two columns: half the row minus half the 14 px column gap.
