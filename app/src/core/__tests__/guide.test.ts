@@ -69,13 +69,13 @@ describe('Guide.answer', () => {
     expect(llm.calls).toHaveLength(0);
   });
 
-  test('streams the answer and reports the places it names, in order', async () => {
-    const answer = 'Book the Real Alcázar ahead; afterwards Seville Cathedral is two minutes away.';
+  test('streams the answer a sentence at a time and reports the places it names, in order', async () => {
+    const answer = 'Book the Real Alcázar ahead. Afterwards Seville Cathedral is two minutes away.';
     const { llm, guide } = guideWith(answer);
     const tokens: string[] = [];
     const out = await guide.answer('What should I know before visiting the Alcazar?', sit, trip, t => tokens.push(t));
-    expect(tokens.length).toBeGreaterThan(3);
-    expect(tokens.join('')).toBe(answer);
+    expect(tokens).toEqual(['Book the Real Alcázar ahead.', ' Afterwards Seville Cathedral is two minutes away.']);
+    expect(out.text).toBe(answer);
     expect(out.places.map(p => p.id)).toEqual(['alcazar', 'catedral']);
 
     const prompt = llm.calls[0].req.messages[1].content;

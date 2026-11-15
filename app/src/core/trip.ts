@@ -14,6 +14,8 @@ export interface TripDraft {
   stops: {
     title: string;
     place_name: string | null;
+    /** The weekday they named ("Tuesday"), copied rather than computed; it overrides day. */
+    weekday?: string | null;
     day: number;
     start: string | null;
     duration_minutes: number | null;
@@ -35,12 +37,13 @@ export const TRIP_SCHEMA: JSONSchema = {
         properties: {
           title: { type: 'string' },
           place_name: { type: ['string', 'null'] },
+          weekday: { type: ['string', 'null'], enum: [...WEEKDAY_NAMES, null] },
           day: { type: 'integer', minimum: 1, maximum: 14 },
           start: { type: ['string', 'null'], pattern: '^[0-2][0-9]:[0-5][0-9]$' },
           duration_minutes: { type: ['integer', 'null'] },
           fixed: { type: 'boolean' },
         },
-        required: ['title', 'place_name', 'day', 'start', 'duration_minutes', 'fixed'],
+        required: ['title', 'place_name', 'weekday', 'day', 'start', 'duration_minutes', 'fixed'],
       },
     },
   },
@@ -101,7 +104,7 @@ export function resolveDraft(draft: TripDraft, index: PackIndex, startDate: stri
       id: newStopId(),
       title: s.title,
       placeId: place?.id,
-      day: Math.max(1, Math.min(days, s.day || 1)),
+      day: dayOfWeekday(startDate, days, s.weekday) ?? Math.max(1, Math.min(days, s.day || 1)),
       start,
       durationMinutes: s.duration_minutes ?? place?.visitMinutes,
       fixed: !!s.fixed,
@@ -120,6 +123,19 @@ export function resolveDraft(draft: TripDraft, index: PackIndex, startDate: stri
   };
 }
 
+/**
+ * The trip day for a named weekday: the first day of the trip that falls on
+ * it. Small models copy "Tuesday" reliably but miscount it into a day number
+ * (seen live: Tuesday as day 2 of a Sunday start), so code does the counting.
+ */
+export function dayOfWeekday(startDate: string, days: number, name: string | null | undefined): number | undefined {
+  if (!name) return undefined;
+  const target = WEEKDAY_NAMES.findIndex(n => n.toLowerCase() === name.trim().toLowerCase());
+  if (target < 0) return undefined;
+  for (let i = 0; i < days; i++) if (weekday(addDays(startDate, i)) === target) return i + 1;
+  return undefined;
+}
+
 export function sortStops(stops: Stop[]): Stop[] {
   return [...stops].sort(
     (a, b) => a.day - b.day || (a.start ? parseHHMM(a.start) : 9999) - (b.start ? parseHHMM(b.start) : 9999),
@@ -134,6 +150,7 @@ export function tripToDraft(trip: Trip, index: PackIndex): TripDraft {
     stops: trip.stops.map(s => ({
       title: s.title,
       place_name: s.placeId ? index.place(s.placeId)?.name ?? null : null,
+      weekday: null,
       day: s.day,
       start: s.start ?? null,
       duration_minutes: s.durationMinutes ?? null,

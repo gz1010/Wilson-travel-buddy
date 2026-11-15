@@ -1,7 +1,7 @@
 import { FixtureLLM } from '../../services/llm/fixtureLLM';
 import { seville } from '../../pack/seville';
 import { PackIndex } from '../pack';
-import { calendarLines, nextFixedStop, resolveDraft, summarizeTrip, TRIP_SCHEMA, TripPlanner, tripDay, type TripDraft } from '../trip';
+import { calendarLines, dayOfWeekday, nextFixedStop, resolveDraft, summarizeTrip, TRIP_SCHEMA, TripPlanner, tripDay, type TripDraft } from '../trip';
 import type { Trip } from '../types';
 
 const index = new PackIndex(seville);
@@ -220,5 +220,35 @@ describe('summarizeTrip', () => {
         'Day 3 15:00: Museum of Fine Arts [booked]',
       ].join('\n'),
     );
+  });
+});
+
+describe('weekday overrides a miscounted day', () => {
+  test('dayOfWeekday finds the first trip day on that weekday', () => {
+    expect(dayOfWeekday(DAY1, 3, 'Tuesday')).toBe(3); // Sun, Mon, Tue
+    expect(dayOfWeekday(DAY1, 3, 'sunday')).toBe(1);
+    expect(dayOfWeekday(DAY1, 3, 'Friday')).toBeUndefined(); // not in a 3-day trip
+    expect(dayOfWeekday(DAY1, 3, null)).toBeUndefined();
+    expect(dayOfWeekday(DAY1, 3, 'Tues')).toBeUndefined();
+  });
+
+  test('seen live: the model said Tuesday but day 2; code puts it on day 3', () => {
+    const trip = resolveDraft(draft({ stops: [stop({ title: 'museum', weekday: 'Tuesday', day: 2, start: '15:00', fixed: true })] }), index, DAY1, '');
+    expect(trip.stops[0].day).toBe(3);
+  });
+
+  test('without a weekday, or one outside the trip, the day number stands', () => {
+    const trip = resolveDraft(
+      draft({ stops: [stop({ title: 'a', weekday: null, day: 2 }), stop({ title: 'b', weekday: 'Friday', day: 1 })] }),
+      index,
+      DAY1,
+      '',
+    );
+    expect(trip.stops.map(s => s.day)).toEqual([1, 2]);
+  });
+
+  test('the schema asks for the weekday before the day', () => {
+    const props = Object.keys((TRIP_SCHEMA as any).properties.stops.items.properties);
+    expect(props.indexOf('weekday')).toBeLessThan(props.indexOf('day'));
   });
 });

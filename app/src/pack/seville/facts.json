@@ -244,5 +244,129 @@
   "tags": [
    "local-life"
   ]
+ },
+ {
+  "id": "perdigones-shot",
+  "placeId": "torre-perdigones",
+  "title": "How the shot tower worked",
+  "body": "Lead shot for hunting was made here: molten lead was poured through a sieve at the top, and the drops became round as they fell into water at the bottom. Today a camera obscura at the top projects live views of the city onto a table.",
+  "tags": [
+   "history",
+   "views"
+  ]
+ },
+ {
+  "id": "carboneria-name",
+  "placeId": "la-carboneria",
+  "title": "Why it is called La Carbonería",
+  "body": "Carbonería means coal shop: the bar fills an old coal yard in Santa Cruz. Flamenco there is informal and free, so arrive early for a seat near the stage.",
+  "tags": [
+   "flamenco",
+   "nightlife",
+   "local-life"
+  ]
+ },
+ {
+  "id": "comercio-churros",
+  "placeId": "el-comercio",
+  "title": "Churros for breakfast",
+  "body": "In Seville churros are eaten in the morning, dipped in thick hot chocolate. Bar El Comercio is one of the classic places to have them; order at the counter.",
+  "tags": [
+   "food",
+   "local-life"
+  ]
+ },
+ {
+  "id": "caridad-manara",
+  "placeId": "hospital-caridad",
+  "title": "Miguel de Mañara and the Caridad",
+  "body": "The hospital was run by the brotherhood of Miguel de Mañara, a nobleman who gave his life to caring for the poor. Its church holds Valdés Leal's paintings of death, In Ictu Oculi and Finis Gloriae Mundi, and works by Murillo.",
+  "tags": [
+   "art",
+   "history",
+   "religion"
+  ]
+ },
+ {
+  "id": "tobacco-carmen",
+  "placeId": "universidad",
+  "title": "Carmen worked here",
+  "body": "The Royal Tobacco Factory employed thousands of women rolling cigars. It is the setting of Carmen, the story by Mérimée that Bizet turned into an opera. It is now the main building of the University of Seville, and you can walk in on weekdays.",
+  "tags": [
+   "history",
+   "architecture"
+  ]
+ },
+ {
+  "id": "lebrija-mosaics",
+  "placeId": "palacio-lebrija",
+  "title": "Roman floors in a Seville house",
+  "body": "The Countess of Lebrija paved her house with Roman mosaics brought from the ruins of Itálica, just outside Seville. The ground floor around the patio is the reason to visit.",
+  "tags": [
+   "history",
+   "art",
+   "architecture"
+  ]
+ },
+ {
+  "id": "america-doves",
+  "placeId": "plaza-america",
+  "title": "The square of the doves",
+  "body": "Plaza de América is known locally for its white doves, which gather between the pavilions built for the 1929 Ibero-American Exposition. Two of the pavilions house the Archaeological Museum and the Museum of Popular Arts and Customs.",
+  "tags": [
+   "family",
+   "architecture",
+   "nature"
+  ]
+ },
+ {
+  "id": "san-jorge-inquisition",
+  "placeId": "castillo-san-jorge",
+  "title": "The Inquisition in Triana",
+  "body": "The castle of San Jorge was the seat of the Spanish Inquisition in Seville. Its foundations survive under Triana Market, and the small museum explains what happened there.",
+  "tags": [
+   "history"
+  ]
+ },
+ {
+  "id": "caac-monastery",
+  "placeId": "caac",
+  "title": "Monastery, then ceramics factory",
+  "body": "Columbus stayed at the Cartuja monastery while preparing his voyages. In the 19th century it became the Pickman ceramics factory, and its tall brick kilns still stand among the contemporary art.",
+  "tags": [
+   "history",
+   "art"
+  ]
+ },
+ {
+  "id": "esperanza-triana",
+  "placeId": "capilla-marineros",
+  "title": "The Esperanza de Triana",
+  "body": "This chapel is home to the Esperanza de Triana, one of the most loved images of Seville's Holy Week. Triana's sailors and potters have kept it for centuries, and locals drop in daily to see her.",
+  "tags": [
+   "religion",
+   "local-life"
+  ]
+ },
+ {
+  "id": "gran-poder-image",
+  "placeId": "gran-poder",
+  "title": "The Lord of Seville",
+  "body": "Jesús del Gran Poder, carved by Juan de Mesa in the 17th century, is so revered that locals call him the Lord of Seville. The basilica is free and quiet outside mass times.",
+  "tags": [
+   "religion",
+   "art"
+  ]
+ },
+ {
+  "id": "lonja-river",
+  "placeId": "lonja-barranco",
+  "title": "A fish market by the river",
+  "body": "The iron-and-glass hall was built in the 19th century as the city fish market, beside the Triana bridge. Today its stalls serve tapas and drinks from morning until late, a covered option when it rains.",
+  "tags": [
+   "food",
+   "markets",
+   "architecture"
+  ]
  }
 ]

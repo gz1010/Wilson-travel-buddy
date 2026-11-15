@@ -74,11 +74,11 @@ test('"what should I do now?" shows instant picks, then the model\'s, moves the 
 });
 
 test('a guide question streams tokens and focuses the first place named', async () => {
-  const { run } = setup({ 'trip.extract': TRIP_ANSWER, guide: 'Seville Cathedral holds the tomb of Columbus.' });
+  const { run } = setup({ 'trip.extract': TRIP_ANSWER, guide: 'Seville Cathedral holds the tomb of Columbus. Go early.' });
   await run("I'm here three days");
   const events = await run('Tell me about Columbus');
   expect(types(events).filter(t => t !== 'token')).toEqual(['focus', 'done']);
-  expect(events.filter(e => e.type === 'token').length).toBeGreaterThan(1);
+  expect(events.filter(e => e.type === 'token').length).toBe(2); // one per sentence
   expect(events.find(e => e.type === 'focus')).toEqual({ type: 'focus', placeId: 'catedral' });
 });
 

@@ -25,10 +25,22 @@ coordinates and their hours. Run
 
 ## Demo-critical
 
-Check these first; they are on the demo route or in the scripted examples:
+Hours checked on 14 Nov 2026 for the eight places on the demo route:
 
-- catedral, alcazar, setas, bellas-artes (the Tuesday museum), mercado-triana,
-  rinconcillo, plaza-espana, parque-maria-luisa
+| Place | Hours now in the pack | Source |
+|---|---|---|
+| catedral | Mon–Sat 10:45–18:00, Sun 14:30–19:00 | catedraldesevilla.es (official; was 11:00–17:00) |
+| alcazar | daily 09:30–17:00 (Oct–Mar) | several ticket sites agree; official site not reached |
+| setas | 09:30–23:00, Fri–Sat to 23:30 | Time Out (was daily to 23:30) |
+| bellas-artes | Tue–Sat 09:00–21:00, Sun 09:00–15:00, Mon closed | Junta de Andalucía listings |
+| mercado-triana | Mon–Sat 09:00–00:00, Sun 12:00–17:00 | Time Out, Barceló: stalls to 15:00, bars to midnight (was 09:00–15:00, Sun closed) |
+| rinconcillo | daily 13:00–01:30 | Time Out |
+| plaza-espana | open all day | public square |
+| parque-maria-luisa | daily 08:00–22:00 (winter) | Time Out, Visita Sevilla |
+
+Their map pins were compared with OpenStreetMap the same day. Four were moved:
+rinconcillo (about 250 m off), parque-maria-luisa (175 m), bellas-artes (120 m)
+and mercado-triana (60 m). The other four were within about 30 m.
 
 ## Forecast
 
@@ -42,5 +54,8 @@ another way.
 
 ## Facts
 
-Facts exist for 18 places, all from the original 25. The other places have
-only their one-line summary for the guide to answer from.
+37 facts cover 30 places. 12 were added for newer places (shot tower, La
+Carbonería, El Comercio, Caridad, Tobacco Factory, Lebrija, Plaza de América,
+San Jorge, CAAC, Sailors' Chapel, Gran Poder, Lonja del Barranco), kept to
+well-known facts with no uncertain dates. The other places have only their
+one-line summary.

@@ -6,6 +6,7 @@
     "start": "react-native start",
     "macos": "react-native run-macos --scheme TravelBuddy-macOS",
     "test": "jest",
+    "test:live": "node ../scripts/test-live.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "postinstall": "node ../scripts/build-map-assets.mjs"

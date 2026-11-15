@@ -45,10 +45,13 @@ export class LlamaClient implements LLMClient {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const parser = new SSEParser();
+      const think = new ThinkFilter();
       let text = '';
       const read = () => {
         try {
-          for (const delta of parser.feed(xhr.responseText)) {
+          for (const raw of parser.feed(xhr.responseText)) {
+            const delta = think.push(raw);
+            if (!delta) continue;
             text += delta;
             onToken(delta);
           }
@@ -89,6 +92,35 @@ export function buildBody(req: ChatRequest, schema?: JSONSchema): Record<string,
     chat_template_kwargs: { enable_thinking: false },
     ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: req.tag.replace(/\W/g, '_'), schema, strict: true } } } : {}),
   };
+}
+
+/**
+ * Drops a leading "<think>…</think>" block from a stream. With thinking off,
+ * Bonsai-2's template still opens the reply with an empty one, and a server
+ * started with --reasoning-format none passes it through as text, where it
+ * would be shown and spoken. PrismML's Bonsai-2 launcher does not use that
+ * flag; this guards against any server that does.
+ */
+export class ThinkFilter {
+  private pending = '';
+  private passing = false;
+
+  push(delta: string): string {
+    if (this.passing) return delta;
+    this.pending += delta;
+    const s = this.pending.trimStart();
+    if (s.startsWith('<think>')) {
+      const end = s.indexOf('</think>');
+      if (end < 0) return ''; // still inside the block
+      const rest = s.slice(end + '</think>'.length).trimStart();
+      if (!rest) return ''; // the reply proper has not started yet
+      this.passing = true;
+      return rest;
+    }
+    if ('<think>'.startsWith(s)) return ''; // could still become "<think>"
+    this.passing = true;
+    return this.pending;
+  }
 }
 
 export function prettyModelName(id: string): string {

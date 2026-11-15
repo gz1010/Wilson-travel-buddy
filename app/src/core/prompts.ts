@@ -13,6 +13,7 @@ Rules:
 - base_area: where they are staying, in their words, or null.
 - interests: only from the allowed list; pick what they said they like.
 - stops: only things they said they will do. "fixed" is true for tickets, bookings and set times.
+- weekday: if they name a day of the week for a stop, copy it ("Tuesday"); otherwise null.
 - day: use the calendar ("Tuesday" means the day whose weekday is Tuesday). start is 24-hour "HH:MM" or null. "afternoon" is 15:00, "morning" is 10:00, "evening" is 19:00.
 - Do not invent stops.`,
 
@@ -28,14 +29,17 @@ Keep everything they did not ask to change exactly as it is.`,
 Rules:
 - Use only the candidates and their notes. Do not invent facts, times or distances.
 - Each reason is one sentence of at most 25 words, addressed to the traveller ("you").
-- Mention the most useful note: timing, weather, distance, or what they like.`,
+- Mention the most useful note: timing, weather, distance, or what they like.
+- Only when a candidate's notes say "rain is likely", mention the rain in its reason, using the note's words and time.
+- Mention sunset only for a place whose notes include "sunset".`,
 
   guide: (city: string) =>
     `You are Travel Buddy, a friendly offline guide for ${city}. Answer the traveller's question from the SOURCES only.
 Rules:
 - At most 3 short sentences; it will be read aloud.
 - Name places exactly as written in the sources.
-- If the sources do not answer the question, reply exactly: "${NOT_IN_GUIDE}"`,
+- If the sources answer the question, answer and stop. Never add a note about what the sources lack.
+- If the sources do not answer it, reply exactly: "${NOT_IN_GUIDE}" and nothing else.`,
 
   translate: (from: string, to: string) =>
     `Translate the user's message from ${from} to ${to}. Reply with the translation only, no quotes or notes. Keep it natural and spoken.`,

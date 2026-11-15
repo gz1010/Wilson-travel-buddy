@@ -17,7 +17,15 @@ export class Guide {
   sources(question: string, sit: Situation, trip?: Trip): SearchHit[] {
     // Fuzzy search always finds something; weak matches ("sushi in Tokyo" →
     // a tapas fact) only tempt a small model to answer anyway.
-    const hits = this.index.query(question, 5, ['place', 'fact']).filter(h => h.score >= MIN_SOURCE_SCORE);
+    const hits = this.index
+      .query(question, 5, ['place', 'fact'])
+      .filter(h => h.score >= MIN_SOURCE_SCORE)
+      .map(h => {
+        // The search document appends neighbourhood and category for matching;
+        // the model only needs the summary (seen live: it read "Santa Catalina tapas-bar" aloud).
+        const place = h.kind === 'place' ? this.index.place(h.id) : undefined;
+        return place ? { ...h, text: place.neighborhood ? `${place.summary} (${place.neighborhood})` : place.summary } : h;
+      });
     if (!NEARBY.test(question)) return hits;
     // "near my hotel" means the hotel, not the current location. Nearby
     // places go first: for these questions they are the answer.
@@ -51,7 +59,8 @@ export class Guide {
     ]
       .filter(Boolean)
       .join('\n');
-    const text = await this.llm.stream(
+    const filter = new DeclineFilter(onToken);
+    await this.llm.stream(
       {
         tag: 'guide',
         maxTokens: 220,
@@ -60,8 +69,60 @@ export class Guide {
           { role: 'user', content: `${context}\n\nQuestion: ${question}` },
         ],
       },
-      onToken,
+      t => filter.push(t),
     );
+    const text = filter.end();
     return { text, places: this.index.placesMentionedIn(text) };
   }
+}
+
+/**
+ * Bonsai-2 sometimes adds the refusal after a real answer ("…buried in the
+ * Cathedral. That isn't in my guide for this trip.") or talks about its
+ * sources ("No, the sources do not mention tap water."), which read aloud
+ * sounds like an answer. This passes the reply through a sentence at a time
+ * and drops those sentences, so they are never shown or spoken; if nothing
+ * is left, the reply is the refusal.
+ */
+export class DeclineFilter {
+  private tail = '';
+  private out = '';
+
+  constructor(private onToken: (t: string) => void) {}
+
+  push(token: string): void {
+    this.tail += token;
+    let m: RegExpExecArray | null;
+    const end = /[.!?…]["”')\]]*\s+/g;
+    let cut = 0;
+    while ((m = end.exec(this.tail))) {
+      this.sentence(this.tail.slice(cut, m.index + m[0].length));
+      cut = m.index + m[0].length;
+    }
+    this.tail = this.tail.slice(cut);
+  }
+
+  /** Call when the stream ends; returns everything shown. */
+  end(): string {
+    this.sentence(this.tail);
+    this.tail = '';
+    if (!this.out) this.emit(NOT_IN_GUIDE);
+    return this.out;
+  }
+
+  private sentence(raw: string): void {
+    const s = raw.trim();
+    if (!s || isMeta(s)) return;
+    this.emit(this.out ? ` ${s}` : s);
+  }
+
+  private emit(text: string): void {
+    this.out += text;
+    this.onToken(text);
+  }
+}
+
+/** A sentence about the guide rather than the city. */
+function isMeta(s: string): boolean {
+  return s.includes(NOT_IN_GUIDE.slice(0, -1)) || /\b(the|my|these|your|our) (sources?|guide)\b/i.test(s);
 }

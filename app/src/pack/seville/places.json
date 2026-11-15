@@ -16,13 +16,13 @@
   "indoor": true,
   "visitMinutes": 90,
   "hours": {
-   "mon": "11:00-15:30",
-   "tue": "11:00-17:00",
-   "wed": "11:00-17:00",
-   "thu": "11:00-17:00",
-   "fri": "11:00-17:00",
-   "sat": "11:00-17:00",
-   "sun": "14:30-18:00"
+   "mon": "10:45-18:00",
+   "tue": "10:45-18:00",
+   "wed": "10:45-18:00",
+   "thu": "10:45-18:00",
+   "fri": "10:45-18:00",
+   "sat": "10:45-18:00",
+   "sun": "14:30-19:00"
   },
   "summary": "The largest Gothic cathedral in the world, with Columbus's tomb and the Giralda bell tower, climbed by ramps instead of stairs.",
   "localName": "Catedral de Sevilla",
@@ -79,8 +79,8 @@
   "name": "María Luisa Park",
   "category": "park",
   "point": {
-   "lat": 37.376,
-   "lon": -5.989
+   "lat": 37.37449,
+   "lon": -5.98836
   },
   "tags": [
    "nature",
@@ -112,7 +112,13 @@
   "indoor": false,
   "visitMinutes": 45,
   "hours": {
-   "daily": "09:30-23:30"
+   "mon": "09:30-23:00",
+   "tue": "09:30-23:00",
+   "wed": "09:30-23:00",
+   "thu": "09:30-23:00",
+   "fri": "09:30-23:30",
+   "sat": "09:30-23:30",
+   "sun": "09:30-23:00"
   },
   "summary": "A giant wooden canopy over Plaza de la Encarnación with a rooftop walkway and one of the best sunset views of the city.",
   "localName": "Metropol Parasol",
@@ -124,8 +130,8 @@
   "name": "Triana Market",
   "category": "market",
   "point": {
-   "lat": 37.3858,
-   "lon": -6.0029
+   "lat": 37.38575,
+   "lon": -6.00357
   },
   "tags": [
    "food",
@@ -136,13 +142,13 @@
   "indoor": true,
   "visitMinutes": 60,
   "hours": {
-   "mon": "09:00-15:00",
-   "tue": "09:00-15:00",
-   "wed": "09:00-15:00",
-   "thu": "09:00-15:00",
-   "fri": "09:00-15:00",
-   "sat": "09:00-15:00",
-   "sun": "closed"
+   "mon": "09:00-00:00",
+   "tue": "09:00-00:00",
+   "wed": "09:00-00:00",
+   "thu": "09:00-00:00",
+   "fri": "09:00-00:00",
+   "sat": "09:00-00:00",
+   "sun": "12:00-17:00"
   },
   "summary": "A covered food market built over the ruins of a medieval castle, with fish, ham and produce stalls and small tapas counters.",
   "localName": "Mercado de Triana",
@@ -257,8 +263,8 @@
   "name": "Museum of Fine Arts",
   "category": "museum",
   "point": {
-   "lat": 37.3936,
-   "lon": -6.0001
+   "lat": 37.39249,
+   "lon": -6.00008
   },
   "tags": [
    "art",
@@ -412,8 +418,8 @@
   "name": "El Rinconcillo",
   "category": "tapas-bar",
   "point": {
-   "lat": 37.3953,
-   "lon": -5.9897
+   "lat": 37.39334,
+   "lon": -5.98829
   },
   "tags": [
    "food",

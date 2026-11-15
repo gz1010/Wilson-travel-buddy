@@ -71,13 +71,14 @@ export function scoreCandidates(index: PackIndex, trip: Trip | undefined, sit: S
     // Weather
     let weatherScore = 0;
     if (rainSoon) {
-      const hour = rainSoon.time.slice(11);
+      const rain = rainSoon === now ? 'rain is likely now' : `rain is likely from ${rainSoon.time.slice(11)}`;
       if (place.indoor) {
         weatherScore += 0.5;
-        notes.push(`indoor; rain ${rainSoon.precipitationChance}% from ${hour}`);
+        // No percentage here: the model copies it into reasons, and "(70%)" reads badly aloud.
+        notes.unshift(`indoors, out of the rain (${rain})`);
       } else {
         weatherScore -= 0.8;
-        notes.push(`outdoor; rain ${rainSoon.precipitationChance}% from ${hour}`);
+        notes.unshift(`outdoors, and ${rain}`);
       }
     }
     if (now && now.temperatureC >= 32 && !place.indoor && arrival > 12 * 60 && arrival < 18 * 60) {
@@ -150,8 +151,8 @@ export function templateReason(c: Candidate): string {
   const bits = [`${c.walkMinutes} min walk`];
   const fit = c.notes.find(n => n.includes('from your') || n.startsWith('fits before'));
   if (fit) bits.push(fit);
-  const weather = c.notes.find(n => n.startsWith('indoor; rain'));
-  if (weather) bits.push(`indoors, and ${weather.replace('indoor; ', '')}`);
+  const weather = c.notes.find(n => n.startsWith('indoors, out of the rain'));
+  if (weather) bits.push(`indoors, and rain is likely ${/rain is likely (now|from \d\d:\d\d)/.exec(weather)?.[1]}`);
   const sunset = c.notes.find(n => n.startsWith('sunset'));
   if (sunset) bits.push(`good light before ${sunset}`);
   if (c.matchedInterests.length) bits.push(`you like ${c.matchedInterests.slice(0, 2).join(' and ')}`);

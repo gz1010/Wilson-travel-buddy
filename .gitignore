@@ -26,3 +26,6 @@ app/macos/Pods/
 # Swift
 .build/
 .swiftpm/
+
+# Live model check output (npm run test:live)
+app/src/core/__live__/last-run.json
