@@ -13,5 +13,31 @@
   37.37,
   -5.975,
   37.405
- ]
+ ],
+ "heroes": {
+  "midday": {
+   "file": "hero-midday.jpg",
+   "credit": "Carlos Delgado",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Plaza_de_Espa%C3%B1a_(Sevilla)_-_01.jpg"
+  },
+  "afternoon": {
+   "file": "hero-afternoon.jpg",
+   "credit": "Oftalmologo",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File:Catedral_de_Sevilla_fachada_este_2.jpg"
+  },
+  "dusk": {
+   "file": "hero-dusk.jpg",
+   "credit": "No machine-readable author provided. Morinpat assumed (based on copyright claims).",
+   "license": "CC BY 2.5",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla_Torre_del_oro.JPG"
+  },
+  "night": {
+   "file": "hero-night.jpg",
+   "credit": "Anual",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Setas_2022An006.jpg"
+  }
+ }
 }

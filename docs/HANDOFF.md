@@ -6,6 +6,32 @@ Claude Code session on Person A's M3 Mac, because the Mac can do what the
 cloud container could not: build the Swift helper and the macOS app, run
 Bonsai-2 and Argmax, reach Wikipedia, and use the camera.
 
+## Update, Sunday 11/15: what Person B finished from Windows
+
+Everything below that doesn't need a Mac is done, type-checked, linted and covered by tests.
+What is left needs the Mac: the Swift camera and on-screen checks. Don't redo tasks 1 to 4.
+
+| Task | State |
+|---|---|
+| 1. Map and Place | Done. Map: "You: …" chip with "Tap the map to move", Focus / I'm here on a search match, "I'm here" on the card, "At my hotel". Place: every fact, Wikipedia credit line, the asked question and its streamed answer on top with SPEAKING, starter questions when the guide has under two facts, a scroll area that stops above the buttons. |
+| 2. Plan text input | Done. Always-visible glass pill with a send button; Enter sends. The macOS focus ring is turned off. A smaller orb when the window is under 800 px tall. |
+| 3. Translate | Done apart from the check on the Mac. Visible copy says Translate, a fixed 72 px band for the pill, line counts fitted to each half, 100 px kept for the tab bar (no mic orb there). **Flip fix:** the transform moved to an inner opaque view with an explicit `transformOrigin: '50% 50%'`. RCTView's `displayLayer` recentres `layer.transform` on every redraw, so after a resize a plain rotate was recentred twice and drifted out of the half. With a transformOrigin set, `reactSetFrame` resets the transform first. **Confirm on the Mac that the top half is upside down, including after resizing the window.** If it still isn't, try `scaleX: -1, scaleY: -1` in `FLIPPED` in `TalkScreen.tsx`. |
+| 4. Prepared pack | Done and run for real: `fetch-facts.mjs`, `prepare-pack.mjs`, `build-photos.mjs` (1200 px places, 1600 px heroes taken from place photos), `prepared.json`, the Welcome line, README licences. Result: 79 facts (42 from Wikipedia; 18 of those exist only on Spanish Wikipedia, so they read in Spanish), 48 place photos, and all 4 city photos (Plaza de España, the Cathedral, Torre del Oro, Las Setas). Wrong Wikipedia matches are fixed in `app/src/pack/seville/wiki-overrides.json`. Ten places whose every photo hit was wrong (a portrait, a museum in the Caribbean, an opera title page…) are set to `null` in `photos/overrides.json`, so they show their drawn scene tile. City photos now come only from landmark place photos, never a search (a search gave a painting). The forecast was skipped (`--skip forecast`) so the demo's sample rain stays. **Look at the photos on the Mac** and fix any bad pick in `photos/overrides.json`. Tiles are gitignored: run `node scripts/prepare-pack.mjs --skip facts,photos,forecast` on the Mac. |
+| 5. Camera and Look | **TypeScript side done; the Swift side is yours.** Done: `protocol.ts` messages, `AudioClient.startCamera` / `snap` (helper client and typed stand-in), `ChatMessage.images` sent as `image_url` parts, `core/vision.ts` (`Looker`) with tests, `prompts.look`, `LookScreen.tsx`, the Look tab, the Talk tab renamed Translate, the tab bar on talk and look, and the projector check in `start.sh`. |
+| 6. Integration | Run on Windows: `tsc`, `eslint` (B's two lint errors fixed), `jest`. Everything else needs the Mac. |
+
+**For A, the Swift camera (task 5 step 1), matching `app/src/services/audio/protocol.ts`:**
+
+- Add `camera: true` to the `ready` message once `Camera.swift` exists. The app only sends
+  `camera.*` messages to a helper that says so; older builds get "This buddy-audio build has
+  no camera yet".
+- `camera.start` → a stream of `camera.frame {jpeg}`, `camera.snap {id}` → `camera.snapped {id, jpeg}`,
+  `camera.stop`. Failures send `camera.error {message, id?}`, with the snap's id when a snap failed.
+  `jpeg` is base64 with no `data:` prefix. If access is refused, say "denied" in the message: the
+  Look screen then tells the person where to allow it.
+- Then check on the Mac: Look with a real sign and a dish, `start.sh` printing "Vision projector: …",
+  and llama-server's log showing `Vision:`.
+
 ## How to run this on the Mac
 
 1. Commit or stash local changes, then pull this branch (see the commands in

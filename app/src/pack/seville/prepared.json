@@ -1,12 +1,12 @@
 {
- "preparedAt": null,
- "places": 0,
- "facts": 0,
- "wikiFacts": 0,
- "photos": 0,
- "heroes": 0,
- "tiles": false,
- "forecastFrom": null,
- "forecastTo": null,
+ "preparedAt": "2026-11-15T06:33:54.730Z",
+ "places": 60,
+ "facts": 79,
+ "wikiFacts": 42,
+ "photos": 48,
+ "heroes": 4,
+ "tiles": true,
+ "forecastFrom": "2026-11-15T00:00",
+ "forecastTo": "2026-11-19T23:00",
  "forecastIsSample": true
 }
