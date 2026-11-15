@@ -5,17 +5,20 @@
 //   node scripts/build-photos.mjs                 # Seville
 //   node scripts/build-photos.mjs --dest seville --width 1200 --hero-width 1600
 //   node scripts/build-photos.mjs --only catedral,alcazar   # redo some places
+//   node scripts/build-photos.mjs --only torre-oro --heroes # redo some places, then the city photos
 //
 // For each place it uses the main image of its Wikipedia article (Spanish, then English),
 // otherwise the best Commons search hit. To replace a bad pick, put the Commons file name in
 // app/src/pack/<dest>/photos/overrides.json, e.g. { "catedral": "File:Catedral de Sevilla.jpg" },
-// and run again with --only catedral. The four city photos (heroes) reuse place photos at a
-// larger size, one landmark per time of day (HERO_PLACES below); "heroes" in overrides.json
-// replaces one, and a Commons search is the last resort.
+// and run again with --only catedral; null instead of a name means no photo (the drawn scene
+// tile), for places where every search hit is wrong. The four city photos (heroes) reuse
+// landmark place photos at a larger size (HERO_PLACES below), and "heroes" in overrides.json
+// replaces one. A time of day with no landmark photo keeps its drawn sky: Commons searches for
+// generic city views returned paintings and murals.
 //
 // Writes: photos/<id>.jpg, a `photo` record on each place in places.json, `heroes` in
 // destination.json, and photos/index.ts (the static require() list the app bundles).
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,14 +43,23 @@ const HEADERS = { 'User-Agent': 'TravelBuddyPackBuilder/1.0 (offline travel app;
 const ALLOWED = /^(cc0|public domain|pd|cc by(-sa)? \d)/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Wikimedia rate-limits anonymous clients (429): back off, honouring Retry-After, rather than
+// treating a refused request as "no photo".
+async function getWithBackoff(url) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const res = await fetch(url, { headers: HEADERS });
+    if (res.ok) return res;
+    if (res.status === 404) throw new Error('404');
+    const wait = Number(res.headers.get('retry-after')) * 1000 || 4000 * 2 ** attempt;
+    await sleep(Math.min(wait, 60000));
+  }
+  throw new Error(`${new URL(url).host} kept refusing (rate limit)`);
+}
+
 async function api(host, params) {
   const url = `https://${host}/w/api.php?` + new URLSearchParams({ format: 'json', formatversion: '2', origin: '*', ...params });
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(url, { headers: HEADERS });
-    if (res.ok) return res.json();
-    await sleep(1000 * (attempt + 1));
-  }
-  throw new Error(`${host} API failed`);
+  await sleep(500);
+  return (await getWithBackoff(url)).json();
 }
 
 const strip = s => (s ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
@@ -99,14 +111,13 @@ async function pick(candidates, width = WIDTH) {
 }
 
 async function download(info, file) {
-  const res = await fetch(info.thumb, { headers: HEADERS });
-  if (!res.ok) throw new Error(`download ${res.status}`);
+  const res = await getWithBackoff(info.thumb);
   writeFileSync(join(photoDir, file), Buffer.from(await res.arrayBuffer()));
   return { file, credit: info.credit, license: info.license, source: info.source };
 }
 
 async function placePhoto(place) {
-  if (overrides[place.id]) return pick([overrides[place.id]]);
+  if (place.id in overrides) return overrides[place.id] ? pick([overrides[place.id]]) : undefined;
   const name = place.localName ?? place.name;
   const candidates = [
     await wikipediaImage('es', `${name} ${localCity}`).catch(() => undefined),
@@ -117,12 +128,12 @@ async function placePhoto(place) {
 }
 
 // City photos by time of day: a landmark that reads well at that hour. The first place with a
-// photo wins. Commons searches (HERO_SEARCHES) are only the fallback.
+// photo wins; with none, that time of day keeps its drawn sky.
 const HERO_PLACES = {
-  midday: ['plaza-espana', 'alcazar'],
-  afternoon: ['catedral', 'archivo-indias'],
-  dusk: ['torre-oro', 'puente-triana'],
-  night: ['setas', 'puente-triana'],
+  midday: ['plaza-espana', 'alcazar', 'parque-maria-luisa'],
+  afternoon: ['catedral', 'archivo-indias', 'plaza-nueva'],
+  dusk: ['torre-oro', 'puente-triana', 'calle-betis'],
+  night: ['setas', 'puente-triana', 'alfalfa'],
 };
 
 /** The Commons file title a place photo came from, from its record's description URL. */
@@ -131,19 +142,13 @@ function commonsTitle(photo) {
   return m ? decodeURIComponent(m[1]).replace(/_/g, ' ') : undefined;
 }
 
-const HERO_SEARCHES = {
-  midday: `${localCity} plaza día`,
-  afternoon: `${localCity} calle tarde`,
-  dusk: `${localCity} atardecer`,
-  night: `${localCity} noche`,
-};
-
 let found = 0;
 for (const place of places) {
   if (only && !only.has(place.id)) continue;
   try {
     const info = await placePhoto(place);
     if (!info) {
+      if (place.photo?.file && existsSync(join(photoDir, place.photo.file))) unlinkSync(join(photoDir, place.photo.file));
       delete place.photo;
       console.log(`  -     ${place.id}: no reusable photo (scene tile instead)`);
       continue;
@@ -154,23 +159,25 @@ for (const place of places) {
   } catch (e) {
     console.log(`  error ${place.id}: ${e.message}`);
   }
-  await sleep(300);
+  await sleep(1000);
 }
 
-if (!only) {
+if (!only || 'heroes' in args) {
   dest.heroes = dest.heroes ?? {};
-  for (const [tod, query] of Object.entries(HERO_SEARCHES)) {
+  for (const tod of Object.keys(HERO_PLACES)) {
     const chosen = overrides.heroes?.[tod];
     const fromPlaces = HERO_PLACES[tod].map(id => commonsTitle(places.find(p => p.id === id)?.photo));
-    const info = await pick(
-      chosen ? [chosen] : [...fromPlaces, ...(await commonsSearch(query).catch(() => []))],
-      HERO_WIDTH,
-    );
+    const info = await pick(chosen ? [chosen] : fromPlaces, HERO_WIDTH);
     if (info) {
       dest.heroes[tod] = await download(info, `hero-${tod}.jpg`);
       console.log(`  ok    hero ${tod}: ${info.title} (${info.license})`);
-    } else console.log(`  -     hero ${tod}: none found; set heroes.${tod} in overrides.json`);
-    await sleep(300);
+    } else {
+      // No landmark photo: the drawn sky, never a random search hit.
+      if (dest.heroes[tod] && existsSync(join(photoDir, dest.heroes[tod].file))) unlinkSync(join(photoDir, dest.heroes[tod].file));
+      delete dest.heroes[tod];
+      console.log(`  -     hero ${tod}: no landmark photo; set heroes.${tod} in overrides.json`);
+    }
+    await sleep(1000);
   }
 }
 
