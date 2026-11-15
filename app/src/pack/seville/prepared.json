@@ -1,0 +1,12 @@
+{
+ "preparedAt": null,
+ "places": 0,
+ "facts": 0,
+ "wikiFacts": 0,
+ "photos": 0,
+ "heroes": 0,
+ "tiles": false,
+ "forecastFrom": null,
+ "forecastTo": null,
+ "forecastIsSample": true
+}

@@ -3,14 +3,15 @@
 // Commons, keeping only reusable licences. Run once per city while online:
 //
 //   node scripts/build-photos.mjs                 # Seville
-//   node scripts/build-photos.mjs --dest seville --width 900
+//   node scripts/build-photos.mjs --dest seville --width 1200 --hero-width 1600
 //   node scripts/build-photos.mjs --only catedral,alcazar   # redo some places
 //
 // For each place it uses the main image of its Wikipedia article (Spanish, then English),
 // otherwise the best Commons search hit. To replace a bad pick, put the Commons file name in
 // app/src/pack/<dest>/photos/overrides.json, e.g. { "catedral": "File:Catedral de Sevilla.jpg" },
-// and run again with --only catedral. Hero photos come from "heroes" in that same file, or the
-// default searches below.
+// and run again with --only catedral. The four city photos (heroes) reuse place photos at a
+// larger size, one landmark per time of day (HERO_PLACES below); "heroes" in overrides.json
+// replaces one, and a Commons search is the last resort.
 //
 // Writes: photos/<id>.jpg, a `photo` record on each place in places.json, `heroes` in
 // destination.json, and photos/index.ts (the static require() list the app bundles).
@@ -22,7 +23,8 @@ const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
 );
 const destId = args.dest ?? 'seville';
-const WIDTH = Number(args.width ?? 900);
+const WIDTH = Number(args.width ?? 1200);
+const HERO_WIDTH = Number(args['hero-width'] ?? 1600);
 const only = args.only ? new Set(args.only.split(',')) : undefined;
 const packDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'app/src/pack', destId);
 const photoDir = join(packDir, 'photos');
@@ -51,9 +53,9 @@ async function api(host, params) {
 const strip = s => (s ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
 /** Licence, author and a WIDTH-px thumbnail for a Commons file, or undefined if not reusable. */
-async function fileInfo(title) {
+async function fileInfo(title, width = WIDTH) {
   const j = await api('commons.wikimedia.org', {
-    action: 'query', titles: title, prop: 'imageinfo', iiprop: 'url|extmetadata|mime', iiurlwidth: String(WIDTH),
+    action: 'query', titles: title, prop: 'imageinfo', iiprop: 'url|extmetadata|mime', iiurlwidth: String(width),
   });
   const page = j.query?.pages?.[0];
   const ii = page?.imageinfo?.[0];
@@ -87,10 +89,10 @@ async function commonsSearch(query) {
   return (j.query?.search ?? []).map(r => r.title);
 }
 
-async function pick(candidates) {
+async function pick(candidates, width = WIDTH) {
   for (const title of candidates) {
     if (!title) continue;
-    const info = await fileInfo(title).catch(() => undefined);
+    const info = await fileInfo(title, width).catch(() => undefined);
     if (info) return info;
   }
   return undefined;
@@ -112,6 +114,21 @@ async function placePhoto(place) {
     ...(await commonsSearch(`${name} ${localCity}`).catch(() => [])),
   ];
   return pick(candidates);
+}
+
+// City photos by time of day: a landmark that reads well at that hour. The first place with a
+// photo wins. Commons searches (HERO_SEARCHES) are only the fallback.
+const HERO_PLACES = {
+  midday: ['plaza-espana', 'alcazar'],
+  afternoon: ['catedral', 'archivo-indias'],
+  dusk: ['torre-oro', 'puente-triana'],
+  night: ['setas', 'puente-triana'],
+};
+
+/** The Commons file title a place photo came from, from its record's description URL. */
+function commonsTitle(photo) {
+  const m = /\/wiki\/(File:.+)$/.exec(photo?.source ?? '');
+  return m ? decodeURIComponent(m[1]).replace(/_/g, ' ') : undefined;
 }
 
 const HERO_SEARCHES = {
@@ -144,7 +161,11 @@ if (!only) {
   dest.heroes = dest.heroes ?? {};
   for (const [tod, query] of Object.entries(HERO_SEARCHES)) {
     const chosen = overrides.heroes?.[tod];
-    const info = await pick(chosen ? [chosen] : await commonsSearch(query).catch(() => []));
+    const fromPlaces = HERO_PLACES[tod].map(id => commonsTitle(places.find(p => p.id === id)?.photo));
+    const info = await pick(
+      chosen ? [chosen] : [...fromPlaces, ...(await commonsSearch(query).catch(() => []))],
+      HERO_WIDTH,
+    );
     if (info) {
       dest.heroes[tod] = await download(info, `hero-${tod}.jpg`);
       console.log(`  ok    hero ${tod}: ${info.title} (${info.license})`);

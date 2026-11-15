@@ -4,6 +4,7 @@ import { Glass, GlassButton, OfflineChip } from '../dusk/Glass';
 import { useReduceMotion } from '../dusk/motion';
 import { HeroPhoto, PhotoFade } from '../dusk/Photos';
 import { dusk, font, white } from '../dusk/tokens';
+import { preparedLine } from '../dusk/format';
 import type { WelcomeProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
 
@@ -16,7 +17,7 @@ const H = dusk.layout.phoneHeight;
 
 type Step = WelcomeProps['steps'][number];
 
-export function WelcomeScreen({ city, steps, status, models, ready, onStart }: WelcomeProps) {
+export function WelcomeScreen({ city, steps, status, models, ready, onStart, prepared }: WelcomeProps) {
   const { width, height } = useScreenSize();
   const sx = width / W;
   // Shift for everything below the photo's middle: positive on taller phones, negative on shorter.
@@ -47,6 +48,10 @@ export function WelcomeScreen({ city, steps, status, models, ready, onStart }: W
         </Text>
         <Text style={[styles.subtitle, { maxWidth: 300 * sx }]}>
           {`All of ${city} on this phone, and a guide that never needs a signal.`}
+        </Text>
+        {/* What was downloaded while online, or how to do it (scripts/prepare-pack.mjs). */}
+        <Text numberOfLines={2} style={[styles.prepared, { maxWidth: 320 * sx }]}>
+          {preparedLine(city, prepared)}
         </Text>
       </View>
 
@@ -141,6 +146,7 @@ const styles = StyleSheet.create({
     color: dusk.color.textSoft,
     textAlign: 'center',
   },
+  prepared: { ...font('500'), marginTop: 10, fontSize: 12, lineHeight: 16, color: dusk.color.text2, textAlign: 'center' },
   grid: { paddingVertical: 12, paddingHorizontal: 16 },
   gridInner: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8, columnGap: 14 },
   // Two columns: half the row minus half the 14 px column gap.

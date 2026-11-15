@@ -13,7 +13,8 @@ An offline travel companion for the Mac that knows your trip, suggests what to d
 2. **What to do now.** Code ranks the city's places by distance, opening hours, weather, time of day, interests and the next booking; Bonsai-2 picks three and says why. Move the clock or your location and the suggestions change.
 3. **Voice guide.** Answers come only from the bundled guide, and it says so when the guide has no answer.
 4. **Translator.** Talk with a local across the Mac; each sentence is labelled with its speaker, translated and spoken.
-5. **Offline map** with stops and suggestions, and an **environment panel**: the saved forecast with its age, and sunrise and sunset computed on-device.
+5. **Look.** Point the Mac's camera at a dish, a menu or a road sign; Bonsai-2 says what it is, translates any text and gives a tip.
+6. **Offline map** with stops and suggestions, and an **environment panel**: the saved forecast with its age, and sunrise and sunset computed on-device.
 
 ## How it fits together
 
@@ -38,16 +39,17 @@ BONSAI_MODEL=4B scripts/fetch-models.sh
 ```
 
 ```bash
-node scripts/build-tiles.mjs
-```
-
-```bash
-node scripts/fetch-forecast.mjs
+node scripts/prepare-pack.mjs --skip forecast
 ```
 
 - `fetch-models.sh` gets Bonsai-2 and `llama-server` through PrismML's Bonsai-demo setup, and on Apple Silicon builds `buddy-audio` and downloads the Argmax models.
-- `build-tiles.mjs` bakes OpenStreetMap tiles for Seville into the app (gitignored). Without it the map shows pins only.
-- `fetch-forecast.mjs` saves a real forecast. The committed one is sample data.
+- `prepare-pack.mjs` downloads everything the guide needs, then the app never goes online again. It runs four steps in order, reports each one, and carries on past a failure:
+  - `fetch-facts.mjs`: a Wikipedia summary for each place. Fix a wrong match in `app/src/pack/seville/wiki-overrides.json`.
+  - `build-photos.mjs`: a photo per place and four city photos, from Wikimedia Commons. Fix a bad pick in `app/src/pack/seville/photos/overrides.json`.
+  - `fetch-forecast.mjs`: a real Open-Meteo forecast. `--skip forecast` keeps the committed sample, which has the rain the demo needs.
+  - `build-tiles.mjs`: OpenStreetMap tiles for Seville. They are gitignored, so run this on every machine. Without them the map shows pins only.
+
+  It writes `app/src/pack/seville/prepared.json`, and the Welcome screen shows what was prepared. Facts and photos are committed, so a fresh clone only needs the tiles (`--skip facts,photos,forecast`).
 
 ## Run (Wi-Fi off is fine)
 
@@ -55,7 +57,7 @@ node scripts/fetch-forecast.mjs
 scripts/start.sh
 ```
 
-It starts `llama-server`, `buddy-audio` and Metro (React Native's JavaScript server), waits for the model, then builds and opens the app. Logs go to `~/Library/Application Support/TravelBuddy/logs/`. The first time, macOS asks for microphone access for the terminal running `buddy-audio`.
+It starts `llama-server`, `buddy-audio` and Metro (React Native's JavaScript server), waits for the model, then builds and opens the app. Logs go to `~/Library/Application Support/TravelBuddy/logs/`. The first time, macOS asks for microphone access, and for camera access when you open Look, for the terminal running `buddy-audio`. The helper owns the microphone and the camera, so the app itself needs neither entitlement. Look also needs Bonsai-2's vision projector (`*mmproj*.gguf` next to the model); `start.sh` says whether it found one.
 
 To work on the app without the helpers: `cd app && npm start` in one terminal and `cd app && npm run macos` in another.
 
@@ -71,4 +73,12 @@ Pack data is in `app/src/pack/seville/`. To add a place, look it up in OpenStree
 
 ## Credits
 
-Map data © OpenStreetMap contributors, tiles via Protomaps. Forecast from Open-Meteo. Bonsai-2 by PrismML. Speech by Argmax.
+Bonsai-2 by PrismML. Speech by Argmax.
+
+| Data | Source | Licence |
+|---|---|---|
+| Place summaries (`wiki-*` facts) | Wikipedia contributors; each fact records its article URL | CC BY-SA 4.0 |
+| Photos | Wikimedia Commons; author, licence and file page for each photo are in `places.json` (`photo`) and `destination.json` (`heroes`) | Per photo: CC0, public domain, CC BY or CC BY-SA |
+| Map data and place locations | © OpenStreetMap contributors, tiles via Protomaps | ODbL |
+| Forecast | Open-Meteo.com | CC BY 4.0 |
+| Manrope font | The Manrope Project Authors | SIL Open Font Licence (`app/assets/fonts/OFL.txt`) |

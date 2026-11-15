@@ -17,4 +17,20 @@ export interface WelcomeProps {
   models?: string[];
   ready: boolean;
   onStart: () => void;
+  /** What scripts/prepare-pack.mjs downloaded while online (the pack's prepared.json). */
+  prepared?: PreparedPack;
+}
+
+/** app/src/pack/<city>/prepared.json, written by scripts/prepare-pack.mjs. */
+export interface PreparedPack {
+  /** ISO time of the last run, or null when the pack has never been prepared. */
+  preparedAt: string | null;
+  places: number;
+  facts: number;
+  wikiFacts?: number;
+  photos: number;
+  heroes?: number;
+  tiles?: boolean;
+  forecastFrom?: string | null;
+  forecastTo?: string | null;
 }

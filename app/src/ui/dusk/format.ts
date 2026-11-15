@@ -25,6 +25,22 @@ export function directions(from: GeoPoint, to: GeoPoint, meters: number) {
   };
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Welcome's line about the offline pack: "Seville guide prepared Nov 14 · 60 places · 97 facts ·
+ * 52 photos", or how to prepare it when it never was.
+ */
+export function preparedLine(
+  city: string,
+  p: { preparedAt: string | null; places: number; facts: number; photos: number } | undefined,
+): string {
+  if (!p?.preparedAt) return 'Not prepared yet: run node scripts/prepare-pack.mjs while online';
+  const d = new Date(p.preparedAt);
+  const when = Number.isNaN(d.getTime()) ? '' : ` ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return `${city} guide prepared${when} · ${p.places} places · ${p.facts} facts · ${p.photos} photos`;
+}
+
 export const CATEGORY_LABEL: Record<PlaceCategory, string> = {
   landmark: 'Landmark',
   museum: 'Museum',
