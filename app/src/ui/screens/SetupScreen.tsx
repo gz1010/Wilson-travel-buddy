@@ -14,8 +14,8 @@ import {
 import { addDays, weekday, WEEKDAY_KEYS, WEEKDAY_NAMES } from '../../core/time';
 import { tripDay } from '../../core/trip';
 import type { Trip } from '../../core/types';
-import { Glass, GlassButton, GlassIconButton, onGlass } from '../dusk/Glass';
-import { CloseIcon } from '../dusk/Icons';
+import { axPress, Glass, GlassButton, GlassIconButton, onGlass } from '../dusk/Glass';
+import { ArrowIcon, CloseIcon } from '../dusk/Icons';
 import { MicOrb } from '../dusk/Nav';
 import { HeroPhoto, PhotoFade } from '../dusk/Photos';
 import { useReduceMotion } from '../dusk/motion';
@@ -34,6 +34,37 @@ const TRANSCRIPT_LINE = Math.round(TRANSCRIPT_SIZE * 1.32);
 const MAX_DAY_TILES = 5;
 // Narrow no-break space: pads a pill without letting the line break between the padding and the word.
 const THIN_SPACE = '\u202F';
+// The typed-plans pill and its send button.
+const FIELD_HEIGHT = 48;
+const SEND_SIZE = 36;
+// react-native-macos draws a rectangular focus ring around a focused field, which looks broken
+// inside a pill; the iOS typings don't know the prop that turns it off.
+const NO_FOCUS_RING: object = { enableFocusRing: false };
+// The Mac window's smallest content height (AppDelegate.mm sets contentMinSize to 390 x 700).
+const MIN_HEIGHT = 700;
+
+/**
+ * The screen's vertical sizes for a window height: the mockup's at 844 and taller; below that the
+ * top padding and the mic area shrink, down to the 700 minimum, so the transcript keeps a few lines.
+ */
+function fit(height: number) {
+  const { phoneHeight } = dusk.layout;
+  const t = Math.max(0, Math.min(1, (phoneHeight - height) / (phoneHeight - MIN_HEIGHT)));
+  const mix = (full: number, short: number) => Math.round(full + (short - full) * t);
+  const ringFar = mix(26, 16);
+  return {
+    top: mix(56, 40),
+    transcriptGap: mix(16, 12),
+    fieldGap: mix(14, 10),
+    orb: mix(dusk.size.micOrb, 64),
+    rings: [mix(12, 8), ringFar] as const,
+    // The rings are drawn outside the orb's box, so the orb keeps clear of the field by more.
+    orbTop: ringFar + mix(16, 10),
+    gap: mix(16, 10),
+    confirm: mix(dusk.size.buttonSmall, dusk.size.touch),
+    bottom: mix(40, 22),
+  };
+}
 
 const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen'];
 
@@ -148,6 +179,7 @@ function useKeyboardHeight(reduce: boolean): number {
 export function SetupScreen({ b, nav }: ScreenProps) {
   const { width, height } = useScreenSize();
   const sx = width / dusk.layout.phoneWidth;
+  const f = fit(height);
   const reduce = useReduceMotion();
   const keyboard = useKeyboardHeight(reduce);
   const hasMic = b.runtime.audio.info.hasMicrophone;
@@ -165,15 +197,21 @@ export function SetupScreen({ b, nav }: ScreenProps) {
   const onArea = (e: LayoutChangeEvent) => setAreaHeight(e.nativeEvent.layout.height);
   const lines = Math.max(2, Math.floor(areaHeight / TRANSCRIPT_LINE) || 7);
 
-  // Typed input when there is no microphone.
+  // Typing instead of talking: always there. The send button and Enter both send; the typed line
+  // then shows in the transcript like a spoken one (b.send adds it to the chat).
   const [typed, setTyped] = useState('');
   const input = useRef<TextInput>(null);
-  const submit = () => {
-    const t = typed.trim();
-    if (!t || b.busy) return;
-    b.send(t);
-    setTyped('');
-    Keyboard.dismiss();
+  // Not while the mic is listening: what it hears is sent when it stops, and the transcript shows
+  // the live words until then, so a typed line would race it and not show.
+  const canSend = typed.trim().length > 0 && !b.busy && !b.listening;
+  const submit = (text = typed) => {
+    const t = text.trim();
+    if (t && !b.busy && !b.listening) {
+      b.send(t);
+      setTyped('');
+    }
+    // On macOS, Enter takes focus away from the field; give it back so the next line can be typed.
+    setTimeout(() => input.current?.focus(), 0);
   };
   const onMic = () => (hasMic ? b.talk() : input.current?.focus());
 
@@ -193,7 +231,7 @@ export function SetupScreen({ b, nav }: ScreenProps) {
       <HeroPhoto tod="night" style={[styles.photo, { height: photoHeight }]} />
       <PhotoFade stops={[[0, 1], [0.38, 1], [0.7, 0.4], [1, 0.8]]} />
 
-      <View style={[styles.column, { paddingBottom: keyboardUp ? keyboard + 12 : 40 }]}>
+      <View style={[styles.column, { paddingTop: f.top, paddingBottom: keyboardUp ? keyboard + 12 : f.bottom }]}>
         {/* Header */}
         <View style={[styles.header, { marginHorizontal: 20 * sx }]}>
           <Text style={styles.label}>TELL ME ABOUT YOUR TRIP</Text>
@@ -203,7 +241,7 @@ export function SetupScreen({ b, nav }: ScreenProps) {
         </View>
 
         {/* Live transcript */}
-        <View style={[styles.transcriptArea, { marginHorizontal: 22 * sx }]} onLayout={onArea}>
+        <View style={[styles.transcriptArea, { marginHorizontal: 22 * sx, marginBottom: f.transcriptGap }]} onLayout={onArea}>
           <Text
             accessibilityLiveRegion="polite"
             numberOfLines={lines}
@@ -267,31 +305,47 @@ export function SetupScreen({ b, nav }: ScreenProps) {
           </View>
         </Glass>
 
-        {/* Bottom: typed input (no microphone), mic orb, confirm. */}
-        <View style={[styles.bottom, keyboardUp && { marginTop: 12 }]}>
-          {!hasMic && (
-            <Glass kind="clear" radius={999} style={[styles.field, { width: Math.min(width - 40 * sx, 330 * sx) }, !keyboardUp && { marginBottom: 12 }]}>
-              <TextInput
-                ref={input}
-                accessibilityLabel="Type your trip"
-                value={typed}
-                onChangeText={setTyped}
-                onSubmitEditing={submit}
-                returnKeyType="send"
-                blurOnSubmit
-                editable={!b.busy}
-                placeholder="Or type it here…"
-                placeholderTextColor={dusk.color.pending}
-                style={styles.input}
-              />
+        {/* Type your plans: a clear-glass pill with a small send button, between the card and the mic. */}
+        <Glass kind="clear" radius={dusk.radius.pill} style={[styles.field, { marginHorizontal: 14 * sx, marginTop: f.fieldGap }]}>
+          <TextInput
+            ref={input}
+            accessibilityLabel="Type your plans"
+            value={typed}
+            onChangeText={setTyped}
+            onSubmitEditing={e => submit(e.nativeEvent.text)}
+            submitBehavior="submit"
+            placeholder="Or type your plans…"
+            placeholderTextColor={dusk.color.pending}
+            selectionColor={white(0.3)}
+            cursorColor={dusk.color.white}
+            autoCorrect={false}
+            spellCheck={false}
+            {...NO_FOCUS_RING}
+            style={styles.input}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            accessibilityState={{ disabled: !canSend }}
+            disabled={!canSend}
+            onPress={() => submit()}
+            {...axPress(() => submit(), !canSend)}
+            hitSlop={(dusk.size.touch - SEND_SIZE) / 2}
+            style={({ pressed }) => ({ opacity: !canSend ? 0.45 : pressed ? 0.85 : 1 })}>
+            <Glass kind="prominent" radius={SEND_SIZE / 2} blur={false} style={styles.send}>
+              <ArrowIcon size={16} strokeWidth={2.4} />
             </Glass>
-          )}
+          </Pressable>
+        </Glass>
+
+        {/* Bottom: mic orb and confirm, smaller in short windows. */}
+        <View style={[styles.bottom, { marginTop: keyboardUp ? 12 : f.orbTop, gap: f.gap }]}>
           {!keyboardUp && (
             <>
-              <OrbWithRings listening={b.listening} onPress={onMic} reduce={reduce} />
+              <OrbWithRings listening={b.listening} onPress={onMic} reduce={reduce} size={f.orb} rings={f.rings} />
               <GlassButton
                 label="Looks right"
-                height={dusk.size.buttonSmall}
+                height={f.confirm}
                 disabled={!trip}
                 onPress={confirm}
                 style={styles.confirm}
@@ -333,6 +387,7 @@ function DayTiles({ b, trip, onDay }: { b: Buddy; trip: Trip; onDay: (date: stri
             accessibilityRole="button"
             accessibilityLabel={`${WEEKDAY_NAMES[wd]}, ${stops.length ? stops.map(s => s.title).join(', ') : 'free'}${fixed ? ', booked' : ''}`}
             onPress={() => onDay(date)}
+            {...axPress(() => onDay(date))}
             style={({ pressed }) => [styles.tileHit, pressed && { opacity: 0.8 }]}>
             {fixed ? (
               <Glass kind="prominent" radius={16} blur={false} style={styles.tile}>
@@ -358,9 +413,21 @@ function Pill({ label }: { label: string }) {
   );
 }
 
-/** The 80 px mic orb with the two faint concentric rings; the rings breathe while listening. */
-function OrbWithRings({ listening, onPress, reduce }: { listening: boolean; onPress: () => void; reduce: boolean }) {
-  const size = dusk.size.micOrb;
+/** The mic orb (80 px in the mockup) with two faint concentric rings; the rings breathe while listening. */
+function OrbWithRings({
+  listening,
+  onPress,
+  reduce,
+  size,
+  rings,
+}: {
+  listening: boolean;
+  onPress: () => void;
+  reduce: boolean;
+  size: number;
+  /** How far the near and the far ring reach beyond the orb. */
+  rings: readonly [number, number];
+}) {
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!listening || reduce) {
@@ -394,8 +461,8 @@ function OrbWithRings({ listening, onPress, reduce }: { listening: boolean; onPr
   );
   return (
     <View style={{ width: size, height: size }}>
-      {ring(26, 0.035)}
-      {ring(12, 0.07)}
+      {ring(rings[1], 0.035)}
+      {ring(rings[0], 0.07)}
       <MicOrb listening={listening} onPress={onPress} size={size} />
     </View>
   );
@@ -404,7 +471,8 @@ function OrbWithRings({ listening, onPress, reduce }: { listening: boolean; onPr
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden' },
   photo: { position: 'absolute', left: 0, right: 0, bottom: 0, opacity: 0.7 },
-  column: { flex: 1, paddingTop: 56 },
+  // paddingTop comes from fit(): 56 at 844 tall, as in the mockup.
+  column: { flex: 1 },
   header: { height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   label: {
     ...font(dusk.font.label.weight),
@@ -413,7 +481,7 @@ const styles = StyleSheet.create({
     color: dusk.color.text2,
   },
   // Header is 44 tall from 56, so the transcript starts at 112 as in the mockup.
-  transcriptArea: { flex: 1, marginTop: 12, marginBottom: 16, overflow: 'hidden' },
+  transcriptArea: { flex: 1, marginTop: 12, overflow: 'hidden' },
   transcript: {
     ...font(dusk.font.transcript.weight),
     fontSize: TRANSCRIPT_SIZE,
@@ -437,8 +505,18 @@ const styles = StyleSheet.create({
   pill: { paddingVertical: 6, paddingHorizontal: 11 },
   pillText: { ...font('700'), fontSize: 12, color: dusk.color.text },
   empty: { ...font('500'), fontSize: 13, lineHeight: 19, color: dusk.color.pending },
-  bottom: { alignItems: 'center', gap: 16, marginTop: 42 },
-  field: { height: dusk.size.touch, justifyContent: 'center', paddingHorizontal: 18 },
-  input: { ...font('500'), fontSize: 15, color: dusk.color.text, height: dusk.size.touch, padding: 0 },
+  bottom: { alignItems: 'center' },
+  field: {
+    height: FIELD_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 18,
+    paddingRight: (FIELD_HEIGHT - SEND_SIZE) / 2,
+  },
+  // No fixed height: a macOS text field draws its text at the top of its frame, so the field keeps
+  // its own height and equal vertical padding, and the pill centres it.
+  input: { ...font('500'), flex: 1, minWidth: 0, fontSize: 15, color: dusk.color.white, paddingVertical: 12, paddingHorizontal: 0 },
+  send: { width: SEND_SIZE, height: SEND_SIZE, alignItems: 'center', justifyContent: 'center' },
   confirm: { width: 220 },
 });
