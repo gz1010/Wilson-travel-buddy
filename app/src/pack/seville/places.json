@@ -235,13 +235,13 @@
   "indoor": true,
   "visitMinutes": 40,
   "hours": {
-   "mon": "09:30-18:45",
-   "tue": "09:30-18:45",
-   "wed": "09:30-18:45",
-   "thu": "09:30-18:45",
-   "fri": "09:30-18:45",
-   "sat": "10:30-18:45",
-   "sun": "10:30-18:45"
+   "mon": "09:30-19:00",
+   "tue": "09:30-19:00",
+   "wed": "09:30-19:00",
+   "thu": "09:30-19:00",
+   "fri": "09:30-19:00",
+   "sat": "10:30-19:00",
+   "sun": "10:30-19:00"
   },
   "summary": "A 13th-century watchtower on the river with a small naval museum and a rooftop view.",
   "neighborhood": "Arenal",
@@ -306,7 +306,13 @@
   "indoor": true,
   "visitMinutes": 60,
   "hours": {
-   "daily": "09:00-18:00"
+   "mon": "09:00-14:00,15:00-17:30",
+   "tue": "09:00-18:00",
+   "wed": "09:00-18:00",
+   "thu": "09:00-18:00",
+   "fri": "09:00-18:00",
+   "sat": "09:00-18:00",
+   "sun": "09:00-18:00"
   },
   "summary": "A 16th-century Andalusian palace mixing Mudéjar and Renaissance styles, with tiled patios and gardens.",
   "neighborhood": "San Bartolomé",
@@ -403,7 +409,7 @@
   "indoor": false,
   "visitMinutes": 50,
   "hours": {
-   "daily": "09:30-19:00"
+   "daily": "09:30-19:30"
   },
   "summary": "An 18th-century baroque bullring by the river, visited on guided tours with a small museum.",
   "localName": "Plaza de Toros de la Real Maestranza",
@@ -490,13 +496,13 @@
   "indoor": true,
   "visitMinutes": 60,
   "hours": {
-   "mon": "closed",
-   "tue": "09:00-15:00",
-   "wed": "09:00-15:00",
-   "thu": "09:00-15:00",
-   "fri": "09:00-15:00",
-   "sat": "09:00-15:00",
-   "sun": "closed"
+   "mon": "09:00-15:00",
+   "tue": "09:00-18:00",
+   "wed": "09:00-18:00",
+   "thu": "09:00-00:00",
+   "fri": "09:00-00:00",
+   "sat": "09:00-00:00",
+   "sun": "13:00-18:00"
   },
   "summary": "Seville's oldest market, where locals shop; the tapas counters at the back are busy at lunchtime.",
   "localName": "Mercado de Feria",
@@ -530,8 +536,8 @@
   "name": "Bodega Santa Cruz",
   "category": "tapas-bar",
   "point": {
-   "lat": 37.3861,
-   "lon": -5.9917
+   "lat": 37.38604,
+   "lon": -5.99077
   },
   "tags": [
    "food",
@@ -552,8 +558,8 @@
   "name": "Casa de la Memoria",
   "category": "flamenco",
   "point": {
-   "lat": 37.3923,
-   "lon": -5.9921
+   "lat": 37.39249,
+   "lon": -5.99369
   },
   "tags": [
    "flamenco",
@@ -564,7 +570,7 @@
   "indoor": true,
   "visitMinutes": 75,
   "hours": {
-   "daily": "19:00-22:30"
+   "daily": "19:30-22:00"
   },
   "summary": "An intimate flamenco show in a 15th-century courtyard house, with performances every evening.",
   "neighborhood": "Centro",
@@ -620,7 +626,7 @@
   "indoor": true,
   "visitMinutes": 30,
   "hours": {
-   "daily": "08:00-21:30"
+   "daily": "08:00-22:00"
   },
   "summary": "A pastry shop from 1885 on Seville's main shopping street, good for coffee and yemas.",
   "neighborhood": "Centro",
@@ -677,13 +683,13 @@
   "indoor": true,
   "visitMinutes": 40,
   "hours": {
-   "mon": "11:00-18:00",
-   "tue": "11:00-18:00",
-   "wed": "11:00-18:00",
-   "thu": "11:00-18:00",
-   "fri": "11:00-18:00",
-   "sat": "11:00-18:00",
-   "sun": "15:00-19:00"
+   "mon": "10:15-18:00",
+   "tue": "10:15-18:00",
+   "wed": "10:15-18:00",
+   "thu": "10:15-18:00",
+   "fri": "10:15-18:00",
+   "sat": "10:15-18:00",
+   "sun": "14:00-18:00"
   },
   "summary": "A huge baroque church on the site of the old main mosque, with gilded altarpieces; the square outside fills up at aperitivo time.",
   "localName": "Iglesia del Salvador",
@@ -712,7 +718,7 @@
   "indoor": true,
   "visitMinutes": 60,
   "hours": {
-   "daily": "10:00-19:00"
+   "daily": "11:00-18:00"
   },
   "summary": "A museum about flamenco's history with costumes and video, plus evening shows.",
   "localName": "Museo del Baile Flamenco",
@@ -730,8 +736,8 @@
   "name": "Triana Ceramics Centre",
   "category": "museum",
   "point": {
-   "lat": 37.384,
-   "lon": -6.004
+   "lat": 37.38555,
+   "lon": -6.00465
   },
   "tags": [
    "art",
@@ -743,12 +749,12 @@
   "visitMinutes": 45,
   "hours": {
    "mon": "closed",
-   "tue": "10:00-18:00",
-   "wed": "10:00-18:00",
-   "thu": "10:00-18:00",
-   "fri": "10:00-18:00",
-   "sat": "10:00-18:00",
-   "sun": "10:00-15:00"
+   "tue": "10:00-19:00",
+   "wed": "10:00-19:00",
+   "thu": "10:00-19:00",
+   "fri": "10:00-19:00",
+   "sat": "10:00-19:00",
+   "sun": "10:00-19:00"
   },
   "summary": "A museum in an old tile factory telling the story of Triana's potters, whose tiles cover the city.",
   "localName": "Centro Cerámica Triana",
@@ -983,9 +989,15 @@
   "indoor": true,
   "visitMinutes": 60,
   "hours": {
-   "daily": "10:00-18:00"
+   "mon": "closed",
+   "tue": "closed",
+   "wed": "closed",
+   "thu": "closed",
+   "fri": "closed",
+   "sat": "closed",
+   "sun": "closed"
   },
-  "summary": "A baroque former home for retired priests in Santa Cruz, with a painted church and a Velázquez centre.",
+  "summary": "Closed while it is converted into the Cathedral chapter’s museum; the church opens only for concerts. A baroque former home for retired priests in Santa Cruz, with a painted church and a Velázquez centre.",
   "neighborhood": "Santa Cruz",
   "price": 2,
   "photo": {
@@ -1013,7 +1025,13 @@
   "indoor": true,
   "visitMinutes": 45,
   "hours": {
-   "daily": "09:00-14:00,17:30-21:00"
+   "mon": "09:00-14:00,17:00-21:00",
+   "tue": "09:00-14:00,17:00-21:00",
+   "wed": "09:00-14:00,17:00-21:00",
+   "thu": "09:00-14:00,17:00-21:00",
+   "fri": "09:00-14:00,17:00-21:00",
+   "sat": "09:00-14:00,17:00-21:00",
+   "sun": "09:30-14:00,17:00-21:00"
   },
   "summary": "Home of the Virgin of La Macarena, the city's best-loved Holy Week image, beside the old city gate.",
   "neighborhood": "Macarena",
@@ -1165,14 +1183,14 @@
   "visitMinutes": 45,
   "hours": {
    "mon": "closed",
-   "tue": "10:00-18:00",
-   "wed": "10:00-18:00",
-   "thu": "10:00-18:00",
-   "fri": "10:00-18:00",
-   "sat": "10:00-18:00",
-   "sun": "10:00-15:00"
+   "tue": "closed",
+   "wed": "closed",
+   "thu": "closed",
+   "fri": "closed",
+   "sat": "closed",
+   "sun": "closed"
   },
-  "summary": "Ruins of the castle that housed the Inquisition, now a small museum beneath Triana Market.",
+  "summary": "Closed for refurbishment; the building is open only as a tourist office. Ruins of the castle that housed the Inquisition, now a small museum beneath Triana Market.",
   "neighborhood": "Triana",
   "price": 0,
   "photo": {
@@ -1199,7 +1217,7 @@
   "indoor": true,
   "visitMinutes": 45,
   "hours": {
-   "daily": "12:00-00:00"
+   "daily": "10:00-01:00"
   },
   "summary": "A classic Santa Cruz tapas bar with hams hanging over the counter.",
   "neighborhood": "Santa Cruz",
@@ -1303,7 +1321,13 @@
   "indoor": true,
   "visitMinutes": 40,
   "hours": {
-   "daily": "12:30-16:30,20:00-00:00"
+   "mon": "closed",
+   "tue": "13:00-16:00,20:00-23:30",
+   "wed": "13:00-16:00,20:00-23:30",
+   "thu": "13:00-16:00,20:00-23:30",
+   "fri": "13:00-16:00,20:00-23:30",
+   "sat": "13:00-16:00,20:00-23:30",
+   "sun": "13:00-16:00,20:00-23:30"
   },
   "summary": "A traditional fried-fish shop: pick fish by weight, served in a paper cone.",
   "neighborhood": "San Bernardo",
@@ -1331,7 +1355,7 @@
   "indoor": true,
   "visitMinutes": 90,
   "hours": {
-   "daily": "20:00-22:30"
+   "daily": "19:00-22:00"
   },
   "summary": "One of the oldest flamenco tablaos in the city, in a small room in Santa Cruz.",
   "neighborhood": "Santa Cruz",
@@ -1354,7 +1378,13 @@
   "indoor": true,
   "visitMinutes": 90,
   "hours": {
-   "daily": "19:00-23:00"
+   "mon": "closed",
+   "tue": "19:00-23:00",
+   "wed": "19:00-23:00",
+   "thu": "19:00-23:00",
+   "fri": "19:00-23:00",
+   "sat": "19:00-23:00",
+   "sun": "19:00-23:00"
   },
   "summary": "A large flamenco tablao near the bullring, with dinner during the show.",
   "neighborhood": "Arenal",
@@ -1506,12 +1536,12 @@
   "visitMinutes": 40,
   "hours": {
    "mon": "closed",
-   "tue": "10:00-15:00",
-   "wed": "10:00-15:00",
-   "thu": "10:00-15:00",
-   "fri": "10:00-15:00",
-   "sat": "10:00-15:00",
-   "sun": "10:00-15:00"
+   "tue": "10:00-14:00,16:00-20:00",
+   "wed": "10:00-14:00,16:00-20:00",
+   "thu": "10:00-14:00,16:00-20:00",
+   "fri": "10:00-14:00,16:00-20:00",
+   "sat": "10:00-14:00,16:00-20:00",
+   "sun": "10:00-14:00,16:00-20:00"
   },
   "summary": "A former Jesuit church with one of the richest baroque interiors in Seville.",
   "neighborhood": "San Julián",
@@ -1540,7 +1570,13 @@
   "indoor": true,
   "visitMinutes": 30,
   "hours": {
-   "daily": "08:00-13:30,18:00-21:00"
+   "mon": "08:00-13:30,17:30-21:00",
+   "tue": "08:00-13:30,17:30-21:00",
+   "wed": "08:00-13:30,17:30-21:00",
+   "thu": "08:00-13:30,17:30-21:00",
+   "fri": "07:30-22:00",
+   "sat": "09:00-14:00,17:30-21:00",
+   "sun": "09:00-14:00,17:30-21:00"
   },
   "summary": "Home of the Jesús del Gran Poder, one of Holy Week's most revered images, on Plaza de San Lorenzo.",
   "neighborhood": "San Lorenzo",
@@ -1569,7 +1605,13 @@
   "indoor": true,
   "visitMinutes": 30,
   "hours": {
-   "daily": "10:30-13:30,18:00-20:30"
+   "mon": "10:30-19:00",
+   "tue": "10:30-19:00",
+   "wed": "10:30-19:00",
+   "thu": "10:30-19:00",
+   "fri": "10:30-19:00",
+   "sat": "closed",
+   "sun": "closed"
   },
   "summary": "Triana's oldest church, known locally as the Cathedral of Triana.",
   "neighborhood": "Triana",
@@ -1597,7 +1639,13 @@
   "indoor": true,
   "visitMinutes": 20,
   "hours": {
-   "daily": "10:00-13:30,18:00-21:00"
+   "mon": "10:00-13:30,17:30-21:00",
+   "tue": "10:00-13:30,17:30-21:00",
+   "wed": "10:00-13:30,17:30-21:00",
+   "thu": "10:00-13:30,17:30-21:00",
+   "fri": "10:00-13:30,17:30-21:00",
+   "sat": "10:00-13:30,17:30-21:00",
+   "sun": "10:00-14:00,17:30-20:30"
   },
   "summary": "The chapel of the Esperanza de Triana, the image Triana carries in Holy Week.",
   "neighborhood": "Triana",
@@ -1627,9 +1675,15 @@
   "indoor": true,
   "visitMinutes": 45,
   "hours": {
-   "daily": "10:30-19:00"
+   "mon": "closed",
+   "tue": "closed",
+   "wed": "closed",
+   "thu": "closed",
+   "fri": "closed",
+   "sat": "closed",
+   "sun": "closed"
   },
-  "summary": "A 17th-century charity hospital whose church holds major paintings by Murillo and Valdés Leal.",
+  "summary": "Closed for restoration until January 2027; its paintings are on show at the Museum of Fine Arts meanwhile. A 17th-century charity hospital whose church holds major paintings by Murillo and Valdés Leal.",
   "neighborhood": "Arenal",
   "price": 1,
   "photo": {
@@ -1773,14 +1827,14 @@
   "visitMinutes": 30,
   "hours": {
    "mon": "closed",
-   "tue": "10:00-14:00,17:00-20:00",
-   "wed": "10:00-14:00,17:00-20:00",
-   "thu": "10:00-14:00,17:00-20:00",
-   "fri": "10:00-14:00,17:00-20:00",
-   "sat": "10:00-14:00,17:00-20:00",
-   "sun": "10:00-14:00"
+   "tue": "closed",
+   "wed": "closed",
+   "thu": "closed",
+   "fri": "closed",
+   "sat": "closed",
+   "sun": "closed"
   },
-  "summary": "The house in Santa Cruz where the painter Murillo lived and died.",
+  "summary": "Temporarily closed for works. The house in Santa Cruz where the painter Murillo lived and died.",
   "neighborhood": "Santa Cruz",
   "price": 0,
   "photo": {
