@@ -31,6 +31,13 @@ let ossProducts: [Target.Dependency] = [
 let proDeps: [Package.Dependency] = [.package(id: "argmaxinc.argmax-sdk-swift", from: "3.0.6")]
 let proProducts: [Target.Dependency] = [.product(name: "Argmax", package: "argmaxinc.argmax-sdk-swift")]
 
+// Links Support/Info.plist into the binary (__TEXT,__info_plist): a command-line tool needs a
+// bundle id and NSLocation*UsageDescription before macOS Location Services will consider it.
+// unsafeFlags are fine here because this is always the root package. See README.md, "Location".
+let infoPlist: [LinkerSetting] = [
+    .unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", "\(root)/Support/Info.plist"]),
+]
+
 let package = Package(
     name: "buddy-audio",
     platforms: [.macOS("15.0")], // TTSKit needs macOS 15 (string form: .v15 needs tools 6.0)
@@ -40,7 +47,8 @@ let package = Package(
             name: "BuddyAudio",
             dependencies: usePro ? proProducts + ossProducts : ossProducts,
             path: "Sources/BuddyAudio",
-            swiftSettings: usePro ? [.define("ARGMAX_PRO")] : []
+            swiftSettings: usePro ? [.define("ARGMAX_PRO")] : [],
+            linkerSettings: infoPlist
         ),
     ]
 )

@@ -1,4 +1,5 @@
 import Accelerate
+import CoreML
 import Foundation
 import SpeakerKit
 import TTSKit
@@ -59,15 +60,26 @@ struct VoicePrints {
     var threshold: Float
     private var prints: [[Float]] = []
 
-    mutating func identify(_ e: [Float]) -> Int {
+    /// Whose voice this is (prints.count for someone new), without learning from it: the translator
+    /// asks before it knows whether the sentence was speech at all.
+    func match(_ e: [Float]) -> Int {
         let sims = prints.map { cosine($0, e) }
         log("voice print similarity to known speakers: \(sims.map { String(format: "%.2f", $0) }) (threshold \(threshold))")
         if let best = sims.indices.max(by: { sims[$0] < sims[$1] }), sims[best] >= threshold || prints.count >= 2 {
-            prints[best] = zip(prints[best], e).map { $0 * 0.7 + $1 * 0.3 }
             return best
         }
-        prints.append(e)
-        return prints.count - 1
+        return prints.count
+    }
+
+    /// Learns from a sentence that was speech: a known speaker's print moves toward it; a new one is kept.
+    @discardableResult
+    mutating func learn(_ e: [Float], as id: Int) -> Int {
+        guard id < prints.count else {
+            prints.append(e)
+            return prints.count - 1
+        }
+        prints[id] = zip(prints[id], e).map { $0 * 0.7 + $1 * 0.3 }
+        return id
     }
 
     mutating func reset() { prints = [] }
@@ -80,6 +92,46 @@ struct VoicePrints {
         vDSP_svesq(b, 1, &nb, vDSP_Length(b.count))
         return dot / (sqrt(na) * sqrt(nb) + 1e-9)
     }
+}
+
+/// The languages Argmax's voice (Qwen3-TTS) speaks, as Whisper codes: the translator listens for
+/// these unless the app names its own (see ttsLanguage in Models.swift).
+let voiceLanguages = ["en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "ru"]
+
+/// Whisper's probability for a language, over all of its ~100 languages.
+typealias LanguageOdds = [(code: String, p: Float)]
+
+/// The translator's language for each voice. Whisper's guess on one short sentence can be wrong
+/// ("Sí." or "OK" heard as Italian), so a known speaker keeps their language unless Whisper is
+/// sure of another one; a new voice, or a sentence without a voice print, takes Whisper's pick.
+struct SpeakerLanguages {
+    private var bySpeaker: [Int: String] = [:]
+
+    /// How sure Whisper must be to move a known speaker to another language: surer on short
+    /// sentences. `seconds` is the whole sentence as cut, with about 1.5 s of quiet around the speech
+    /// (the half second kept before it and the second of silence that ended it), so 2.5 s is a word
+    /// or two. Whisper gave "Sí." 0.91 and "Obrigado." 0.69 (Portuguese, against 0.27 Spanish) when
+    /// cut like that from macOS voices.
+    static func switchConfidence(seconds: Double) -> Float {
+        seconds < 2.5 ? 0.9 : seconds < 4 ? 0.75 : 0.6
+    }
+
+    /// odds: the allowed languages, most likely first. Nil only when there are no odds and no memory.
+    func choose(_ odds: LanguageOdds, speaker: Int?, seconds: Double) -> String? {
+        let known = speaker.flatMap { bySpeaker[$0] }
+        guard let best = odds.first else { return known }
+        guard let known, known != best.code, odds.contains(where: { $0.code == known }) else { return best.code }
+        return best.p >= Self.switchConfidence(seconds: seconds) ? best.code : known
+    }
+
+    mutating func remember(_ code: String, for speaker: Int) { bySpeaker[speaker] = code }
+
+    mutating func reset() { bySpeaker = [:] }
+}
+
+/// "fr 0.93, it 0.04, es 0.01" for the log.
+func oddsText(_ odds: LanguageOdds) -> String {
+    odds.prefix(3).map { "\($0.code) \(String(format: "%.2f", $0.p))" }.joined(separator: ", ")
 }
 
 final class Flag: @unchecked Sendable {
@@ -113,6 +165,8 @@ actor AudioService {
     private var languages: [String] = ["en"]
     private var muted = false
     private var prints: VoicePrints
+    /// Translator: each voice print's language, so short sentences do not flip it.
+    private var spokenLanguages = SpeakerLanguages()
     private var partialTask: Task<Void, Never>?
     private var finals: Task<Void, Never> = Task {}
     private var listenStarted = Date()
@@ -137,6 +191,11 @@ actor AudioService {
         self.send = send
         self.voices = voices
         self.prints = VoicePrints(threshold: voiceThreshold)
+        // BUDDY_LANG_TEST=/a.aiff,/b.wav checks language detection without a microphone (see languageTest).
+        if let test = ProcessInfo.processInfo.environment["BUDDY_LANG_TEST"], !test.isEmpty {
+            let paths = test.split(separator: ",").map { String($0) }
+            Task { await self.languageTest(paths) }
+        }
     }
 
     // MARK: Messages
@@ -152,7 +211,10 @@ actor AudioService {
         case "conversation.start":
             resetConversation()
             pushToTalk = m.pushToTalk ?? false
-            await start(.conversation, languages: m.languages ?? ["en", "es"], listenLanguage: nil)
+            // Each sentence may be in any of the app's languages (the first is the traveller's);
+            // without a list, any language the voice speaks.
+            let allowed = (m.languages ?? []).filter { !$0.isEmpty }
+            await start(.conversation, languages: allowed.isEmpty ? voiceLanguages : allowed, listenLanguage: nil)
         case "turn.start":
             guard mode == .conversation, pushToTalk else { break }
             if pttActive { pttActive = false; finishTurnNow() } // a press without a release: close it first
@@ -309,6 +371,7 @@ actor AudioService {
         finals.cancel()
         finals = Task {}
         prints.reset()
+        spokenLanguages.reset()
         session = []
         utterance = []
         heardSpeech = false
@@ -320,8 +383,10 @@ actor AudioService {
     private func partial() async {
         guard mode != .idle, heardSpeech, utterance.count > sampleRate / 2 else { return }
         let lang = mode == .listen ? listenLanguage : (pushToTalk && pttActive ? pttLanguage : nil)
-        let (text, _) = await transcribe(utterance, language: lang)
-        if !text.isEmpty, mode != .idle { send(.partial(text: text, speaker: nil)) }
+        let (text, heard) = await transcribe(utterance, language: lang)
+        // In a conversation, the language heard so far (if it is one of the app's) tells the app who is talking.
+        let language = mode == .conversation ? (lang ?? heard.flatMap { languages.contains($0) ? $0 : nil }) : nil
+        if !text.isEmpty, mode != .idle { send(.partial(text: text, speaker: nil, language: language)) }
     }
 
     // MARK: Voice loop
@@ -351,30 +416,56 @@ actor AudioService {
             if ctx.pushToTalk { send(.final(text: "", language: ctx.forcedLanguage, speaker: nil, turn: ctx.turn)) }
             return
         }
-        // The pressed button's language if there is one; otherwise the more likely of the two.
-        var lang = ctx.forcedLanguage ?? ctx.languages.first
-        // langProbs holds only the sampled language's log-probability, so use the detected code directly.
-        if ctx.forcedLanguage == nil, ctx.languages.count > 1, let detected = try? await models.whisper.detectLangauge(audioArray: audio) {
-            lang = ctx.languages.contains(detected.language) ? detected.language : ctx.languages.first
+        // The pressed button's language if there is one; otherwise Whisper picks among the app's
+        // languages, and a known voice keeps its language unless Whisper is sure of another. So who
+        // is speaking comes first, without learning their voice yet: this may turn out not to be speech.
+        var lang = ctx.forcedLanguage ?? (ctx.languages.count == 1 ? ctx.languages.first : nil)
+        let detect = lang == nil
+        var voice: [Float]?
+        var guess: Int?
+        if detect {
+            voice = await speakerVoice(audio, session: session, range: range)
+            guard current() else { return }
+            guess = voice.map { prints.match($0) }
+            let odds = await languageOdds(audio, among: ctx.languages)
+            guard current() else { return }
+            lang = spokenLanguages.choose(odds, speaker: guess, seconds: Double(audio.count) / Double(sampleRate))
+            log("language: \(oddsText(odds)) -> \(lang ?? "Whisper's own guess")\(guess.map { " (speaker \($0))" } ?? "")")
         }
-        let (text, _) = await transcribe(audio, language: lang, confirmedSpeech: true)
+        let (text, heard) = await transcribe(audio, language: lang, confirmedSpeech: true)
         guard current() else { return }
+        // No pick (detection failed): Whisper guessed while transcribing; keep that if the app allows it.
+        if lang == nil { lang = heard.flatMap { ctx.languages.contains($0) ? $0 : nil } }
         guard !text.isEmpty else {
             if ctx.pushToTalk { send(.final(text: "", language: lang, speaker: nil, turn: ctx.turn)) }
             return
         }
-        // Diarizing the whole conversation is far more reliable than one short sentence alone;
-        // the per-sentence voice print is the fallback. Argmax labels speakers in both modes.
-        var speaker = await sessionSpeaker(session, sentence: range)
-        if speaker == nil { speaker = await voicePrint(audio) }
-        guard current() else { return }
+        // It was speech: Argmax labels the speaker (in both modes) and remembers their language.
+        if !detect {
+            voice = await speakerVoice(audio, session: session, range: range)
+            guard current() else { return }
+            guess = voice.map { prints.match($0) }
+        }
+        var speaker: Int?
+        if let voice, let guess {
+            let id = prints.learn(voice, as: guess)
+            if let lang { spokenLanguages.remember(lang, for: id) }
+            speaker = id
+        }
         send(.final(text: text, language: lang, speaker: speaker, turn: ctx.turn))
     }
 
-    /// Runs SpeakerKit over the conversation so far, finds the speaker cluster that overlaps this
-    /// sentence most, and matches that cluster's centroid to the speakers seen before, so the
-    /// numbers stay stable from one run to the next.
-    private func sessionSpeaker(_ session: [Float], sentence range: Range<Int>) async -> Int? {
+    /// This sentence's voice print. Diarizing the whole conversation is far more reliable than one
+    /// short sentence alone, so that comes first; the sentence's own print is the fallback.
+    private func speakerVoice(_ audio: [Float], session: [Float], range: Range<Int>) async -> [Float]? {
+        if let centroid = await sessionVoice(session, sentence: range) { return centroid }
+        return await sentenceVoice(audio)
+    }
+
+    /// Runs SpeakerKit over the conversation so far and returns the centroid of the speaker cluster
+    /// that overlaps this sentence most. Matching it to the prints seen before (VoicePrints) keeps the
+    /// speaker numbers stable from one run to the next.
+    private func sessionVoice(_ session: [Float], sentence range: Range<Int>) async -> [Float]? {
         guard let speakers = models.speakers, range.count > sampleRate / 2 else { return nil }
         do {
             let result = try await speakers.diarize(audioArray: session, options: PyannoteDiarizationOptions())
@@ -387,26 +478,100 @@ actor AudioService {
                 if o > 0 { overlap[id, default: 0] += o }
             }
             log("conversation diarization: \(result.speakerCount) speakers; this sentence overlaps \(overlap.mapValues { String(format: "%.1fs", $0) })")
-            guard let cluster = overlap.max(by: { $0.value < $1.value })?.key,
-                  let centroid = result.speakerCentroidEmbeddings[cluster] else { return nil }
-            return prints.identify(centroid)
+            guard let cluster = overlap.max(by: { $0.value < $1.value })?.key else { return nil }
+            return result.speakerCentroidEmbeddings[cluster]
         } catch {
             log("Conversation diarization failed: \(error)")
             return nil
         }
     }
 
-    private func voicePrint(_ audio: [Float]) async -> Int? {
+    private func sentenceVoice(_ audio: [Float]) async -> [Float]? {
         // Short sentences give unreliable voice prints; the app falls back to language for those.
         guard let speakers = models.speakers, audio.count > sampleRate * 3 / 2 else { return nil }
         do {
             let result = try await speakers.diarize(audioArray: audio, options: PyannoteDiarizationOptions(numberOfSpeakers: 1))
-            guard let embedding = result.speakerCentroidEmbeddings.sorted(by: { $0.key < $1.key }).first?.value else { return nil }
-            return prints.identify(embedding)
+            return result.speakerCentroidEmbeddings.sorted(by: { $0.key < $1.key }).first?.value
         } catch {
             log("Voice print failed: \(error)")
             return nil
         }
+    }
+
+    // MARK: Language detection
+
+    private struct DetectionError: Error { let reason: String }
+
+    /// Whisper's probability for each of `allowed`, most likely first. This is the pass WhisperKit's
+    /// detectLangauge makes (the encoder on the first 30 s, then one decoder step from
+    /// <|startoftranscript|>), but it keeps every language's score: WhisperKit returns only the
+    /// winner's. The probabilities are over all of Whisper's languages, so they say how sure it is,
+    /// not only which of ours is likeliest. Falls back to WhisperKit's own detection.
+    private func languageOdds(_ audio: [Float], among allowed: [String]) async -> LanguageOdds {
+        let whisper = models.whisper
+        do {
+            guard let tokenizer = whisper.tokenizer else { throw DetectionError(reason: "no tokenizer") }
+            let sot = tokenizer.specialTokens.startOfTranscriptToken
+            let window = whisper.featureExtractor.windowSamples ?? Constants.defaultWindowSamples
+            guard let samples = whisper.audioProcessor.padOrTrim(fromArray: audio, startAt: 0, toLength: window),
+                  let mel = try await whisper.featureExtractor.logMelSpectrogram(fromAudio: samples),
+                  let encoded = try await whisper.audioEncoder.encodeFeatures(mel) as? MLMultiArray,
+                  let inputs = try whisper.textDecoder.prepareDecoderInputs(withPrompt: [sot]) as? DecodingInputs
+            else { throw DetectionError(reason: "no encoder output") }
+            inputs.inputIds[0] = NSNumber(value: sot)
+            inputs.cacheLength[0] = NSNumber(value: 0)
+            let output = try await whisper.textDecoder.predictLogits(TextDecoderMLMultiArrayInputType(
+                inputIds: inputs.inputIds,
+                cacheLength: inputs.cacheLength,
+                keyCache: inputs.keyCache,
+                valueCache: inputs.valueCache,
+                kvCacheUpdateMask: inputs.kvCacheUpdateMask,
+                encoderOutputEmbeds: encoded,
+                decoderKeyPaddingMask: inputs.decoderKeyPaddingMask
+            ))
+            guard let logits = (output as? TextDecoderMLMultiArrayOutputType)?.logits,
+                  let vocab = logits.shape.last?.intValue
+            else { throw DetectionError(reason: "no logits") }
+            let lead = Array(repeating: NSNumber(value: 0), count: max(0, logits.shape.count - 1))
+            var scores: [String: Float] = [:]
+            for code in Set(Constants.languages.values) {
+                guard let id = tokenizer.convertTokenToId("<|\(code)|>"), id > tokenizer.specialTokens.specialTokenBegin, id < vocab else { continue }
+                let score = logits[lead + [NSNumber(value: id)]].floatValue
+                if score.isFinite { scores[code] = score }
+            }
+            guard let top = scores.values.max() else { throw DetectionError(reason: "no language scores") }
+            let total = scores.values.reduce(Float(0)) { $0 + exp($1 - top) }
+            return allowed
+                .compactMap { code in scores[code].map { (code: code, p: exp($0 - top) / total) } }
+                .sorted { $0.p > $1.p }
+        } catch {
+            log("Language detection fell back to WhisperKit's: \(error)")
+            guard let detected = try? await whisper.detectLangauge(audioArray: audio), allowed.contains(detected.language) else { return [] }
+            // langProbs holds only the winner's log-probability.
+            return [(code: detected.language, p: detected.langProbs[detected.language].map { exp($0) } ?? 0.5)]
+        }
+    }
+
+    /// BUDDY_LANG_TEST=/a.aiff,/b.wav: on start, runs each file through the translator's language
+    /// pick in order, as one speaker's sentences, and logs Whisper's odds, the pick and the text; then
+    /// the helper carries on as usual. For checking detection without a microphone, e.g. with
+    /// `say -v Thomas "Où est la cathédrale ?" -o fr.aiff`.
+    private func languageTest(_ paths: [String]) async {
+        var memory = SpeakerLanguages()
+        for path in paths {
+            guard let audio = try? AudioProcessor.loadAudioAsFloatArray(fromPath: path) else {
+                log("language test: could not read \(path)")
+                continue
+            }
+            let seconds = Double(audio.count) / Double(sampleRate)
+            let odds = await languageOdds(audio, among: voiceLanguages)
+            let pick = memory.choose(odds, speaker: 0, seconds: seconds)
+            if let pick { memory.remember(pick, for: 0) }
+            let own = try? await models.whisper.detectLangauge(audioArray: audio)
+            let (text, _) = await transcribe(audio, language: pick, confirmedSpeech: true)
+            log("language test \(URL(fileURLWithPath: path).lastPathComponent) (\(String(format: "%.1f", seconds)) s): \(oddsText(odds)); WhisperKit's pick \(own?.language ?? "?"); kept as \(pick ?? "?"): \(text)")
+        }
+        log("language test done")
     }
 
     // MARK: Whisper
@@ -448,7 +613,7 @@ actor AudioService {
         let previous = speech
         let tts = models.tts
         let flag = cancelSpeech
-        let voice = voices[language] ?? voices["default"] ?? .aiden
+        let voice = self.voice(for: language)
         let sendStarted = send
         let audioOut = tts.audioOutput
         speech = Task { [weak self] in
@@ -481,4 +646,18 @@ actor AudioService {
     }
 
     private func sendDone(_ id: String) { send(.speakDone(id: id)) }
+
+    /// The voice for a language: the one the helper was given for it; else Qwen3-TTS's native voice
+    /// for Japanese, Korean and Chinese; else the local's voice (the one for Spanish), so the two
+    /// people's languages keep sounding different.
+    private func voice(for language: String) -> Qwen3Speaker {
+        if let v = voices[language] { return v }
+        switch language {
+        case "ja": return .onoAnna
+        case "ko": return .sohee
+        case "zh": return .vivian
+        case "en": return voices["default"] ?? .aiden
+        default: return voices["es"] ?? voices["default"] ?? .aiden
+        }
+    }
 }

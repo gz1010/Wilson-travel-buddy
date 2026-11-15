@@ -7,12 +7,7 @@ import { dusk } from './tokens';
 
 export type { LiquidGlassLine };
 
-/** The font the glass letters are cut from, as a bundled asset (required lazily: tests can't load a .ttf). */
-function fontAsset(): number {
-  return require('../../../assets/fonts/Manrope_800ExtraBold.ttf');
-}
-
-/** Jest has no web view, fetch or font assets: keep the fallback there. */
+/** Jest has no web view or fetch: keep the fallback there. */
 function inTests(): boolean {
   return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.NODE_ENV === 'test';
 }
@@ -49,6 +44,8 @@ function assetDataUri(asset: number): Promise<string> {
 /**
  * A photo with words in 3D liquid glass over it (liquidGlassPage.ts: refraction, dispersion,
  * frost, rim light, an extruded side and a shadow), in a small offline web view. Fills its box.
+ * The letters are the system font (SF Pro Heavy), so the page loads nothing but the photo; a line
+ * too wide for the box is drawn smaller to fit inside `inset` on both sides.
  * `fallback` (the same photo and words drawn natively) shows until the glass has rendered, and
  * stays if it can't (no photo, no WebGL, tests). The web view never takes clicks unless
  * `interactive`, in which case the light follows the pointer.
@@ -73,7 +70,7 @@ export function LiquidGlass({
   style?: StyleProp<ViewStyle>;
 }) {
   const box = useBox();
-  const [assets, setAssets] = useState<{ photo: string; font: string } | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -81,8 +78,8 @@ export function LiquidGlass({
     if (photo === undefined || inTests()) return;
     let live = true;
     try {
-      Promise.all([assetDataUri(photo), assetDataUri(fontAsset())])
-        .then(([p, f]) => live && setAssets({ photo: p, font: f }))
+      assetDataUri(photo)
+        .then(p => live && setPhotoUri(p))
         .catch(() => {});
     } catch {
       // No glass: the fallback stays.
@@ -97,12 +94,11 @@ export function LiquidGlass({
   const fadeKey = JSON.stringify(fade);
   const html = useMemo(
     () =>
-      box.size && assets
+      box.size && photoUri
         ? liquidGlassPage({
             width: box.size.width,
             height: box.size.height,
-            photo: assets.photo,
-            font: assets.font,
+            photo: photoUri,
             lines: JSON.parse(linesKey),
             align,
             inset,
@@ -110,7 +106,7 @@ export function LiquidGlass({
             fade: JSON.parse(fadeKey),
           })
         : null,
-    [box.size, assets, linesKey, fadeKey, align, inset],
+    [box.size, photoUri, linesKey, fadeKey, align, inset],
   );
 
   useEffect(() => {

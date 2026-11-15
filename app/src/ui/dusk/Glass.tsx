@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { GlassBackdrop, hasLiquidGlass } from './Blur';
+import { GlassBackdrop, hasLiquidGlass, hasNativeTint } from './Blur';
 import { useReduceMotion } from './motion';
 import { dusk, font, glass, type GlassKind } from './tokens';
 
@@ -20,9 +20,17 @@ interface GlassProps {
   blur?: boolean;
   /**
    * Colour the glass, e.g. while someone is speaking: any CSS colour, used at the alpha it
-   * carries ('rgba(255,170,90,0.35)'). Leave it out for clear glass.
+   * carries ('rgba(255,170,90,0.35)'). Leave it out for clear glass. The native glass takes it
+   * (Liquid Glass tints its own refraction); only without it (no blur, an older build) is it a
+   * colour wash drawn over the glass here.
    */
   tint?: string;
+  /**
+   * A flat colour laid over the glass whatever it is made of. Unlike a native tint it holds when
+   * the window is not the key window, where Liquid Glass turns a milky white and drops its tint:
+   * over a bright background (the white map) that left white type unreadable.
+   */
+  wash?: string;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 }
@@ -32,8 +40,9 @@ function Rim({ width, height, radius, strength }: { width: number; height: numbe
   const id = useRef(`rim${Math.random().toString(36).slice(2)}`).current;
   if (width <= 0 || height <= 0) return null;
   const r = Math.min(radius, height / 2, width / 2);
+  // Keyed on its size: react-native-svg on macOS keeps its first drawing when the view is resized.
   return (
-    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
+    <Svg key={`${Math.round(width)}x${Math.round(height)}`} pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
       <Defs>
         <SvgLinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#fff" stopOpacity={0.55 * strength} />
@@ -48,15 +57,18 @@ function Rim({ width, height, radius, strength }: { width: number; height: numbe
   );
 }
 
-export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, tint, style, children }: GlassProps) {
+export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, tint, wash, style, children }: GlassProps) {
   const g = glass[kind];
   const [size, setSize] = useState({ width: 0, height: 0 });
   const prominent = kind === 'prominent';
   const native = blur && hasLiquidGlass;
+  // The tint goes to the native glass when this build's glass takes one; otherwise a wash here.
+  const tintNative = blur && hasNativeTint;
   // Body light: almost nothing for clear glass; more for prominent; a top-left radial glint for orbs.
   const body = native ? (prominent ? 0.14 : 0) : prominent ? 0.22 : 0.06;
   // Pills pass 999: native glass needs the real radius, at most half the shorter side.
   const r = size.width > 0 && size.height > 0 ? Math.min(radius, size.width / 2, size.height / 2) : radius;
+  const orbId = useRef(`orb${Math.random().toString(36).slice(2)}`).current;
   return (
     <View
       onLayout={e => {
@@ -65,23 +77,27 @@ export function Glass({ kind = 'clear', radius = dusk.radius.card, blur = true, 
       }}
       style={[{ borderRadius: radius, shadowColor: '#000', shadowOpacity: g.shadow * 0.7, shadowRadius: 20, shadowOffset: { width: 0, height: 12 } }, style]}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
-        {blur && <GlassBackdrop style={StyleSheet.absoluteFill} radius={r} variant={prominent ? 'regular' : 'clear'} />}
+        {blur && <GlassBackdrop style={StyleSheet.absoluteFill} radius={r} variant={prominent ? 'regular' : 'clear'} tint={tintNative ? tint : undefined} />}
         {kind === 'orb' ? (
-          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-            <Defs>
-              <RadialGradient id="orb" cx="32%" cy="24%" r="80%">
-                <Stop offset="0" stopColor="#fff" stopOpacity={glass.orb.stops[0] * 0.7} />
-                <Stop offset="0.24" stopColor="#fff" stopOpacity={glass.orb.stops[1] * 0.6} />
-                <Stop offset="0.58" stopColor="#fff" stopOpacity={0.02} />
-                <Stop offset="1" stopColor="#fff" stopOpacity={0.1} />
-              </RadialGradient>
-            </Defs>
-            <Rect width="100%" height="100%" fill="url(#orb)" />
-          </Svg>
+          // Drawn at the measured size and keyed on it: react-native-svg on macOS keeps its first drawing.
+          size.width > 0 && size.height > 0 ? (
+            <Svg key={`${size.width}x${size.height}`} style={StyleSheet.absoluteFill} width={size.width} height={size.height}>
+              <Defs>
+                <RadialGradient id={orbId} cx="32%" cy="24%" r="80%">
+                  <Stop offset="0" stopColor="#fff" stopOpacity={glass.orb.stops[0] * 0.7} />
+                  <Stop offset="0.24" stopColor="#fff" stopOpacity={glass.orb.stops[1] * 0.6} />
+                  <Stop offset="0.58" stopColor="#fff" stopOpacity={0.02} />
+                  <Stop offset="1" stopColor="#fff" stopOpacity={0.1} />
+                </RadialGradient>
+              </Defs>
+              <Rect x={0} y={0} width={size.width} height={size.height} fill={`url(#${orbId})`} />
+            </Svg>
+          ) : null
         ) : body > 0 ? (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(255,255,255,${body})` }]} />
         ) : null}
-        {tint ? <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} /> : null}
+        {tint && !tintNative ? <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} /> : null}
+        {wash ? <View style={[StyleSheet.absoluteFill, { backgroundColor: wash }]} /> : null}
       </View>
       {/* Apple's Liquid Glass draws its own edge light; elsewhere, draw the rim. */}
       {!native && <Rim width={size.width} height={size.height} radius={radius} strength={prominent || kind === 'orb' ? 1.4 : 1} />}
@@ -107,6 +123,8 @@ interface ButtonProps {
   textStyle?: StyleProp<TextStyle>;
   disabled?: boolean;
   accessibilityLabel?: string;
+  /** A flat colour over the glass (see Glass), e.g. smoke over a bright map so the white label reads. */
+  wash?: string;
 }
 
 /**
@@ -119,11 +137,11 @@ export function axPress(onPress?: () => void, disabled?: boolean): { onAccessibi
 }
 
 /** A pill button. Primary actions use the prominent kind. */
-export function GlassButton({ label, onPress, kind = 'prominent', height = dusk.size.button, style, textStyle, disabled, accessibilityLabel }: ButtonProps) {
+export function GlassButton({ label, onPress, kind = 'prominent', height = dusk.size.button, style, textStyle, disabled, accessibilityLabel, wash }: ButtonProps) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} onPress={onPress} {...axPress(onPress, disabled)} disabled={disabled} style={({ pressed }) => [{ opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }, style]}>
-      <Glass kind={kind} radius={999} style={{ height, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
-        <Text style={[onGlass, font('800'), { fontSize: 15 }, textStyle]}>{label}</Text>
+      <Glass kind={kind} radius={999} wash={wash} style={{ height, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
+        <Text style={[onGlass, font('700'), { fontSize: 15 }, textStyle]}>{label}</Text>
       </Glass>
     </Pressable>
   );
@@ -181,9 +199,9 @@ export function GlassChip({ label, selected, onPress, style, height = 40 }: Chip
 }
 
 /** The "Offline" chip: always visible on the main screens. */
-export function OfflineChip({ style }: { style?: StyleProp<ViewStyle> }) {
+export function OfflineChip({ style, wash }: { style?: StyleProp<ViewStyle>; wash?: string }) {
   return (
-    <Glass kind="clear" radius={999} style={[{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, height: 28, gap: 6 }, style]}>
+    <Glass kind="clear" radius={999} wash={wash} style={[{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, height: 28, gap: 6 }, style]}>
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff', shadowColor: '#fff', shadowOpacity: 0.8, shadowRadius: 4 }} />
       <Text style={[onGlass, font('700'), { fontSize: 11 }]}>Offline</Text>
     </Glass>

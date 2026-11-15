@@ -57,6 +57,7 @@ Licences of what the pack contains:
 | Place facts marked with a source | Wikipedia | CC BY-SA 4.0 (each fact keeps its article URL) |
 | Photos | Wikimedia Commons | Per photo (CC0, public domain, CC BY or CC BY-SA), with author and file page in `places.json` and `destination.json` |
 | Map tiles | OpenStreetMap contributors, via Protomaps | ODbL |
+| Aerial photos (map's Aerial layer, `scripts/build-aerial.mjs`) | Instituto Geográfico Nacional, PNOA máxima actualidad orthophotos (WMTS), credited on the map as "PNOA máxima actualidad CC BY 4.0 scne.es" | CC BY 4.0 |
 | Forecast | Open-Meteo.com | CC BY 4.0 |
 
 ## Run (Wi-Fi off is fine)

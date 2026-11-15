@@ -8,7 +8,7 @@ argmax-key
 models/
 bin/
 
-# Built map tiles: made by scripts/build-tiles.mjs
+# Built map tiles and aerial photos: made by scripts/build-tiles.mjs and scripts/build-aerial.mjs
 app/src/map/generated/
 
 # Node / React Native

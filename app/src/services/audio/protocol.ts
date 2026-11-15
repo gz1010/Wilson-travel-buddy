@@ -12,7 +12,11 @@ export type AppToHelper =
   /** Voice loop: listen for one utterance. The helper ends it on ~0.8 s of silence or listen.stop. */
   | { type: 'listen.start'; language?: Lang }
   | { type: 'listen.stop' }
-  /** Translator: listen continuously and label speakers. */
+  /**
+   * Translator: listen continuously and label speakers. Each sentence is heard in one of
+   * `languages` (the traveller's first); a known speaker keeps their language unless Whisper is
+   * sure of another. Empty: all ten languages the voice speaks.
+   */
   | { type: 'conversation.start'; languages: Lang[]; pushToTalk?: boolean }
   /**
    * Push-to-talk only: someone pressed / released their button. `turn` is an id the helper
@@ -33,7 +37,12 @@ export type AppToHelper =
   | { type: 'camera.snap'; id: string }
   | { type: 'camera.stop' }
   /** Sent every few seconds while the preview shows; without any message for 15 s the helper turns the camera off. */
-  | { type: 'camera.alive' };
+  | { type: 'camera.alive' }
+  /**
+   * macOS Location (the helper asks CoreLocation, which locates a Mac from nearby Wi-Fi networks).
+   * Answered by location or location.error with the same id, within about 8 s.
+   */
+  | { type: 'location.get'; id: string };
 
 export type HelperToApp =
   | {
@@ -46,7 +55,8 @@ export type HelperToApp =
     }
   | { type: 'status'; message: string }
   | { type: 'level'; value: number }
-  | { type: 'partial'; text: string; speaker?: number }
+  /** language: in a conversation, what Whisper hears so far, when it is one of the conversation's languages. */
+  | { type: 'partial'; text: string; speaker?: number; language?: Lang }
   /** turn: the push-to-talk turn this answers. Every release gets exactly one final, maybe empty. */
   | { type: 'final'; text: string; language?: Lang; speaker?: number; turn?: string }
   /** sinceEndMs: how long ago the person stopped speaking (latency readout). */
@@ -55,9 +65,13 @@ export type HelperToApp =
   | { type: 'speak.started'; id: string }
   | { type: 'speak.done'; id: string }
   | { type: 'error'; message: string }
-  /** A live preview frame: base64 JPEG, ~480 px wide, at most 6 a second. */
+  /** A live preview frame: base64 JPEG, ~1000 px wide (quality 0.75), at most 6 a second, fewer when frames are big. */
   | { type: 'camera.frame'; jpeg: string }
-  /** The answer to camera.snap: base64 JPEG, ~1024 px wide; no jpeg when the camera is not running. */
+  /** The answer to camera.snap: base64 JPEG, ~1600 px wide (quality 0.85); no jpeg when the camera is not running. */
   | { type: 'camera.snapped'; id: string; jpeg?: string }
   /** No camera, permission refused, or the session failed. The camera is off after this. */
-  | { type: 'camera.error'; message: string };
+  | { type: 'camera.error'; message: string }
+  /** The answer to location.get. accuracy: metres, when macOS gives one; at: when macOS made the fix, ms since 1970. */
+  | { type: 'location'; id: string; lat: number; lon: number; accuracy?: number; at: number }
+  /** macOS could not locate the Mac (Wi-Fi off, Location Services off, permission refused or not given yet). */
+  | { type: 'location.error'; id: string; message: string };

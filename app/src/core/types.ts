@@ -297,7 +297,8 @@ export interface Heard {
 export type Side = 'traveler' | 'local';
 
 export type TurnEvent =
-  | { type: 'partial'; text: string; speaker?: number }
+  /** language: what Argmax hears so far (one of the conversation's languages), when it can tell. */
+  | { type: 'partial'; text: string; speaker?: number; language?: Lang }
   | { type: 'final'; text: string; language?: Lang; speaker?: number; turn?: string }
   | { type: 'level'; value: number };
 
@@ -338,6 +339,22 @@ export interface AudioClient {
   startCamera(onFrame: (jpeg: string) => void, onError?: (message: string) => void): () => void;
   /** A sharper still (base64 JPEG, ~1024 px) from the running camera; undefined if there is none. */
   snap(): Promise<string | undefined>;
+  /**
+   * Where macOS says this Mac is (CoreLocation, through the helper: it locates a Mac from nearby
+   * Wi-Fi networks, so it fails with Wi-Fi off). Resolves undefined when it can't, after at most
+   * about 10 s; onError, if given, gets the helper's reason.
+   */
+  locate(onError?: (message: string) => void): Promise<LocationFix | undefined>;
+}
+
+/** A position fix from macOS Location (or the last one saved). */
+export interface LocationFix {
+  lat: number;
+  lon: number;
+  /** Radius in metres, when known. */
+  accuracy?: number;
+  /** When the fix was made, ms since 1970 (Date.now()). */
+  at: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -347,12 +364,23 @@ export type CompanionEvent =
   | { type: 'status'; text: string }
   /** lang: the language to speak this in, when it isn't English (phrase answers). */
   | { type: 'token'; text: string; lang?: Lang }
-  | { type: 'done'; text: string; lang?: Lang }
+  /** cited: the guide facts behind a guide answer, for the screens to show. */
+  | { type: 'done'; text: string; lang?: Lang; cited?: Cited }
   | { type: 'focus'; placeId: string }
   | { type: 'recommendations'; items: Recommendation[] }
   | { type: 'trip'; trip: Trip }
   | { type: 'translator' }
   | { type: 'error'; text: string };
+
+/**
+ * The facts behind the latest answer (b.cited): those the model cited first, then the rest of
+ * the place's, on the question's topic first. Code picks them; the model only numbers sources.
+ */
+export interface Cited {
+  /** The place the answer is about, when there is one. */
+  placeId?: string;
+  facts: Fact[];
+}
 
 export interface Companion {
   handle(text: string, onEvent: (e: CompanionEvent) => void): Promise<void>;

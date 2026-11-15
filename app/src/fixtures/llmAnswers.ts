@@ -1,3 +1,4 @@
+import { NOT_IN_GUIDE } from '../core/prompts';
 import type { FixtureAnswer } from '../services/llm/fixtureLLM';
 // Real Bonsai-2 answers saved by `npm run eval`; used in place of the hand-written ones below.
 import recorded from './recorded.json';
@@ -37,12 +38,34 @@ const handWritten: Record<string, FixtureAnswer> = {
       picks: ids.map(id => ({ place_id: id, reason: REASONS[id] ?? 'It is a short walk away and matches what you like.' })),
     });
   },
-  guide:
-    "The Giralda was originally a minaret before it became the Cathedral's tower. Inside there are 35 ramps instead of stairs for riders on horseback to climb.",
+  guide: req => guideAnswer(req.messages[1]?.content ?? ''),
   'translate.en-es': '¿Podrías decirme cómo llegar a la catedral desde aquí?',
   'translate.es-en': "It's five minutes away, walking straight down this street.",
   'translate*': '(translation)',
 };
+
+/** A real Bonsai-2 4B answer about the Giralda, with the source number the answer prompt asks for. */
+const GIRALDA =
+  "The Giralda was originally a minaret before it became the Cathedral's tower [1]. Inside there are 35 ramps instead of stairs for riders on horseback to climb [1].";
+
+/**
+ * Without a model, a guide question gets the Giralda answer when it is about the Giralda, else
+ * the first two sentences of its best source, numbered like the model numbers them: the facts
+ * panel and the answers then follow the question, as they do with Bonsai-2.
+ */
+function guideAnswer(user: string): string {
+  const question = /\nQuestion: (.*)$/s.exec(user)?.[1] ?? '';
+  const sources = [...user.matchAll(/^\[(\d+)\] [^:\n]+: (.+)$/gm)];
+  const giralda = sources.find(s => /Giralda/.test(s[2]));
+  if (/giralda/i.test(question) && giralda) return GIRALDA.replace(/\[1\]/g, `[${giralda[1]}]`);
+  const best = sources[0];
+  if (!best) return NOT_IN_GUIDE;
+  const sentences = best[2].replace(/\s*\([^)]*\)/g, '').match(/[^.!?]+[.!?]+/g) ?? [best[2]];
+  return sentences
+    .slice(0, 2)
+    .map(s => `${s.trim().replace(/[.!?]+$/, '')} [${best[1]}].`)
+    .join(' ');
+}
 
 // Recorded answers win for fixed-text requests. Recommendations stay hand-written: their
 // allowed place IDs change with the clock, so a recorded pick could name a closed place.

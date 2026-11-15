@@ -1,21 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { timeOfDay } from '../../core/look';
 import { SentenceChunker } from '../../core/sentences';
 import type { Place } from '../../core/types';
 import { Looker, plainText } from '../../core/vision';
+import { heroPhotos } from '../../pack/seville/photos';
+import { AmbientBackdrop } from '../dusk/AmbientBackdrop';
 import { axPress, Glass, GlassButton, OfflineChip, onGlass } from '../dusk/Glass';
 import { MicIcon, WaveIcon } from '../dusk/Icons';
+import { useReduceMotion } from '../dusk/motion';
 import { PhotoFade } from '../dusk/Photos';
 import { useScreenSize } from '../dusk/Screen';
 import { dusk, font, ground, white } from '../dusk/tokens';
 import type { ScreenProps } from './types';
 
-// Look (AntPlace/AntNow style): the camera's live preview in the top ~520 px, fading into the
-// ground. The glass shutter freezes the frame and Bonsai-2 says what it is (a dish, a sign, a
-// road marking, a menu) in a glass card; "Ask about it" listens for a question and speaks the
-// answer. The helper owns the camera; the model only sees the photo the person took.
-// DuskRoot draws the tab bar over the bottom 100 px.
+// Scan (the screen id stays 'look'; AntPlace/AntNow style): the camera's live preview in the top
+// ~520 px, fading into the ground. The glass shutter takes a sharp photo (the helper's ~1600 px
+// snap, shown in place of the ~1000 px preview) and Bonsai-2 says what it is (a dish, a sign, a
+// menu), translates any writing and gives one tip, in a glass card; "Ask about it" listens for a
+// question and speaks the answer. The helper owns the camera; the model only sees the photo the
+// person took. DuskRoot draws the tab bar over the bottom 100 px.
+// Behind everything, an ambient backdrop: the photo you took, blurred and darkened, so the card and
+// buttons sit on its colours; before that (and with no camera) the city at this time of day, as on
+// Now. The preview fades into it.
 
 const W = dusk.layout.phoneWidth;
 /** The tab bar's top edge above the bottom of the window (DuskRoot: bottom 26 + 58 tall), plus air. */
@@ -41,13 +49,65 @@ function cameraProblem(message: string): { title: string; body: string; retry: b
   if (/without the audio helper|audio helper (not connected|disconnected)/i.test(message)) {
     return { title: 'No camera right now', body: 'The camera comes through the audio helper, which isn’t running. Start everything with scripts/start.sh.', retry: false };
   }
-  if (/refused|denied|access/i.test(message)) return { title: 'Camera access is off', body: message, retry: true };
+  if (/refused|denied|access/i.test(message)) return { title: 'Camera access is off', body: message.replace(/ > /g, ' › '), retry: true };
   if (/no camera/i.test(message)) return { title: 'No camera found', body: 'This Mac has no camera the helper can use. Connect one (or an iPhone as a Continuity Camera) and try again.', retry: true };
   return { title: 'The camera stopped', body: message, retry: true };
 }
 
+interface Size {
+  width: number;
+  height: number;
+}
+
+/** How long a new preview size must hold before the pictures are remade for it (a window being dragged). */
+const SETTLE_MS = 160;
+
+/**
+ * The preview's measured size, rounded: the pictures are drawn at it and remade (keyed on it) when
+ * it changes, as macOS keeps an image decoded at its first layout size and stretches it. The first
+ * size applies at once, later ones once they hold for SETTLE_MS, so dragging the window doesn't
+ * remake (and blank) the photo on every step.
+ */
+function useSettledBox() {
+  const [size, setSize] = useState<Size | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const measured = useRef(false);
+  useEffect(
+    () => () => {
+      if (timer.current !== undefined) clearTimeout(timer.current);
+    },
+    [],
+  );
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const next = { width: Math.round(e.nativeEvent.layout.width), height: Math.round(e.nativeEvent.layout.height) };
+    if (next.width <= 0 || next.height <= 0) return;
+    const apply = () => setSize(prev => (prev && prev.width === next.width && prev.height === next.height ? prev : next));
+    if (timer.current !== undefined) clearTimeout(timer.current);
+    if (measured.current) timer.current = setTimeout(apply, SETTLE_MS);
+    else {
+      measured.current = true;
+      apply();
+    }
+  }, []);
+  return { size, key: size ? `${size.width}x${size.height}` : 'none', onLayout };
+}
+
+/** A camera picture at the preview's measured size (in points, so macOS decodes it for the Retina pixels). */
+function CameraImage({ jpeg, size, label }: { jpeg: string; size: Size; label?: string }) {
+  return (
+    <Image
+      source={{ uri: `data:image/jpeg;base64,${jpeg}` }}
+      resizeMode="cover"
+      style={[styles.photo, size]}
+      accessible={!!label}
+      accessibilityLabel={label}
+      accessibilityIgnoresInvertColors
+    />
+  );
+}
+
 /** The live frames. Its own component, so a new frame (up to 6 a second) redraws only this image. */
-const LivePreview = React.memo(function LivePreview({ sink, initial }: { sink: React.MutableRefObject<((jpeg: string) => void) | undefined>; initial?: string }) {
+const LivePreview = React.memo(function LivePreview({ sink, initial, size }: { sink: React.MutableRefObject<((jpeg: string) => void) | undefined>; initial?: string; size: Size }) {
   const [frame, setFrame] = useState(initial);
   useEffect(() => {
     sink.current = setFrame;
@@ -56,7 +116,7 @@ const LivePreview = React.memo(function LivePreview({ sink, initial }: { sink: R
     };
   }, [sink]);
   if (!frame) return null;
-  return <Image source={{ uri: `data:image/jpeg;base64,${frame}` }} resizeMode="cover" style={StyleSheet.absoluteFill} accessibilityIgnoresInvertColors />;
+  return <CameraImage jpeg={frame} size={size} />;
 });
 
 export function LookScreen({ b, nav }: ScreenProps) {
@@ -72,6 +132,8 @@ export function LookScreen({ b, nav }: ScreenProps) {
   // --- The camera, through the helper.
   const lastFrame = useRef<string | undefined>(undefined);
   const sink = useRef<((jpeg: string) => void) | undefined>(undefined);
+  /** True from the shutter until Retake: the preview holds its last frame under the photo. */
+  const paused = useRef(false);
   const [hasFrames, setHasFrames] = useState(false);
   const [cameraError, setCameraError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
@@ -82,6 +144,7 @@ export function LookScreen({ b, nav }: ScreenProps) {
     let first = true;
     return audio.startCamera(
       jpeg => {
+        if (paused.current) return;
         lastFrame.current = jpeg;
         sink.current?.(jpeg);
         if (first) {
@@ -92,6 +155,18 @@ export function LookScreen({ b, nav }: ScreenProps) {
       message => setCameraError(message),
     );
   }, [audio, attempt]);
+
+  // The preview's measured size: the pictures are drawn at it and remade when it changes.
+  const box = useSettledBox();
+
+  // The shutter's blink over the preview (none with reduce motion).
+  const reduceMotion = useReduceMotion();
+  const flash = useRef(new Animated.Value(0)).current;
+  const blink = useCallback(() => {
+    if (reduceMotion) return;
+    flash.setValue(0.5);
+    Animated.timing(flash, { toValue: 0, duration: 280, useNativeDriver: true }).start();
+  }, [flash, reduceMotion]);
 
   // --- What the person looked at, and what Bonsai-2 said.
   const [phase, setPhase] = useState<Phase>('live');
@@ -115,7 +190,7 @@ export function LookScreen({ b, nav }: ScreenProps) {
     [audio],
   );
 
-  // The tab bar's mic takes the microphone over: drop our question.
+  // The floating buddy takes the microphone over: drop our question.
   useEffect(() => {
     if (b.listening && listeningRef.current) {
       run.current++;
@@ -135,7 +210,7 @@ export function LookScreen({ b, nav }: ScreenProps) {
       setSpoke(speak);
       setPhase('looking');
       if (!b.runtime.live.llm) {
-        setProblem('Bonsai-2 isn’t running, so nothing can look at the photo. Start it with scripts/start.sh.');
+        setProblem('Bonsai-2 isn’t running, so nothing can read the photo. Start it with scripts/start.sh.');
         setPhase('answered');
         return;
       }
@@ -162,20 +237,23 @@ export function LookScreen({ b, nav }: ScreenProps) {
   );
 
   /**
-   * Freezes the newest preview frame at once, then swaps in the sharper still from the helper.
-   * Returns undefined if Retake (or leaving) came first.
+   * The shutter: the preview holds still at once (with a blink), then the helper's sharp snap
+   * (~1600 px) is shown and is what Bonsai-2 reads. Only when no snap comes back (the camera
+   * stopped) is the last preview frame used. Returns undefined if Retake (or leaving) came first.
    */
   const freeze = useCallback(
     async (id: number): Promise<string | undefined> => {
       const preview = lastFrame.current;
       if (!preview) return undefined;
-      setFrozen(preview);
-      const still = (await audio.snap()) ?? preview;
+      paused.current = true;
+      blink();
+      const still = await audio.snap();
       if (id !== run.current) return undefined;
-      setFrozen(still);
-      return still;
+      const photo = still ?? preview;
+      setFrozen(photo);
+      return photo;
     },
-    [audio],
+    [audio, blink],
   );
 
   const shoot = async () => {
@@ -229,6 +307,7 @@ export function LookScreen({ b, nav }: ScreenProps) {
     if (listeningRef.current) audio.stopListening();
     listeningRef.current = false;
     b.stopSpeaking();
+    paused.current = false;
     setFrozen(undefined);
     setQuestion(undefined);
     setPartial('');
@@ -239,16 +318,23 @@ export function LookScreen({ b, nav }: ScreenProps) {
   };
 
   const live = phase === 'live' && !frozen;
+  // The backdrop: the photo you took once there is one, else the city at this time of day.
+  const tod = timeOfDay(b.situation.clock, b.index.destination);
+  const frozenSource = useMemo(() => (frozen ? { uri: `data:image/jpeg;base64,${frozen}` } : undefined), [frozen]);
+  /** A picture fills the preview (live frames or the photo); otherwise the backdrop shows there too. */
+  const showing = hasFrames || !!frozen;
   const noCamera = cameraError !== undefined && !frozen ? cameraProblem(cameraError) : undefined;
   const listening = phase === 'listening';
   // Not while the shutter's sharper still is on its way (the question would get the preview frame).
   const askDisabled = b.listening || !audio.info.hasMicrophone || (live && !hasFrames) || (phase === 'looking' && !answer);
 
   // --- The card: what you asked, then what Bonsai-2 says.
-  const label = `WHAT YOU'RE LOOKING AT · ${model.toUpperCase()} ON THIS MAC`;
+  const label = `WHAT IT IS · ${model.toUpperCase()} ON THIS MAC`;
   const asked = listening ? (partial ? `“${partial}”` : 'Listening…') : question ? `“${question}”` : undefined;
   const pending = phase === 'looking' && !answer;
-  const body = problem ?? (pending ? 'Looking…' : answer || (phase === 'answered' ? 'Nothing came back. Try again, a little closer.' : ''));
+  const body =
+    problem ??
+    (pending ? (frozen ? 'Reading the photo…' : 'Taking the photo…') : answer || (phase === 'answered' ? 'Nothing came back. Try again, a little closer.' : ''));
 
   const askPill = (style?: object) => (
     <Pressable
@@ -268,23 +354,33 @@ export function LookScreen({ b, nav }: ScreenProps) {
 
   return (
     <View style={styles.root}>
-      {/* Top ~520: the live preview, or the frozen photo, fading into the ground. */}
-      <View style={[styles.preview, { height: previewH }]} pointerEvents="none">
-        {frozen ? (
-          <Image source={{ uri: `data:image/jpeg;base64,${frozen}` }} resizeMode="cover" style={StyleSheet.absoluteFill} accessibilityIgnoresInvertColors />
-        ) : (
-          <LivePreview sink={sink} initial={lastFrame.current} />
+      <AmbientBackdrop source={frozenSource ?? heroPhotos[tod]} strength={0.75} />
+
+      {/* Top ~520: the live preview, and the photo over it once taken, fading into the backdrop. */}
+      <View testID="scan-preview" style={[styles.preview, { height: previewH }, showing && styles.previewShowing]} pointerEvents="none" onLayout={box.onLayout}>
+        {box.size && (
+          <View key={box.key} style={StyleSheet.absoluteFill}>
+            <LivePreview key={attempt} sink={sink} initial={lastFrame.current} size={box.size} />
+            {frozen && <CameraImage jpeg={frozen} size={box.size} label="The photo you took" />}
+          </View>
         )}
-        <PhotoFade stops={[[0, 0.5], [0.22, 0.05], [0.68, 0.05], [1, 1]]} />
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: dusk.color.white, opacity: flash }]} />
+        {showing && <PhotoFade stops={[[0, 0.5], [0.22, 0.05], [0.68, 0.05], [1, 1]]} />}
       </View>
+      {/* Under the preview the ground thins out into the backdrop, so there is no edge. */}
+      {showing && (
+        <View pointerEvents="none" style={[styles.melt, { top: previewH }]}>
+          <PhotoFade stops={[[0, 1], [0.45, 0.55], [1, 0]]} />
+        </View>
+      )}
 
       <View style={[styles.header, { left: 22 * sx, right: 22 * sx }]}>
         <View style={{ flexShrink: 1 }}>
           <Text style={[styles.title, font('700')]} accessibilityRole="header">
-            Look
+            Scan
           </Text>
           <Text style={[styles.models, font('500')]} numberOfLines={1}>
-            {`${model} looks · nothing leaves this Mac`}
+            {`${model} on this Mac · photos never leave it`}
           </Text>
         </View>
         <OfflineChip />
@@ -309,9 +405,14 @@ export function LookScreen({ b, nav }: ScreenProps) {
       {live ? (
         <>
           {hasFrames && !noCamera && (
-            <Text style={[styles.hint, font('600'), { top: previewH - 58, left: 24 * sx, right: 24 * sx }]} numberOfLines={2}>
-              Point at a dish, a sign, a road marking or a menu
-            </Text>
+            <View style={[styles.hintWrap, { top: previewH - 74, left: 24 * sx, right: 24 * sx }]} pointerEvents="none">
+              <Text style={[styles.hint, font('700')]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                Point at a dish, a sign or a menu
+              </Text>
+              <Text style={[styles.hintSub, font('500')]} numberOfLines={2}>
+                You’ll get what it is, the translation and a tip
+              </Text>
+            </View>
           )}
           <View style={[styles.controls, { top: previewH, bottom: TAB_RESERVE }]}>
             {noCamera ? (
@@ -320,7 +421,7 @@ export function LookScreen({ b, nav }: ScreenProps) {
               <>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Take a photo and ask what it is"
+                  accessibilityLabel="Scan: take a photo and find out what it is"
                   accessibilityState={{ disabled: !hasFrames }}
                   disabled={!hasFrames}
                   onPress={shoot}
@@ -379,7 +480,9 @@ export function LookScreen({ b, nav }: ScreenProps) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: dusk.color.ground },
-  preview: { position: 'absolute', left: 0, right: 0, top: 0, overflow: 'hidden', backgroundColor: dusk.color.raised },
+  preview: { position: 'absolute', left: 0, right: 0, top: 0, overflow: 'hidden' },
+  previewShowing: { backgroundColor: dusk.color.raised },
+  melt: { position: 'absolute', left: 0, right: 0, height: 150 },
   header: { position: 'absolute', top: HEADER_TOP, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
   title: { fontSize: 24, letterSpacing: -0.48, color: dusk.color.text, textShadowColor: ground(0.45), textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 12 },
   models: { fontSize: 11, marginTop: 2, color: dusk.color.text2, textShadowColor: ground(0.5), textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
@@ -387,7 +490,10 @@ const styles = StyleSheet.create({
   problemCard: { padding: 20, gap: 8, alignItems: 'flex-start' },
   problemBody: { fontSize: 14, lineHeight: 20, color: dusk.color.textSoft },
   starting: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontSize: 14, color: dusk.color.text2 },
-  hint: { position: 'absolute', textAlign: 'center', fontSize: 14, lineHeight: 19, ...onGlass, textShadowColor: ground(0.7), textShadowRadius: 10 },
+  photo: { position: 'absolute', left: 0, top: 0 },
+  hintWrap: { position: 'absolute', alignItems: 'center', gap: 3 },
+  hint: { textAlign: 'center', fontSize: 16, lineHeight: 21, letterSpacing: -0.16, ...onGlass, textShadowColor: ground(0.7), textShadowRadius: 10 },
+  hintSub: { textAlign: 'center', fontSize: 13, lineHeight: 18, color: dusk.color.textSoft, textShadowColor: ground(0.8), textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10 },
   controls: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
   shutter: { width: SHUTTER, height: SHUTTER, alignItems: 'center', justifyContent: 'center' },
   askPill: { height: BTN, minWidth: 180, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 22 },

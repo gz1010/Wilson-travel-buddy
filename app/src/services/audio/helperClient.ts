@@ -1,4 +1,4 @@
-import type { AudioClient, AudioInfo, Heard, Lang, TurnEvent } from '../../core/types';
+import type { AudioClient, AudioInfo, Heard, Lang, LocationFix, TurnEvent } from '../../core/types';
 import { AUDIO_HELPER_URL, PROTOCOL_VERSION, type AppToHelper, type HelperToApp } from './protocol';
 
 /**
@@ -21,6 +21,8 @@ export class HelperAudioClient implements AudioClient {
   /** The running camera preview, if any. A new startCamera replaces it. */
   private camera?: { onFrame: (jpeg: string) => void; onError?: (message: string) => void; alive: ReturnType<typeof setInterval> };
   private snapWaiters = new Map<string, (jpeg: string | undefined) => void>();
+  /** locate() calls waiting for the helper's location / location.error, by id. */
+  private locateWaiters = new Map<string, (fix: LocationFix | undefined, error?: string) => void>();
 
   /** Connects and waits for "ready" (the helper may still be loading models). */
   connect(url = AUDIO_HELPER_URL, timeoutMs = 2000, readyTimeoutMs = 120_000): Promise<boolean> {
@@ -65,6 +67,8 @@ export class HelperAudioClient implements AudioClient {
         this.speakWaiters.clear();
         this.conversationHandler = undefined;
         this.endCamera('Audio helper disconnected');
+        for (const done of [...this.locateWaiters.values()]) done(undefined, 'The audio helper disconnected.');
+        this.locateWaiters.clear();
         this.onDisconnect?.();
       };
       ws.onmessage = ev => {
@@ -121,7 +125,7 @@ export class HelperAudioClient implements AudioClient {
         if (this.conversationHandler) {
           this.conversationHandler(
             m.type === 'partial'
-              ? { type: 'partial', text: m.text, speaker: m.speaker }
+              ? { type: 'partial', text: m.text, speaker: m.speaker, language: m.language }
               : { type: 'final', text: m.text, language: m.language, speaker: m.speaker, turn: m.turn },
           );
         }
@@ -140,6 +144,24 @@ export class HelperAudioClient implements AudioClient {
       }
       case 'camera.error':
         this.endCamera(m.message); // the helper has already turned the camera off
+        return;
+      case 'location': {
+        const usable = Number.isFinite(m.lat) && Number.isFinite(m.lon) && Math.abs(m.lat) <= 90 && Math.abs(m.lon) <= 180;
+        this.locateWaiters.get(m.id)?.(
+          usable
+            ? {
+                lat: m.lat,
+                lon: m.lon,
+                accuracy: typeof m.accuracy === 'number' && Number.isFinite(m.accuracy) && m.accuracy >= 0 ? m.accuracy : undefined,
+                at: Number.isFinite(m.at) ? m.at : Date.now(),
+              }
+            : undefined,
+          usable ? undefined : 'macOS sent a position the app cannot use.',
+        );
+        return;
+      }
+      case 'location.error':
+        this.locateWaiters.get(m.id)?.(undefined, m.message);
         return;
     }
     this.listener?.(m);
@@ -237,6 +259,30 @@ export class HelperAudioClient implements AudioClient {
         resolve(jpeg);
       });
       this.send({ type: 'camera.snap', id });
+    });
+  }
+
+  /**
+   * Asks the helper where macOS says the Mac is. The helper gives up after ~8 s (a permission
+   * prompt nobody answered, or no Wi-Fi), so timeoutMs is a little longer: running out means the
+   * helper never answered (a build from before location.get ignores it).
+   */
+  locate(onError?: (message: string) => void, timeoutMs = 10_000): Promise<LocationFix | undefined> {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      onError?.('The audio helper is not connected, so macOS Location is not available.');
+      return Promise.resolve(undefined);
+    }
+    const id = `g${++this.counter}`;
+    return new Promise(resolve => {
+      const timer = setTimeout(() => finish(undefined, 'The audio helper did not answer. An older build has no Location: rebuild and restart it.'), timeoutMs);
+      const finish = (fix: LocationFix | undefined, error?: string) => {
+        clearTimeout(timer);
+        this.locateWaiters.delete(id);
+        if (!fix) onError?.(error ?? 'macOS could not locate this Mac.');
+        resolve(fix);
+      };
+      this.locateWaiters.set(id, finish);
+      this.send({ type: 'location.get', id });
     });
   }
 

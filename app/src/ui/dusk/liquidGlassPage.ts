@@ -5,7 +5,8 @@
 // speed: a shader that bends the photo through the letters instead of real 3D meshes.
 //
 // 1. The photo is drawn cover-fit with the card's dark fade into a canvas (the background).
-// 2. The words are drawn white on black into a second canvas (the mask), in Manrope ExtraBold.
+// 2. The words are drawn white on black into a second canvas (the mask), in the system font
+//    (SF Pro Heavy, so no font is loaded), each line made smaller if it would not fit the width.
 // 3. The mask is blurred (two passes) into a height map: flat inside the letters, falling off at
 //    the edges like a bevel, so thin strokes come out rounded like poured glass.
 // 4. One fragment shader: normals from the height map bend the photo (refraction), the red, green
@@ -26,9 +27,9 @@ export interface LiquidGlassConfig {
   width: number;
   height: number;
   photo: string;
-  font: string;
   lines: LiquidGlassLine[];
   align: 'center' | 'left';
+  /** Left padding when align is 'left'; the room kept on both sides when a line must shrink. */
   inset: number;
   /** Letter spacing in em. */
   tracking: number;
@@ -188,22 +189,55 @@ const RENDERER = String.raw`
     return c;
   }
 
+  // A line too wide for the box (inside the inset, at least 6 px, on both sides: GlassWord's
+  // glassLinePad) is drawn smaller; a sunk baseline shrinks with it, so the same share of the
+  // letters stays below the edge.
+  var FONT = '-apple-system, system-ui, "Helvetica Neue", sans-serif';
+  var pad = Math.max(6, cfg.inset) * dpr;
+  function fitLines() {
+    var m = document.createElement('canvas').getContext('2d');
+    return cfg.lines.map(function (line) {
+      var size = line.size * dpr;
+      var chars = Array.from(line.text);
+      function width(sz) {
+        m.font = '800 ' + sz + 'px ' + FONT;
+        var w = 0;
+        chars.forEach(function (ch) { w += m.measureText(ch).width; });
+        return w + cfg.tracking * sz * Math.max(0, chars.length - 1);
+      }
+      var room = W - 2 * pad;
+      var total = width(size);
+      var baseline = line.baseline * dpr;
+      if (room > 0 && total > room) {
+        var f = room / total;
+        // Measured again at the new size: optical sizes make small letters a little wider.
+        for (var i = 0; i < 3 && total > room; i++) {
+          size = Math.max(8 * dpr, size * f);
+          total = width(size);
+          f = room / total;
+        }
+        if (baseline < 0) baseline *= size / (line.size * dpr);
+      }
+      return { text: line.text, chars: chars, size: size, baseline: baseline };
+    });
+  }
+  var fitted = fitLines();
+
   function drawMask() {
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var x = c.getContext('2d');
     x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
     x.fillStyle = '#fff';
     x.textBaseline = 'alphabetic';
-    cfg.lines.forEach(function (line) {
-      var size = line.size * dpr;
+    fitted.forEach(function (line) {
+      var size = line.size;
       var track = cfg.tracking * size;
-      x.font = '800 ' + size + 'px GlassFont';
-      var chars = Array.from(line.text);
-      var widths = chars.map(function (ch) { return x.measureText(ch).width; });
-      var total = widths.reduce(function (a, b) { return a + b; }, 0) + track * Math.max(0, chars.length - 1);
+      x.font = '800 ' + size + 'px ' + FONT;
+      var widths = line.chars.map(function (ch) { return x.measureText(ch).width; });
+      var total = widths.reduce(function (a, b) { return a + b; }, 0) + track * Math.max(0, line.chars.length - 1);
       var px = cfg.align === 'center' ? (W - total) / 2 : cfg.inset * dpr;
-      var py = H - line.baseline * dpr;
-      chars.forEach(function (ch, i) { x.fillText(ch, px, py); px += widths[i] + track; });
+      var py = H - line.baseline;
+      line.chars.forEach(function (ch, i) { x.fillText(ch, px, py); px += widths[i] + track; });
     });
     return c;
   }
@@ -230,7 +264,7 @@ const RENDERER = String.raw`
     var a = target(gl, gl2, half) || target(gl, gl2, false);
     var b = target(gl, gl2, half) || target(gl, gl2, false);
 
-    var px = sizeOf(cfg.lines) * dpr;
+    var px = sizeOf(fitted);
     var sigma = Math.max(2, Math.min(16, px * 0.04));
     gl.viewport(0, 0, W, H);
 
@@ -283,14 +317,12 @@ const RENDERER = String.raw`
   }
 
   try {
-    var face = new FontFace('GlassFont', 'url(' + cfg.font + ')', { weight: '800' });
     var img = new Image();
-    Promise.all([
-      face.load().then(function (f) { document.fonts.add(f); }),
-      new Promise(function (res, rej) { img.onload = res; img.onerror = function () { rej(new Error('photo')); }; img.src = cfg.photo; }),
-    ]).then(function () {
+    img.onload = function () {
       try { start(img); } catch (e) { post('error:' + (e && e.message)); }
-    }, function (e) { post('error:' + (e && e.message)); });
+    };
+    img.onerror = function () { post('error:photo'); };
+    img.src = cfg.photo;
   } catch (e) {
     post('error:' + (e && e.message));
   }

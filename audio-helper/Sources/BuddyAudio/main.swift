@@ -2,10 +2,11 @@ import Foundation
 import TTSKit
 
 // buddy-audio [--port 8765] [--models-dir DIR] [--whisper-model NAME]
-//             [--voice-threshold 0.55] [--prepare] [--pro]
+//             [--voice-threshold 0.55] [--prepare] [--pro] [--no-app-bundle]
 //
 // --prepare downloads every model while online, writes the manifest, and exits.
 // After that, the helper starts with Wi-Fi off.
+// --no-app-bundle: don't rerun from BuddyAudio.app (then macOS never offers Location; see Location.swift).
 
 let args = CommandLine.arguments
 func arg(_ name: String) -> String? {
@@ -33,11 +34,16 @@ if args.contains("--prepare") {
     dispatchMain()
 }
 
+// macOS asks for Location only for an app bundle: rerun from one (same pid) before opening the port.
+LocationAppBundle.relaunchInsideIfNeeded(args)
+
 let server = try WebSocketServer(port: port)
 let (inbox, inboxContinuation) = AsyncStream<Incoming>.makeStream()
 var service: AudioService?
 // The camera needs no models, so it works while the speech models are still loading.
 let camera = CameraService { server.send($0) }
+// macOS Location (Wi-Fi positioning) for the map; needs no models either. See Location.swift.
+let location = LocationService { server.send($0) }
 var readyMessage: Outgoing?
 var lastStatus = Outgoing.status("Starting the audio helper…")
 
@@ -50,7 +56,7 @@ server.onMessage = { data in
         server.send(readyMessage ?? lastStatus)
         return
     }
-    if m.type.hasPrefix("camera.") {
+    if m.type.hasPrefix("camera.") || m.type.hasPrefix("location.") {
         inboxContinuation.yield(m)
         return
     }
@@ -66,7 +72,9 @@ server.onConnect = { inboxContinuation.yield(Incoming(type: "camera.stop")) }
 // One consumer, so messages reach the audio service and the camera in the order the app sent them.
 Task {
     for await m in inbox {
-        if m.type.hasPrefix("camera.") { camera.handle(m) } else { await service?.handle(m) }
+        if m.type.hasPrefix("camera.") { camera.handle(m) }
+        else if m.type.hasPrefix("location.") { location.handle(m) }
+        else { await service?.handle(m) }
     }
 }
 server.start()

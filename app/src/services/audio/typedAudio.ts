@@ -1,4 +1,4 @@
-import type { AudioClient, AudioInfo, Heard, Lang, TurnEvent } from '../../core/types';
+import type { AudioClient, AudioInfo, Heard, Lang, LocationFix, TurnEvent } from '../../core/types';
 
 export interface ScriptedLine {
   speaker: number;
@@ -45,6 +45,12 @@ export class TypedAudio implements AudioClient {
     return undefined;
   }
 
+  /** macOS Location goes through the helper too, so without it the app falls back to the saved fix or a tap. */
+  async locate(onError?: (message: string) => void): Promise<LocationFix | undefined> {
+    onError?.('No macOS Location without the audio helper.');
+    return undefined;
+  }
+
   /** Replays the script word by word, as the real helper would stream it. */
   conversation(_languages: Lang[], onEvent: (e: TurnEvent) => void): () => void {
     let stopped = false;
@@ -55,7 +61,8 @@ export class TypedAudio implements AudioClient {
       words.forEach((_, i) => {
         timers.push(
           setTimeout(() => {
-            if (!stopped) onEvent({ type: 'partial', text: words.slice(0, i + 1).join(' '), speaker: line.speaker });
+            if (!stopped)
+              onEvent({ type: 'partial', text: words.slice(0, i + 1).join(' '), speaker: line.speaker, language: line.language });
           }, at + i * 120),
         );
       });

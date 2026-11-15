@@ -2,22 +2,24 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatHHMM, openState } from '../../core/time';
 import type { Fact, Place } from '../../core/types';
+import { AmbientBackdrop, MeltingPhoto } from '../dusk/AmbientBackdrop';
 import { CATEGORY_LABEL, directions } from '../dusk/format';
 import { axPress, Glass, GlassButton, GlassIconButton, OfflineChip, onGlass } from '../dusk/Glass';
 import { CloseIcon, MapIcon, WaveIcon } from '../dusk/Icons';
 import { MicOrb } from '../dusk/Nav';
-import { PhotoFade, PlacePhoto } from '../dusk/Photos';
+import { PhotoFade, PlacePhoto, placePhotoSource } from '../dusk/Photos';
 import { dusk, font, ground, white } from '../dusk/tokens';
 import type { ChatLine } from '../useBuddy';
 import type { ScreenProps } from './types';
 import { useScreenSize } from '../dusk/Screen';
 
-// AntPlace: one place. Its pack photo on top fading into the ground, the name, how far it is
-// and whether it is open, the summary, then the "From your <city> guide" card: the question asked
-// about this place and its streamed answer, every fact the pack has about it, and questions to ask
-// when the pack has few. All of that scrolls in the space above Add to day · Map · Ask, and the card
-// grows to meet them, so the page never ends in an empty band. No tab bar here: the close orb goes
-// back to Now.
+// AntPlace: one place. Its pack photo on top, sharp, melting into a blurred and darkened copy of
+// itself that fills the window (AmbientBackdrop, as on Now), so the glass has colour behind it
+// instead of flat black. Then the name, how far it is and whether it is open, the summary, then the
+// "From your <city> guide" card: the question asked about this place and its streamed answer,
+// every fact the pack has about it, and questions to ask when the pack has few. All of that scrolls
+// behind Add to day · Map · Ask (which float on a soft shade), and the card grows to meet them, so
+// the page never ends in an empty band. No tab bar here: the close orb goes back to Now.
 
 const W = dusk.layout.phoneWidth;
 const H = dusk.layout.phoneHeight;
@@ -29,8 +31,42 @@ const CLOSE = 42;
 const TOP = 56;
 /** About the Offline chip's width, so the pill never runs under it. */
 const OFFLINE_W = 80;
-/** The soft edge where the scrolling card meets the buttons. */
-const EDGE_FADE = 22;
+/** The soft shade the buttons float on rises this far above them. */
+const EDGE_FADE = 44;
+/** Space between the end of the card and the buttons. */
+const ACTIONS_GAP = 12;
+/** Over the sharp photo: dark behind the pill and orb at the top, and a little behind the name. */
+const HERO_SHADE: [number, number][] = [
+  [0, 0.4],
+  [0.2, 0],
+  [0.55, 0],
+  [0.82, 0.28],
+  [1, 0],
+];
+/**
+ * Under the buttons: clear at the top, then dark enough that facts scrolled under the row fade
+ * away instead of fighting the buttons (and their glass, which shows what is behind it).
+ */
+const ACTIONS_SHADE: [number, number][] = [
+  [0, 0],
+  [0.3, 0.55],
+  [0.6, 0.86],
+  [1, 0.94],
+];
+/** Once the page scrolls: behind the pill and close orb, so text never runs under them. */
+const TOP_SHADE: [number, number][] = [
+  [0, 0.88],
+  [0.55, 0.62],
+  [1, 0],
+];
+/** The fallback scene tile (no photo, no backdrop) still fades into the ground. */
+const TILE_FADE: [number, number][] = [
+  [0, 0.35],
+  [0.2, 0],
+  [0.52, 0],
+  [0.82, 0.8],
+  [1, 1],
+];
 /** With fewer facts than this, the card offers questions to ask. */
 const FEW_FACTS = 3;
 const QUESTIONS = ["What's special here?", 'When is it quietest?', 'Is it worth it in the rain?'];
@@ -170,22 +206,38 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
   const answerText = answer ? answer.text || (answer.pending ? '…' : '') : b.busy ? '…' : '';
   const answerPending = !answer || (!!answer.pending && !answer.text);
 
+  // The place's photo: sharp on top, and blurred behind the whole page. Without one, the drawn
+  // scene tile fades into the plain ground as before.
+  const photo = placePhotoSource(place.id);
+  // The buttons' row: 12 above, the 54 px buttons, the bottom inset. The page scrolls behind it.
+  const actionsH = ACTIONS_GAP + BTN + bottom;
+
   return (
     <View style={styles.root}>
+      <AmbientBackdrop source={photo} strength={0.7} />
       <Animated.ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ flexGrow: 1, paddingTop: contentTop, paddingBottom: EDGE_FADE }}
+        style={StyleSheet.absoluteFill}
+        contentContainerStyle={{ flexGrow: 1, paddingTop: contentTop, paddingBottom: actionsH + ACTIONS_GAP }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}>
-        {/* Top 470: the pack photo, fading into the ground (mockup gradient). */}
+        {/* Top 470: the pack photo, melting into the blurred backdrop (or the scene tile into the ground). */}
         <View style={[styles.photo, { height: photoH }]} pointerEvents="none">
-          <PlacePhoto place={place} style={StyleSheet.absoluteFill} />
-          <PhotoFade stops={[[0, 0.35], [0.2, 0], [0.52, 0], [0.82, 0.8], [1, 1]]} />
+          {photo !== undefined ? (
+            <>
+              <MeltingPhoto source={photo} melt={Math.round(photoH * 0.42)} />
+              <PhotoFade stops={HERO_SHADE} />
+            </>
+          ) : (
+            <>
+              <PlacePhoto place={place} style={StyleSheet.absoluteFill} />
+              <PhotoFade stops={TILE_FADE} />
+            </>
+          )}
         </View>
 
         <View style={{ marginHorizontal: 22 * sx, gap: 10 }}>
-          <Text style={[styles.title, font('600')]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} accessibilityRole="header">
+          <Text style={[styles.title, font('700')]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} accessibilityRole="header">
             {place.name}
           </Text>
           <Text style={[styles.distance, font('700')]}>{distanceLine}</Text>
@@ -262,17 +314,20 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
         </Glass>
       </Animated.ScrollView>
 
-      {/* Bottom row, under the scroll area; the card fades into it. */}
-      <View style={[styles.actions, { paddingLeft: 22 * sx, paddingRight: 22 * sx, paddingBottom: bottom }]}>
-        <View style={styles.edge} pointerEvents="none">
-          <PhotoFade stops={[[0, 0], [1, 1]]} />
+      {/* Bottom row, floating over the page on a soft shade (it never ends in a hard edge). */}
+      <View pointerEvents="box-none" style={[styles.actions, { height: actionsH, paddingLeft: 22 * sx, paddingRight: 22 * sx, paddingBottom: bottom }]}>
+        <View style={[styles.edge, { height: actionsH + EDGE_FADE }]} pointerEvents="none">
+          <PhotoFade stops={ACTIONS_SHADE} />
         </View>
+        {/* Once added it is a settled state, not a faded button: a see-through (0.45) button let
+            the facts scrolled under it show through its label. */}
         <GlassButton
-          label={inDay ? 'In your day' : 'Add to day'}
+          label={inDay ? '✓ In your day' : 'Add to day'}
           disabled={inDay}
           accessibilityLabel={inDay ? `${place.name} is in your day` : `Add ${place.name} to your day`}
           onPress={() => b.addToTrip(place.id)}
-          style={{ flex: 1 }}
+          style={inDay ? styles.settled : styles.grow}
+          textStyle={inDay ? styles.settledText : undefined}
         />
         <GlassIconButton accessibilityLabel="Show on map" onPress={showMap} size={BTN} kind="clear">
           <MapIcon size={20} />
@@ -282,7 +337,7 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
 
       {/* Top row: what this place is to you, and the close orb back to Now. */}
       <Animated.View style={[styles.topFade, { opacity: topFade }]} pointerEvents="none">
-        <PhotoFade stops={[[0, 1], [0.55, 0.85], [1, 0]]} />
+        <PhotoFade stops={TOP_SHADE} />
       </Animated.View>
       <Glass kind="clear" radius={999} style={[styles.pill, { left: 18 * sx, maxWidth: width - 18 * sx * 2 - CLOSE - OFFLINE_W - 16 }]}>
         <Text style={[onGlass, font('700'), { fontSize: 12 }]} numberOfLines={1}>
@@ -299,16 +354,16 @@ export function PlaceScreen({ b, nav }: ScreenProps) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: dusk.color.ground },
-  scroll: { flex: 1 },
   photo: { position: 'absolute', left: 0, right: 0, top: 0 },
+  // A tight shadow: macOS clips a wide text-shadow blur into a visible box over the photo.
   title: {
     color: dusk.color.text,
     fontSize: 40,
-    lineHeight: 42,
-    letterSpacing: -1.6,
-    textShadowColor: ground(0.5),
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 16,
+    lineHeight: 44,
+    letterSpacing: -0.9,
+    textShadowColor: ground(0.55),
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
   distance: { color: dusk.color.direction, fontSize: 13 },
   summary: { color: dusk.color.textSoft, fontSize: 14, lineHeight: 21 },
@@ -331,8 +386,11 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { height: 34, justifyContent: 'center', paddingHorizontal: 14 },
   chipText: { fontSize: 13 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 12 },
-  edge: { position: 'absolute', left: 0, right: 0, top: -EDGE_FADE, height: EDGE_FADE },
+  actions: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: ACTIONS_GAP },
+  edge: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  grow: { flex: 1 },
+  settled: { flex: 1, opacity: 1 },
+  settledText: { color: dusk.color.text2 },
   topFade: { position: 'absolute', left: 0, right: 0, top: 0, height: TOP + CLOSE + 22 },
   pill: { position: 'absolute', top: TOP + 5, paddingVertical: 8, paddingHorizontal: 13 },
   close: { position: 'absolute', top: TOP },

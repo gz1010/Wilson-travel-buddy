@@ -9,15 +9,24 @@ import QuartzCore
 /// sandbox, so the app needs no camera entitlement. macOS asks for camera access for the
 /// process that started buddy-audio (the terminal).
 ///
-/// While running it sends small preview frames (`camera.frame`, ~480 px wide, JPEG quality 0.5,
-/// at most 6 a second) and answers each snap with the next frame at ~1024 px, quality 0.8.
+/// While running it sends preview frames (`camera.frame`, ~1000 px wide, JPEG quality 0.75, at
+/// most 6 a second) and answers each snap with the next frame at ~1600 px, quality 0.85.
+/// It captures the camera's 4:3 format of about 1760×1328 when it has one (the Scan preview is
+/// taller than it is wide, so a 4:3 frame loses less to the crop), else 1920×1080.
 /// Everything below runs on one serial queue, which is also the capture output's queue.
 final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
-    static let previewWidth: CGFloat = 480
-    static let previewQuality: CGFloat = 0.5
+    /// The preview fills the top ~520 pt of a 390 pt window (1040 px tall on a Retina screen).
+    /// 1000 px wide is ~750 px tall in 4:3: about 200 KB of base64 a frame, 1.2 MB/s at 6 fps.
+    static let previewWidth: CGFloat = 1000
+    static let previewQuality: CGFloat = 0.75
     static let previewInterval: CFTimeInterval = 1.0 / 6
-    static let snapWidth: CGFloat = 1024
-    static let snapQuality: CGFloat = 0.8
+    /// At most this much base64 a second of preview (a clear frame is ~200 KB, so 6 a second fit;
+    /// a grainy one in a dim room can be 550 KB, and then the frames come ~3.5 a second).
+    static let previewBytesPerSecond: Double = 2_000_000
+    /// What the person froze, shown full screen and sent to Bonsai-2 (llama-server scales it to
+    /// its --image-max-tokens budget, so a bigger photo costs no more than ~1024 vision tokens).
+    static let snapWidth: CGFloat = 1600
+    static let snapQuality: CGFloat = 0.85
     /// The app sends camera.alive every few seconds while it shows the preview; without any
     /// message from it for this long (the app quit or crashed), the camera turns itself off.
     static let leaseSeconds: CFTimeInterval = 15
@@ -33,6 +42,10 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
     private var generation = 0
     private var wanted = false
     private var lastFrameAt: CFTimeInterval = 0
+    /// The wait before the next preview frame: previewInterval, longer after a big frame.
+    private var previewGap: CFTimeInterval = CameraService.previewInterval
+    /// The first frame's size goes in the log once per start, to see which format the camera gave.
+    private var loggedSize = false
     private var pendingSnaps: [String] = []
     private var lastHeardAt = CACurrentMediaTime()
     private var watchdog: DispatchSourceTimer?
@@ -92,6 +105,20 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
 
     static let refused = "Camera access was refused. Allow it for the terminal running buddy-audio in System Settings > Privacy & Security > Camera, then restart buddy-audio."
 
+    /// The camera's landscape 4:3 format at least as wide as a snap and at most 2048 px (no 4K),
+    /// e.g. 1760×1328 on a MacBook's FaceTime HD camera or 1920×1440 on an iPhone. Of two the
+    /// same size, the lower frame rate (the preview needs 6 a second). Nil: keep the preset's.
+    static func captureFormat(of device: AVCaptureDevice) -> AVCaptureDevice.Format? {
+        let fits = device.formats.compactMap { format -> (format: AVCaptureDevice.Format, width: Int32, fps: Float64)? in
+            let size = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            guard CGFloat(size.width) >= snapWidth, size.width <= 2048, size.width > size.height,
+                  abs(Int(size.width) * 3 - Int(size.height) * 4) <= Int(size.width) / 25 else { return nil }
+            guard let fps = format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max(), fps >= 15 else { return nil }
+            return (format, size.width, fps)
+        }
+        return fits.min { a, b in a.width != b.width ? a.width < b.width : a.fps < b.fps }?.format
+    }
+
     private func begin(_ gen: Int) {
         guard let device = AVCaptureDevice.default(for: .video) else {
             fail("No camera found on this Mac.")
@@ -99,8 +126,6 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         }
         let session = AVCaptureSession()
         session.beginConfiguration()
-        if session.canSetSessionPreset(.hd1280x720) { session.sessionPreset = .hd1280x720 }
-        else if session.canSetSessionPreset(.high) { session.sessionPreset = .high }
         do {
             let input = try AVCaptureDeviceInput(device: device)
             guard session.canAddInput(input) else { throw CameraError.cannotUse(device.localizedName) }
@@ -110,6 +135,10 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
             fail("Could not open the camera (\(device.localizedName)): \(error.localizedDescription)")
             return
         }
+        // The preset once the camera is in (canSetSessionPreset then asks this camera; set before,
+        // a 1080p preset could keep a 720p-only camera from being added at all).
+        if session.canSetSessionPreset(.hd1920x1080) { session.sessionPreset = .hd1920x1080 }
+        else if session.canSetSessionPreset(.hd1280x720) { session.sessionPreset = .hd1280x720 }
         let output = AVCaptureVideoDataOutput()
         output.alwaysDiscardsLateVideoFrames = true
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -124,6 +153,14 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         if let connection = output.connection(with: .video), connection.isVideoMirroringSupported {
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = false
+        }
+        // The 4:3 format, set after the preset (which applies its own format). On macOS the
+        // session may put its preset's format back when it starts, unless the device stays locked
+        // until it is running; if the lock fails, the preset's 1920×1080 is fine too.
+        var locked = false
+        if let format = Self.captureFormat(of: device), (try? device.lockForConfiguration()) != nil {
+            device.activeFormat = format
+            locked = true
         }
         session.commitConfiguration()
 
@@ -145,7 +182,10 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         ]
         self.session = session
         lastFrameAt = 0
+        previewGap = Self.previewInterval
+        loggedSize = false
         session.startRunning() // blocks this queue until running; frames queue up behind it
+        if locked { device.unlockForConfiguration() }
         guard gen == generation else { return }
         if session.isRunning {
             log("Camera: started (\(device.localizedName))")
@@ -199,18 +239,32 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard wanted, session != nil, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let now = CACurrentMediaTime()
+        let previewDue = now - lastFrameAt >= previewGap
+        guard previewDue || !pendingSnaps.isEmpty else { return } // most of the 30 a second
         let image = CIImage(cvPixelBuffer: pixels)
         if !pendingSnaps.isEmpty {
             let jpeg = encode(image, width: Self.snapWidth, quality: Self.snapQuality, sharp: true)
+            log("Camera: snap, \(Self.describe(image, width: Self.snapWidth, jpeg))")
             for id in pendingSnaps { send(.cameraSnapped(id: id, jpeg: jpeg)) }
             pendingSnaps = []
         }
-        let now = CACurrentMediaTime()
-        guard now - lastFrameAt >= Self.previewInterval else { return }
+        guard previewDue else { return }
         lastFrameAt = now
-        if let jpeg = encode(image, width: Self.previewWidth, quality: Self.previewQuality, sharp: false) {
-            send(.cameraFrame(jpeg: jpeg))
+        guard let jpeg = encode(image, width: Self.previewWidth, quality: Self.previewQuality, sharp: true) else { return }
+        // A grainy (dim) picture compresses badly: fewer frames rather than flooding the app.
+        previewGap = max(Self.previewInterval, Double(jpeg.utf8.count) / Self.previewBytesPerSecond)
+        if !loggedSize {
+            loggedSize = true
+            log("Camera: frames \(Int(image.extent.width))×\(Int(image.extent.height)); preview \(Self.describe(image, width: Self.previewWidth, jpeg))")
         }
+        send(.cameraFrame(jpeg: jpeg))
+    }
+
+    /// "1600×1207, 480 KB" for the log: the encoded size and the base64 length.
+    private static func describe(_ image: CIImage, width: CGFloat, _ jpeg: String?) -> String {
+        let scale = min(1, width / max(1, image.extent.width))
+        return "\(Int(floor(image.extent.width * scale)))×\(Int(floor(image.extent.height * scale))), \((jpeg?.utf8.count ?? 0) / 1024) KB"
     }
 
     /// Scales down to `width` (never up) and encodes a base64 JPEG with Core Image.

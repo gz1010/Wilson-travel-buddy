@@ -2,7 +2,8 @@
 
 A small Swift program that runs Argmax on the Apple Silicon Mac and serves
 the React Native app over a WebSocket on `127.0.0.1:8765`. It also owns the
-camera for the app's Look screen. The message
+camera for the app's Look screen and asks macOS where the Mac is for the map
+(see "Location" below). The message
 protocol is in `app/src/services/audio/protocol.ts` and
 `Sources/BuddyAudio/Protocol.swift`; keep them in step.
 
@@ -40,6 +41,8 @@ the same speaker; tune it in the demo room).
   sentence ends, not live.
 - **speak**: Qwen3-TTS through TTSKit, queued, interruptible.
 - **mute**: drops microphone audio while the app's voice plays.
+- **location** (the map): `location.get {id}` answers `location {id, lat, lon,
+  accuracy, at}` or `location.error {id, message}`; see "Location" below.
 - **camera** (Look): `camera.start` turns the Mac's camera on (AVFoundation)
   and streams `camera.frame` previews (base64 JPEG, ~480 px wide, quality
   0.5, at most 6 a second); `camera.snap {id}` answers with `camera.snapped
@@ -70,6 +73,65 @@ Test it without the app (Node 22+), with the helper running:
 ```bash
 node -e "const w=new WebSocket('ws://127.0.0.1:8765');let n=0;w.onopen=()=>w.send(JSON.stringify({type:'camera.start'}));w.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='camera.frame'&&++n===12){console.log('12 frames, last',m.jpeg.length,'base64 chars');w.send(JSON.stringify({type:'camera.stop'}));process.exit(0)}if(m.type==='camera.error'){console.log(m.message);process.exit(1)}}"
 ```
+
+## Location
+
+The map's locate button asks the helper (`location.get {id}`), the helper asks
+macOS (CoreLocation, one `requestLocation`, up to 8 s) and answers `location
+{id, lat, lon, accuracy, at}` (accuracy in metres, `at` in ms since 1970) or
+`location.error {id, message}`. The app is sandboxed and makes no network
+call; the helper sends nothing over the network either: it only asks macOS's
+locationd.
+
+**A Mac has no GPS.** macOS works out where it is from the Wi-Fi networks it
+can see, so Wi-Fi must be switched **on** (it need not be joined to a network;
+offline, macOS can only use what it has cached for the area, so it may fail
+too). With Wi-Fi off the helper answers at once: "Wi-Fi is off, so macOS
+cannot locate this Mac". The app then uses the last fix it saved (every macOS
+fix inside the pack's map is saved, and the "You:" chip says how old it is,
+e.g. "Plaza Nueva (last known, 2 h ago)"), and failing that asks you to tap the
+map. A fix far from the pack's city (you are testing at home) moves no one: the
+app says how far away macOS puts the Mac.
+
+**Which app gets the permission.** macOS asks for Location only on behalf of
+an app bundle: for a bare command-line tool it never shows the prompt and the
+request stays "not determined" (CoreLocationAgent logs `client bundle is NULL.
+Skip showing AuthPrompt`, even with an embedded Info.plist; checked on macOS
+26). So at start the helper copies itself into
+`~/Library/Application Support/TravelBuddy/BuddyAudio.app` (bundle id
+`com.travelbuddy.buddy-audio`, Info.plist from `Support/Info.plist`, which
+`Package.swift` also links into the binary; signed ad hoc with
+`codesign --sign -`, offline) and `execv`s that copy: same pid, arguments and
+log, so `scripts/start.sh` notices nothing. It refreshes the copy whenever the
+build changes and registers it with Launch Services (locationd forgets the
+answer for a bundle Launch Services does not know). The first `location.get`
+then shows macOS's prompt for **"Travel Buddy audio helper"**, and it appears
+under System Settings > Privacy & Security > Location Services under that name
+(turn it on there if you clicked Don't Allow, then try again; Location
+Services itself must be on). macOS asks again after every rebuild of the
+helper (an ad hoc signature changes with each build) and if the bundle moves;
+restarting an unchanged helper does not ask. `ps` shows the helper as
+`.../BuddyAudio.app/Contents/MacOS/BuddyAudio`. `--no-app-bundle` turns the
+copy off (no Location then). The app's startup locate asks once at launch, so
+after a rebuild the prompt shows when the app starts.
+
+Camera and microphone are unaffected: macOS still asks for the app that
+started buddy-audio (see "Camera access"), whether or not it runs from the
+bundle.
+
+Test it without the app, with the helper running (Node 22+; prints the fix):
+
+```bash
+node -e "const w=new WebSocket('ws://127.0.0.1:8765');w.onopen=()=>w.send(JSON.stringify({type:'location.get',id:'t'}));w.onmessage=e=>{const m=JSON.parse(e.data);if(m.id==='t'){console.log(m);process.exit(0)}}"
+```
+
+The helper's log says what macOS decided: `Location: permission is allowed`,
+`Location: fix within 40 m, 0 s old`, or the reason it gave up.
+
+There is one `BuddyAudio.app` per user, shared by every copy of the helper. A
+new build started on a spare port to test something else replaces it (and
+macOS then asks for Location again), so start such a test with
+`--no-app-bundle` unless you are testing Location.
 
 ## Argmax Pro mode (live speaker labels)
 

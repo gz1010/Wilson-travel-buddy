@@ -41,6 +41,22 @@ Rules:
 - If the sources answer the question, answer and stop. Never add a note about what the sources lack.
 - If the sources do not answer it, reply exactly: "${NOT_IN_GUIDE}" and nothing else.`,
 
+  /**
+   * The companion's answers (Chat and the floating buddy): the guide's rules, plus "is it worth
+   * it?" (without it Bonsai-2 4B said the sources "do not provide an opinion"), plus source
+   * numbers, so the screens can show the facts used. Code strips the numbers before the answer
+   * is shown or spoken. The guide prompt above stays as it is for B's Guide.answer.
+   */
+  answer: (city: string) =>
+    `You are Travel Buddy, a friendly offline guide for ${city}. Answer the traveller's question from the SOURCES only.
+Rules:
+- At most 3 short sentences; it will be read aloud.
+- Name places exactly as written in the sources.
+- "Is it worth it?" or "should I go?": say what the sources give as reasons to go (or not). That is an answer.
+- After each sentence, put the number of the source it comes from in brackets, like [2].
+- If the sources answer the question, answer and stop. Never add a note about what the sources lack.
+- If the sources do not answer it, reply exactly: "${NOT_IN_GUIDE}" and nothing else.`,
+
   translate: (from: string, to: string) =>
     `Translate the user's message from ${from} to ${to}. Reply with the translation only, no quotes or notes. Keep it natural and spoken.`,
 

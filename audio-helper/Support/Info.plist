@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Linked into the BuddyAudio binary (__TEXT,__info_plist; see Package.swift). At start the
+  helper copies itself into ~/Library/Application Support/TravelBuddy/BuddyAudio.app with this
+  as its Info.plist and runs from there, because macOS asks for Location only on behalf of an
+  app bundle (see Location.swift). The camera and microphone strings are here in case macOS
+  ever asks for this bundle rather than for the terminal that started it. See README.md, "Location".
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.travelbuddy.buddy-audio</string>
+	<key>CFBundleName</key>
+	<string>buddy-audio</string>
+	<key>CFBundleDisplayName</key>
+	<string>Travel Buddy audio helper</string>
+	<key>CFBundleExecutable</key>
+	<string>BuddyAudio</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSLocationUsageDescription</key>
+	<string>Travel Buddy shows where you are on its offline map. macOS works this out from the Wi-Fi networks nearby.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Travel Buddy shows where you are on its offline map. macOS works this out from the Wi-Fi networks nearby.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Travel Buddy listens when you talk to it or use the translator. Speech is transcribed on this Mac.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Travel Buddy's Scan screen looks at menus, signs and food. Photos are read on this Mac.</string>
+</dict>
+</plist>

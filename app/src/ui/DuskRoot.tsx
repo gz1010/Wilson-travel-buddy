@@ -3,6 +3,7 @@ import { StatusBar } from 'react-native';
 import type { PackIndex } from '../core/pack';
 import packPrepared from '../pack/seville/prepared.json';
 import { connectRuntime, type Runtime } from '../services/runtime';
+import { FloatingBuddy } from './dusk/Buddy';
 import { TabBar, type Nav, type ScreenName } from './dusk/Nav';
 import { ScreenSizeProvider } from './dusk/Screen';
 import { dusk } from './dusk/tokens';
@@ -17,7 +18,7 @@ import { WelcomeScreen } from './screens/WelcomeScreen';
 import { useBuddy } from './useBuddy';
 
 /**
- * The Dusk · liquid glass app (iOS). Welcome connects to Bonsai-2 and the Argmax helper while it
+ * The Dusk · liquid glass app (macOS). Welcome connects to Bonsai-2 and the Argmax helper while it
  * shows; the main screens switch with a small state machine, no navigation library.
  */
 export function DuskRoot({ index }: { index: PackIndex }) {
@@ -54,8 +55,19 @@ export function DuskRoot({ index }: { index: PackIndex }) {
   return <DuskApp runtime={runtime} index={index} />;
 }
 
-/** Screens that show the floating tab bar; each leaves its bottom ~100 px free for it. */
-const TAB_BAR_SCREENS: ScreenName[] = ['now', 'map', 'talk', 'look'];
+/**
+ * Screens that show the floating tab bar (Now · Map · Chat · Translate · Scan); each leaves its
+ * bottom ~100 px free for it. Place is a detail screen with its own close button.
+ */
+const TAB_BAR_SCREENS: ScreenName[] = ['now', 'map', 'setup', 'talk', 'look'];
+
+/**
+ * Screens without the floating buddy: Chat ('setup') is the whole conversation already, and
+ * Translate ('talk') runs its own Argmax conversation, which needs the microphone to itself.
+ * Place has its own mic orb in its footer, whose answer lands in the place's guide card; a second
+ * orb floating over its photo only competed with it.
+ */
+const NO_BUDDY_SCREENS: ScreenName[] = ['setup', 'talk', 'place'];
 
 function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
   const b = useBuddy(runtime, index);
@@ -63,14 +75,15 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
   const [placeId, setPlaceId] = useState<string>();
   const [decided, setDecided] = useState(false);
 
-  // First screen, once the saved trip has been read: the plan if there is none, otherwise Now.
+  // First screen, once the saved trip has been read: Chat to plan the trip if there is none,
+  // otherwise Now.
   useEffect(() => {
     if (decided || !b.tripLoaded) return;
     setScreen(b.trip ? 'now' : 'setup');
     setDecided(true);
   }, [b.trip, b.tripLoaded, decided]);
 
-  // "Translate for me" by voice opens Talk.
+  // "Translate for me" by voice opens Translate.
   useEffect(() => {
     if (b.mode === 'translator') {
       setScreen('talk');
@@ -92,6 +105,10 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
     [screen, placeId, b],
   );
 
+  // Until the saved trip has been read the first screen isn't known; showing Chat meanwhile made
+  // it flash before Now on every launch with a trip.
+  if (!decided) return <ScreenSizeProvider style={{ backgroundColor: dusk.color.ground }}>{null}</ScreenSizeProvider>;
+
   return (
     <ScreenSizeProvider style={{ backgroundColor: dusk.color.ground }}>
       <StatusBar barStyle="light-content" />
@@ -101,8 +118,10 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
       {screen === 'map' && <MapScreen b={b} nav={nav} />}
       {screen === 'talk' && <TalkScreen b={b} nav={nav} />}
       {screen === 'look' && <LookScreen b={b} nav={nav} />}
-      {/* Translate runs its own Argmax conversation: a voice-loop listen from the orb would take its microphone. */}
-      {TAB_BAR_SCREENS.includes(screen) && <TabBar nav={nav} listening={b.listening} onMic={screen === 'talk' ? undefined : b.talk} />}
+      {/* Stays mounted from tab to tab (same place in the tree), so its glass lens can slide. */}
+      {TAB_BAR_SCREENS.includes(screen) && <TabBar nav={nav} />}
+      {/* Over everything, on every screen; it hides itself on Chat and Translate. */}
+      <FloatingBuddy b={b} visible={!NO_BUDDY_SCREENS.includes(screen)} yieldMicrophone={screen === 'talk'} />
     </ScreenSizeProvider>
   );
 }

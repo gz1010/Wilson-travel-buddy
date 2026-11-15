@@ -12,6 +12,40 @@
 // highlights). On older macOS it is a light blur (NSVisualEffectView at reduced opacity, so
 // the photo behind stays readable). Both are looked up by name, so this compiles with any SDK.
 // Used by src/ui/dusk/Glass.tsx; no React Native glass or blur library supports macOS.
+
+// The older-macOS glass: the light blur, with an optional coloured layer over it for the tint.
+@interface BuddyBlurView : NSVisualEffectView
+@property (nonatomic, copy) NSColor *buddyTint;
+@end
+
+@implementation BuddyBlurView {
+  NSView *_tintView;
+}
+
+- (void)setBuddyTint:(NSColor *)tint
+{
+  _buddyTint = [tint copy];
+  if (tint == nil) {
+    [_tintView removeFromSuperview];
+    _tintView = nil;
+    return;
+  }
+  if (_tintView == nil) {
+    _tintView = [[NSView alloc] initWithFrame:self.bounds];
+    _tintView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    _tintView.wantsLayer = YES;
+    [self addSubview:_tintView];
+  }
+  // The whole view is drawn at its alphaValue (0.55, so the photo behind reads through); undo
+  // that for the tint so it is as strong as its colour asks, like the tint on Liquid Glass.
+  CGFloat alpha = tint.alphaComponent;
+  if (self.alphaValue > 0) {
+    alpha = MIN(1.0, alpha / self.alphaValue);
+  }
+  _tintView.layer.backgroundColor = [tint colorWithAlphaComponent:alpha].CGColor;
+}
+@end
+
 @interface BuddyGlassViewManager : RCTViewManager
 @end
 
@@ -34,7 +68,7 @@ RCT_EXPORT_MODULE(BuddyGlassView)
   if (liquid != nil) {
     return [liquid new];
   }
-  NSVisualEffectView *view = [NSVisualEffectView new];
+  BuddyBlurView *view = [BuddyBlurView new];
   view.blendingMode = NSVisualEffectBlendingModeWithinWindow;
   view.material = NSVisualEffectMaterialUnderWindowBackground;
   view.state = NSVisualEffectStateActive;
@@ -61,6 +95,21 @@ RCT_CUSTOM_VIEW_PROPERTY(glassStyle, NSString, NSView)
   if ([view respondsToSelector:NSSelectorFromString(@"setStyle:")]) {
     BOOL clear = [json isKindOfClass:[NSString class]] && [json isEqualToString:@"clear"];
     [view setValue:@(clear ? 1 : 0) forKey:@"style"];
+  }
+}
+
+// A colour the glass leans toward (someone speaking, a live state), as a processed React Native
+// colour; none for clear glass. Liquid Glass tints itself (NSGlassEffectView.tintColor); the
+// older blur gets a coloured layer over it. Glass.tsx draws the tint in JS only on builds without
+// this prop.
+RCT_CUSTOM_VIEW_PROPERTY(tintColor, UIColor, NSView)
+{
+  NSColor *color = (json != nil && json != (id)kCFNull) ? [RCTConvert UIColor:json] : nil;
+  Class liquid = NSClassFromString(@"NSGlassEffectView");
+  if (liquid != nil && [view isKindOfClass:liquid]) {
+    [view setValue:color forKey:@"tintColor"];
+  } else if ([view isKindOfClass:[BuddyBlurView class]]) {
+    ((BuddyBlurView *)view).buddyTint = color;
   }
 }
 @end
