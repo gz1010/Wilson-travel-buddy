@@ -46,7 +46,7 @@ enum Outgoing {
     var json: Data {
         var d: [String: Any]
         switch self {
-        case let .ready(models, live): d = ["type": "ready", "version": protocolVersion, "models": models, "liveSpeakers": live]
+        case let .ready(models, live): d = ["type": "ready", "version": protocolVersion, "models": models, "liveSpeakers": live, "camera": true]
         case let .status(m): d = ["type": "status", "message": m]
         case let .level(v): d = ["type": "level", "value": Double((v * 100).rounded() / 100)]
         case let .partial(t, s, l):

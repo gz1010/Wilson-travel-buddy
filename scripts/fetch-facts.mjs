@@ -43,6 +43,10 @@ const places = JSON.parse(readFileSync(join(packDir, 'places.json'), 'utf8'));
 const dest = JSON.parse(readFileSync(join(packDir, 'destination.json'), 'utf8'));
 const factsPath = join(packDir, 'facts.json');
 const facts = JSON.parse(readFileSync(factsPath, 'utf8'));
+// Hand fixes for a wrong or missing match (from Person B's version): app/src/pack/<dest>/wiki-overrides.json,
+// { "<placeId>": "en:Article title" } to use that article as it is, or null to give the place no Wikipedia fact.
+const overridesPath = join(packDir, 'wiki-overrides.json');
+const overrides = existsSync(overridesPath) ? JSON.parse(readFileSync(overridesPath, 'utf8')) : {};
 const city = dest.name;
 const localCity = { Seville: 'Sevilla' }[city] ?? city;
 const localLang = dest.language ?? 'es';
@@ -265,6 +269,7 @@ function trimBody(text) {
 const used = new Map(); // article URL → place id, so two places never share one article
 
 async function findArticle(place) {
+  if (Object.hasOwn(overrides, place.id)) return overriddenArticle(place, overrides[place.id]);
   const local = place.localName ?? place.name;
   const searches = [
     ['en', `${place.name} ${city}`],
@@ -317,6 +322,20 @@ async function findArticle(place) {
     return { lang, title: s.title, description: s.description, extract, url, via: lang !== best.lang ? `${best.lang}:${best.title}` : undefined };
   }
   return { tried, errored };
+}
+
+/** The article wiki-overrides.json names for a place ("en:Title"), read without the name checks; null skips it. */
+async function overriddenArticle(place, pick) {
+  if (!pick) return { tried: ['skipped by wiki-overrides.json'], errored: false };
+  const at = pick.indexOf(':');
+  const lang = at > 0 ? pick.slice(0, at) : 'en';
+  const title = at > 0 ? pick.slice(at + 1) : pick;
+  let errored = false;
+  const s = await summary(lang, title).catch(e => ((errored = true), undefined));
+  if (!s?.extract) return { tried: [`${pick} (wiki-overrides.json): ${errored ? 'no answer' : 'no summary'}`], errored };
+  const url = s.content_urls?.desktop?.page ?? `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+  used.set(url, place.id);
+  return { lang, title: s.title, description: s.description, extract: s.extract, url, via: 'wiki-overrides.json' };
 }
 
 // ---------------------------------------------------------------------------

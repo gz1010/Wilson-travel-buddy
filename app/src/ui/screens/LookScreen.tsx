@@ -49,6 +49,7 @@ function cameraProblem(message: string): { title: string; body: string; retry: b
   if (/without the audio helper|audio helper (not connected|disconnected)/i.test(message)) {
     return { title: 'No camera right now', body: 'The camera comes through the audio helper, which isn’t running. Start everything with scripts/start.sh.', retry: false };
   }
+  if (/older build|rebuild/i.test(message)) return { title: 'Update the audio helper', body: message, retry: false };
   if (/refused|denied|access/i.test(message)) return { title: 'Camera access is off', body: message.replace(/ > /g, ' › '), retry: true };
   if (/no camera/i.test(message)) return { title: 'No camera found', body: 'This Mac has no camera the helper can use. Connect one (or an iPhone as a Continuity Camera) and try again.', retry: true };
   return { title: 'The camera stopped', body: message, retry: true };

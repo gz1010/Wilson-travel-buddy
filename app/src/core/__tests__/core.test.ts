@@ -18,14 +18,15 @@ import type { CompanionEvent, Pack, Situation, Trip } from '../types';
 
 const index = new PackIndex(seville);
 const DAY1 = '2026-11-15'; // a Sunday
-// The pack's forecast is whatever prepare-pack.mjs last fetched, so tests that
-// need weather give themselves their own: DAY1 turns rainy from 16:00.
+// The pack's forecast is whatever prepare-pack.mjs last fetched (its days move with every run), so
+// tests that need weather give themselves their own: the forecast's first day turns rainy from 16:00.
+const RAIN_DAY = seville.forecast.hours[0]?.time.slice(0, 10) ?? DAY1;
 const rainyIndex = new PackIndex({
   ...seville,
   forecast: {
     ...seville.forecast,
     hours: seville.forecast.hours.map(h =>
-      h.time.startsWith(DAY1) && Number(h.time.slice(11, 13)) >= 16 ? { ...h, precipitationChance: 70, code: 61 } : h,
+      h.time.startsWith(RAIN_DAY) && Number(h.time.slice(11, 13)) >= 16 ? { ...h, precipitationChance: 70, code: 61 } : h,
     ),
   },
 } satisfies Pack);
@@ -107,10 +108,11 @@ describe('pack', () => {
 describe('scoring', () => {
   const trip: Trip = { startDate: DAY1, days: 3, interests: ['views', 'food'], stops: [], description: '' };
   it('suggests outdoor places at 13:00 but only indoor ones once rain is near at 17:00', () => {
-    expect(rainyIndex.forecastAt({ date: DAY1, minute: 13 * 60 })).toBeDefined(); // the pack covers DAY1
-    const noon = scoreCandidates(rainyIndex, trip, at(13 * 60));
+    expect(rainyIndex.forecastAt({ date: RAIN_DAY, minute: 13 * 60 })).toBeDefined(); // the pack covers RAIN_DAY
+    const rainTrip: Trip = { ...trip, startDate: RAIN_DAY };
+    const noon = scoreCandidates(rainyIndex, rainTrip, at(13 * 60, RAIN_DAY));
     expect(noon.some(c => !c.place.indoor)).toBe(true);
-    const late = scoreCandidates(rainyIndex, trip, at(17 * 60)).slice(0, 3);
+    const late = scoreCandidates(rainyIndex, rainTrip, at(17 * 60, RAIN_DAY)).slice(0, 3);
     expect(late.length).toBeGreaterThan(0);
     expect(late.every(c => c.place.indoor)).toBe(true);
   });

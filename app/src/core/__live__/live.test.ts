@@ -42,7 +42,7 @@ test('trip setup: the spec sentence, five tries', async () => {
     const museum = t.stops.find(s => s.fixed);
     const ok =
       t.days === 3 && !!museum && museum.day === 3 && !!museum.start && museum.start >= '12:00' && museum.start <= '18:00';
-    runs.push({ ok, ms: Date.now() - t0, days: t.days, base: t.base?.name, interests: t.interests, stops: t.stops.map(({ id, ...s }) => s) });
+    runs.push({ ok, ms: Date.now() - t0, days: t.days, base: t.base?.name, interests: t.interests, stops: t.stops.map(({ id: _id, ...s }) => s) });
     trip ??= ok ? t : undefined;
   }
   report.trip = runs;

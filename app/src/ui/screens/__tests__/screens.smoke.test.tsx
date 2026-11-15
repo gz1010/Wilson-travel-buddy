@@ -76,6 +76,11 @@ describe('Dusk screens render', () => {
     act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" models={['Bonsai-2', 'WhisperKit']} ready onStart={() => {}} />));
     expect(JSON.stringify(r!.toJSON())).toContain('Bonsai-2 · WhisperKit');
     expect(r!.root.findAll(n => n.props.accessibilityLabel === 'Get started').length).toBeGreaterThan(0);
+    // The prepared-pack line (after Person B's test): how to prepare it, then what was prepared.
+    act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" ready onStart={() => {}} prepared={{ preparedAt: null, places: 0, facts: 0, photos: 0 }} />));
+    expect(JSON.stringify(r!.toJSON())).toContain('Not prepared yet');
+    act(() => r!.update(<WelcomeScreen city="Seville" steps={[]} status="" ready onStart={() => {}} prepared={{ preparedAt: '2026-11-14T22:00:00-05:00', places: 60, facts: 97, photos: 52 }} />));
+    expect(r!.root.findAll(n => /^Seville guide prepared Nov 14 · 60 places · 97 facts · 52 photos$/.test(String(n.props.accessibilityLabel ?? ''))).length).toBeGreaterThan(0);
     act(() => r!.unmount());
   });
 

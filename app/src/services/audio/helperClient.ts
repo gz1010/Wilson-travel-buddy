@@ -6,6 +6,9 @@ import { AUDIO_HELPER_URL, PROTOCOL_VERSION, type AppToHelper, type HelperToApp 
  * WebSocket. Only one listen, one conversation, one queue of speech and one
  * camera preview run at a time. The helper also owns the camera.
  */
+
+/** startCamera's error when an older helper never answers camera.start. */
+export const OLD_HELPER = 'The audio helper did not start the camera. It may be an older build without one: rebuild it (cd audio-helper && swift build -c release), then run scripts/start.sh again.';
 export class HelperAudioClient implements AudioClient {
   info: AudioInfo = { hasMicrophone: true, models: [], liveSpeakers: false };
   onStatus?: (message: string) => void;
@@ -19,7 +22,7 @@ export class HelperAudioClient implements AudioClient {
   private conversationHandler?: (e: TurnEvent) => void;
   private counter = 0;
   /** The running camera preview, if any. A new startCamera replaces it. */
-  private camera?: { onFrame: (jpeg: string) => void; onError?: (message: string) => void; alive: ReturnType<typeof setInterval> };
+  private camera?: { onFrame: (jpeg: string) => void; onError?: (message: string) => void; alive: ReturnType<typeof setInterval>; silent?: ReturnType<typeof setTimeout> };
   private snapWaiters = new Map<string, (jpeg: string | undefined) => void>();
   /** locate() calls waiting for the helper's location / location.error, by id. */
   private locateWaiters = new Map<string, (fix: LocationFix | undefined, error?: string) => void>();
@@ -87,7 +90,7 @@ export class HelperAudioClient implements AudioClient {
         }
         if (m.type === 'ready') {
           clearTimeout(readyTimer);
-          this.info = { hasMicrophone: true, models: m.models, liveSpeakers: m.liveSpeakers };
+          this.info = { hasMicrophone: true, models: m.models, liveSpeakers: m.liveSpeakers, camera: m.camera === true };
           finish(true);
         }
       };
@@ -134,6 +137,10 @@ export class HelperAudioClient implements AudioClient {
         this.onStatus?.(`Audio helper: ${m.message}`);
         break;
       case 'camera.frame':
+        if (this.camera?.silent) {
+          clearTimeout(this.camera.silent);
+          this.camera.silent = undefined;
+        }
         this.camera?.onFrame(m.jpeg);
         return; // up to 6 a second: nothing else wants them
       case 'camera.snapped': {
@@ -236,7 +243,14 @@ export class HelperAudioClient implements AudioClient {
     }
     // The helper turns the camera off when it hears nothing from us for 15 s (the app quit).
     const alive = setInterval(() => this.send({ type: 'camera.alive' }), aliveMs);
-    const camera = { onFrame, onError, alive };
+    const camera: NonNullable<HelperAudioClient['camera']> = { onFrame, onError, alive };
+    // A helper that doesn't announce the camera may be an older build with none (after Person B's
+    // camera flag): if nothing comes back, say so instead of waiting forever.
+    if (!this.info.camera) {
+      camera.silent = setTimeout(() => {
+        if (this.camera === camera) this.endCamera(OLD_HELPER);
+      }, 6000);
+    }
     this.camera = camera;
     this.send({ type: 'camera.start' });
     return () => {
@@ -291,6 +305,7 @@ export class HelperAudioClient implements AudioClient {
     const camera = this.camera;
     this.camera = undefined;
     if (camera) clearInterval(camera.alive);
+    if (camera?.silent) clearTimeout(camera.silent);
     for (const done of this.snapWaiters.values()) done(undefined);
     this.snapWaiters.clear();
     if (camera && error) camera.onError?.(error);

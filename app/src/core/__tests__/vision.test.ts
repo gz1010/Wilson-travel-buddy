@@ -162,3 +162,19 @@ describe('LlamaClient image content', () => {
     ]);
   });
 });
+
+// After Person B's test: several images in one message, some already data: URIs.
+describe('llama-server request with two images', () => {
+  it('sends each image as its own image_url part, adding the data: prefix only where it is missing', () => {
+    const jpeg = '/9j/4AAQSkZJRgABAQ';
+    const body = buildBody({ tag: 'look', messages: [{ role: 'user', content: 'What is it?', images: [jpeg, 'data:image/jpeg;base64,AAA'] }] });
+    expect((body.messages as unknown[])[0]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'What is it?' },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpeg}` } },
+        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAA' } },
+      ],
+    });
+  });
+});

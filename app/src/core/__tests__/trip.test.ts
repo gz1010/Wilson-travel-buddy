@@ -194,7 +194,7 @@ describe('TripPlanner.revise', () => {
       0,
     );
     const out = await new TripPlanner(llm, index).revise(trip, 'nothing', DAY1);
-    expect(out.stops.map(({ id, ...s }) => s)).toEqual(trip.stops.map(({ id, ...s }) => s));
+    expect(out.stops.map(({ id: _id, ...s }) => s)).toEqual(trip.stops.map(({ id: _id, ...s }) => s));
     expect(out.interests).toEqual(trip.interests);
     expect(out.days).toBe(trip.days);
   });

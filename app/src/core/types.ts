@@ -309,6 +309,8 @@ export interface AudioInfo {
   models: string[];
   /** True when speakers are labelled live (Argmax Pro). */
   liveSpeakers: boolean;
+  /** True when the helper says it serves the camera; undefined for older helper builds. */
+  camera?: boolean;
 }
 
 export interface AudioClient {

@@ -52,6 +52,8 @@ export type HelperToApp =
       models: string[];
       /** True when diarization labels speakers while they talk (Pro, Sortformer). */
       liveSpeakers: boolean;
+      /** True when this helper build serves camera.* (older builds don't say, and have no camera). */
+      camera?: boolean;
     }
   | { type: 'status'; message: string }
   | { type: 'level'; value: number }

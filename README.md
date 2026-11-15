@@ -13,7 +13,8 @@ An offline travel companion for the Mac that knows your trip, suggests what to d
 2. **What to do now.** Code ranks the city's places by distance, opening hours, weather, time of day, interests and the next booking; Bonsai-2 picks three and says why. Move the clock or your location and the suggestions change.
 3. **Voice guide.** Answers come only from the bundled guide, and it says so when the guide has no answer.
 4. **Translator.** Talk with a local across the Mac; each sentence is labelled with its speaker, translated and spoken.
-5. **Offline map** with stops and suggestions, and an **environment panel**: the saved forecast with its age, and sunrise and sunset computed on-device.
+5. **Scan.** Point the Mac's camera at a dish, a menu or a road sign; Bonsai-2 says what it is, translates any text and gives a tip.
+6. **Offline map** with stops and suggestions, and an **environment panel**: the saved forecast with its age, and sunrise and sunset computed on-device.
 
 ## How it fits together
 
@@ -42,13 +43,14 @@ node scripts/prepare-pack.mjs
 ```
 
 - `fetch-models.sh` gets Bonsai-2 and `llama-server` through PrismML's Bonsai-demo setup, and on Apple Silicon builds `buddy-audio` and downloads the Argmax models.
-- `prepare-pack.mjs` fetches everything the city pack needs while you are online, then the app runs with Wi-Fi off. It runs four steps in order, reports each, and carries on past one that fails:
-  1. `fetch-facts.mjs`: each place's Wikipedia article (English, else Spanish), checked against the place's name, location and kind, saved as a short fact with its source.
+- `prepare-pack.mjs` fetches everything the city pack needs while you are online, then the app runs with Wi-Fi off. It runs five steps in order, reports each, and carries on past one that fails:
+  1. `fetch-facts.mjs`: each place's Wikipedia article (English, else Spanish), checked against the place's name, location and kind, saved as a short fact with its source. Fix a wrong or missing match in `app/src/pack/seville/wiki-overrides.json` (`"<placeId>": "en:Article title"`, or `null` for no fact).
   2. `build-photos.mjs`: one photo per place (the matched article's main image, else a Commons search) at 1200 px, and the four time-of-day city photos at 1600 px, picked from the place photos. Fix a bad pick in `app/src/pack/seville/photos/overrides.json`.
   3. `fetch-forecast.mjs`: a 7-day hourly forecast. The app shows its age offline.
   4. `build-tiles.mjs`: OpenStreetMap vector tiles for Seville (gitignored, so run it on every clone). Without them the map shows pins only.
+  5. `build-aerial.mjs`: aerial photo tiles for the map's Aerial layer (gitignored too). Without them that layer is unavailable.
 
-  It then writes `app/src/pack/seville/prepared.json`, which the Welcome screen shows ("Seville guide prepared Nov 14 · 60 places · …"). Each step also runs on its own, e.g. `node scripts/fetch-facts.mjs --dry-run`. Wikimedia lets clients without contact details make 10 requests a minute, so the facts and photos steps pace themselves to that (about 20 minutes); `WIKIMEDIA_CONTACT=you@example.org node scripts/prepare-pack.mjs` is allowed 200 a minute (the address goes only into the User-Agent sent to Wikimedia).
+  It then writes `app/src/pack/seville/prepared.json`, which the Welcome screen shows ("Seville guide prepared Nov 14 · 60 places · …"). Each step also runs on its own, e.g. `node scripts/fetch-facts.mjs --dry-run`. Facts and photos are committed, so a fresh clone only needs the map: `node scripts/prepare-pack.mjs --skip facts,photos,forecast`. Wikimedia lets clients without contact details make 10 requests a minute, so the facts and photos steps pace themselves to that (about 20 minutes); `WIKIMEDIA_CONTACT=you@example.org node scripts/prepare-pack.mjs` is allowed 200 a minute (the address goes only into the User-Agent sent to Wikimedia).
 
 Licences of what the pack contains:
 
@@ -59,6 +61,7 @@ Licences of what the pack contains:
 | Map tiles | OpenStreetMap contributors, via Protomaps | ODbL |
 | Aerial photos (map's Aerial layer, `scripts/build-aerial.mjs`) | Instituto Geográfico Nacional, PNOA máxima actualidad orthophotos (WMTS), credited on the map as "PNOA máxima actualidad CC BY 4.0 scne.es" | CC BY 4.0 |
 | Forecast | Open-Meteo.com | CC BY 4.0 |
+| Manrope font | The Manrope Project Authors | SIL Open Font Licence (`app/assets/fonts/OFL.txt`) |
 
 ## Run (Wi-Fi off is fine)
 
@@ -66,7 +69,7 @@ Licences of what the pack contains:
 scripts/start.sh
 ```
 
-It starts `llama-server`, `buddy-audio` and Metro (React Native's JavaScript server), waits for the model, then builds and opens the app. Logs go to `~/Library/Application Support/TravelBuddy/logs/`. The first time, macOS asks for microphone access for the terminal running `buddy-audio`.
+It starts `llama-server`, `buddy-audio` and Metro (React Native's JavaScript server), waits for the model, then builds and opens the app. Logs go to `~/Library/Application Support/TravelBuddy/logs/`. The first time, macOS asks the app that started `buddy-audio` (your terminal) for microphone access, for camera access when you open Scan, and for location when you press Locate me. The helper owns the microphone, the camera and location, so the app itself needs none of these entitlements. Scan also needs Bonsai-2's vision projector (`*mmproj*.gguf` next to the model); `start.sh` says whether it found one.
 
 To work on the app without the helpers: `cd app && npm start` in one terminal and `cd app && npm run macos` in another.
 
