@@ -14,10 +14,21 @@ import { sunTimes } from '../sun';
 import { openState, shiftClock, formatHHMM } from '../time';
 import { SideAssigner, Translator } from '../translate';
 import { nextFixedStop, resolveDraft, type TripDraft } from '../trip';
-import type { CompanionEvent, Situation, Trip } from '../types';
+import type { CompanionEvent, Pack, Situation, Trip } from '../types';
 
 const index = new PackIndex(seville);
-const DAY1 = '2026-11-15'; // a Sunday; the sample forecast has rain from 16:00
+const DAY1 = '2026-11-15'; // a Sunday
+// The pack's forecast is whatever prepare-pack.mjs last fetched, so tests that
+// need weather give themselves their own: DAY1 turns rainy from 16:00.
+const rainyIndex = new PackIndex({
+  ...seville,
+  forecast: {
+    ...seville.forecast,
+    hours: seville.forecast.hours.map(h =>
+      h.time.startsWith(DAY1) && Number(h.time.slice(11, 13)) >= 16 ? { ...h, precipitationChance: 70, code: 61 } : h,
+    ),
+  },
+} satisfies Pack);
 const at = (minute: number, date = DAY1): Situation => ({
   clock: { date, minute },
   location: index.place('catedral')!.point,
@@ -96,9 +107,10 @@ describe('pack', () => {
 describe('scoring', () => {
   const trip: Trip = { startDate: DAY1, days: 3, interests: ['views', 'food'], stops: [], description: '' };
   it('suggests outdoor places at 13:00 but only indoor ones once rain is near at 17:00', () => {
-    const noon = scoreCandidates(index, trip, at(13 * 60));
+    expect(rainyIndex.forecastAt({ date: DAY1, minute: 13 * 60 })).toBeDefined(); // the pack covers DAY1
+    const noon = scoreCandidates(rainyIndex, trip, at(13 * 60));
     expect(noon.some(c => !c.place.indoor)).toBe(true);
-    const late = scoreCandidates(index, trip, at(17 * 60)).slice(0, 3);
+    const late = scoreCandidates(rainyIndex, trip, at(17 * 60)).slice(0, 3);
     expect(late.length).toBeGreaterThan(0);
     expect(late.every(c => c.place.indoor)).toBe(true);
   });
@@ -221,7 +233,7 @@ describe('companion', () => {
       0,
     ),
     index,
-    { trip: () => saved, situation: () => at(13 * 60), saveTrip: async t => void (saved = t) },
+    { trip: () => saved, situation: () => at(13 * 60), saveTrip: async t => { saved = t; } },
   );
   it('sets up a trip from a description', async () => {
     const ev = await collect(companion, "I'm here three days, staying in Santa Cruz, I love tapas, Tuesday afternoon I have a museum ticket");

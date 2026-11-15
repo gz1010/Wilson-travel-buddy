@@ -38,16 +38,26 @@ BONSAI_MODEL=4B scripts/fetch-models.sh
 ```
 
 ```bash
-node scripts/build-tiles.mjs
-```
-
-```bash
-node scripts/fetch-forecast.mjs
+node scripts/prepare-pack.mjs
 ```
 
 - `fetch-models.sh` gets Bonsai-2 and `llama-server` through PrismML's Bonsai-demo setup, and on Apple Silicon builds `buddy-audio` and downloads the Argmax models.
-- `build-tiles.mjs` bakes OpenStreetMap tiles for Seville into the app (gitignored). Without it the map shows pins only.
-- `fetch-forecast.mjs` saves a real forecast. The committed one is sample data.
+- `prepare-pack.mjs` fetches everything the city pack needs while you are online, then the app runs with Wi-Fi off. It runs four steps in order, reports each, and carries on past one that fails:
+  1. `fetch-facts.mjs`: each place's Wikipedia article (English, else Spanish), checked against the place's name, location and kind, saved as a short fact with its source.
+  2. `build-photos.mjs`: one photo per place (the matched article's main image, else a Commons search) at 1200 px, and the four time-of-day city photos at 1600 px, picked from the place photos. Fix a bad pick in `app/src/pack/seville/photos/overrides.json`.
+  3. `fetch-forecast.mjs`: a 7-day hourly forecast. The app shows its age offline.
+  4. `build-tiles.mjs`: OpenStreetMap vector tiles for Seville (gitignored, so run it on every clone). Without them the map shows pins only.
+
+  It then writes `app/src/pack/seville/prepared.json`, which the Welcome screen shows ("Seville guide prepared Nov 14 · 60 places · …"). Each step also runs on its own, e.g. `node scripts/fetch-facts.mjs --dry-run`. Wikimedia lets clients without contact details make 10 requests a minute, so the facts and photos steps pace themselves to that (about 20 minutes); `WIKIMEDIA_CONTACT=you@example.org node scripts/prepare-pack.mjs` is allowed 200 a minute (the address goes only into the User-Agent sent to Wikimedia).
+
+Licences of what the pack contains:
+
+| Data | Source | Licence |
+|---|---|---|
+| Place facts marked with a source | Wikipedia | CC BY-SA 4.0 (each fact keeps its article URL) |
+| Photos | Wikimedia Commons | Per photo (CC0, public domain, CC BY or CC BY-SA), with author and file page in `places.json` and `destination.json` |
+| Map tiles | OpenStreetMap contributors, via Protomaps | ODbL |
+| Forecast | Open-Meteo.com | CC BY 4.0 |
 
 ## Run (Wi-Fi off is fine)
 
@@ -71,4 +81,4 @@ Pack data is in `app/src/pack/seville/`. To add a place, look it up in OpenStree
 
 ## Credits
 
-Map data © OpenStreetMap contributors, tiles via Protomaps. Forecast from Open-Meteo. Bonsai-2 by PrismML. Speech by Argmax.
+Map data © OpenStreetMap contributors (ODbL), tiles via Protomaps. Forecast from Open-Meteo.com (CC BY 4.0). Place texts from Wikipedia (CC BY-SA 4.0). Photos from Wikimedia Commons, each under its own licence with its author credited in the pack. Bonsai-2 by PrismML. Speech by Argmax.

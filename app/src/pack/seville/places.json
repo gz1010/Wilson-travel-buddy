@@ -27,7 +27,13 @@
   "summary": "The largest Gothic cathedral in the world, with Columbus's tomb and the Giralda bell tower, climbed by ramps instead of stairs.",
   "localName": "Catedral de Sevilla",
   "neighborhood": "Santa Cruz",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "catedral.jpg",
+   "credit": "Ingo Mehling",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla_Cathedral_-_Southeast.jpg"
+  }
  },
  {
   "id": "alcazar",
@@ -50,7 +56,13 @@
   "summary": "A royal palace still used by the Spanish royal family, with Mudéjar courtyards, tiled halls and large gardens.",
   "localName": "Real Alcázar de Sevilla",
   "neighborhood": "Santa Cruz",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "alcazar.jpg",
+   "credit": "Ajay Suresh from New York, NY, USA. Edited by MenkinAlRire",
+   "license": "CC BY 2.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla-2-2_(48040287512)-edit.jpg"
+  }
  },
  {
   "id": "plaza-espana",
@@ -72,7 +84,13 @@
   },
   "summary": "A huge semicircular plaza built for the 1929 Ibero-American Exposition, with a canal, bridges and tiled alcoves for each Spanish province.",
   "neighborhood": "Parque de María Luisa",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "plaza-espana.jpg",
+   "credit": "Carlos Delgado",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Plaza_de_Espa%C3%B1a_(Sevilla)_-_01.jpg"
+  }
  },
  {
   "id": "parque-maria-luisa",
@@ -95,7 +113,13 @@
   "summary": "Seville's main park: shaded paths, fountains, ponds and tiled benches between the old town and Plaza de España.",
   "localName": "Parque de María Luisa",
   "neighborhood": "Parque de María Luisa",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "parque-maria-luisa.jpg",
+   "credit": "Gzzz",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Parque_de_Mar%C3%ADa_Luisa_(2).jpg"
+  }
  },
  {
   "id": "setas",
@@ -123,7 +147,13 @@
   "summary": "A giant wooden canopy over Plaza de la Encarnación with a rooftop walkway and one of the best sunset views of the city.",
   "localName": "Metropol Parasol",
   "neighborhood": "Encarnación",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "setas.jpg",
+   "credit": "Anual",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Metropolparasolnov2011001.jpg"
+  }
  },
  {
   "id": "mercado-triana",
@@ -153,7 +183,13 @@
   "summary": "A covered food market built over the ruins of a medieval castle, with fish, ham and produce stalls and small tapas counters.",
   "localName": "Mercado de Triana",
   "neighborhood": "Triana",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "mercado-triana.jpg",
+   "credit": "CarlosVdeHabsburgo",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Mercado_de_Triana_02.jpg"
+  }
  },
  {
   "id": "puente-triana",
@@ -175,7 +211,13 @@
   "summary": "Seville's oldest standing iron bridge, linking the centre to Triana across the Guadalquivir.",
   "localName": "Puente de Isabel II",
   "neighborhood": "Triana",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "puente-triana.jpg",
+   "credit": "Gregory Zeier",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Pont_Triana.jpg"
+  }
  },
  {
   "id": "torre-oro",
@@ -203,7 +245,13 @@
   },
   "summary": "A 13th-century watchtower on the river with a small naval museum and a rooftop view.",
   "neighborhood": "Arenal",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "torre-oro.jpg",
+   "credit": "Jebulon",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File:Torre_del_Oro_flag_Seville_Spain.jpg"
+  }
  },
  {
   "id": "santa-cruz",
@@ -233,7 +281,13 @@
    "old town",
    "casco antiguo",
    "old Jewish quarter"
-  ]
+  ],
+  "photo": {
+   "file": "santa-cruz.jpg",
+   "credit": "peribanyez",
+   "license": "CC BY-SA 2.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Plaza_santa_amrta_sevilla.jpg"
+  }
  },
  {
   "id": "casa-pilatos",
@@ -256,7 +310,13 @@
   },
   "summary": "A 16th-century Andalusian palace mixing Mudéjar and Renaissance styles, with tiled patios and gardens.",
   "neighborhood": "San Bartolomé",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "casa-pilatos.jpg",
+   "credit": "Ajay Suresh from New York, NY, USA",
+   "license": "CC BY 2.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla-4-7_(48040489973).jpg"
+  }
  },
  {
   "id": "bellas-artes",
@@ -285,7 +345,13 @@
   "summary": "One of Spain's best painting collections, strong on Murillo and Zurbarán, in a former convent.",
   "localName": "Museo de Bellas Artes",
   "neighborhood": "Museo",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "bellas-artes.jpg",
+   "credit": "Pepe Morón",
+   "license": "CC BY 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Fachada_Museo.jpg"
+  }
  },
  {
   "id": "archivo-indias",
@@ -314,7 +380,13 @@
   "summary": "The archive of Spain's American empire, in a Renaissance merchants' exchange; free to enter.",
   "localName": "Archivo General de Indias",
   "neighborhood": "Santa Cruz",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "archivo-indias.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Archivo_de_Indias_002.jpg"
+  }
  },
  {
   "id": "maestranza",
@@ -336,7 +408,13 @@
   "summary": "An 18th-century baroque bullring by the river, visited on guided tours with a small museum.",
   "localName": "Plaza de Toros de la Real Maestranza",
   "neighborhood": "Arenal",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "maestranza.jpg",
+   "credit": "Ajay Suresh from New York, NY, USA",
+   "license": "CC BY 2.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla-3-8_(48040412768).jpg"
+  }
  },
  {
   "id": "palacio-duenas",
@@ -359,7 +437,13 @@
   },
   "summary": "The Duchess of Alba's palace, with patios, gardens and the lemon tree courtyard the poet Machado wrote about.",
   "neighborhood": "San Pedro",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "palacio-duenas.jpg",
+   "credit": "Alonso de Mendoza",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Entrada_al_Palacio_de_las_Due%C3%B1as,_Sevilla.jpg"
+  }
  },
  {
   "id": "alameda",
@@ -381,7 +465,13 @@
   },
   "summary": "A long tree-lined square full of bars and terraces; quiet by day, the centre of local nightlife after dark.",
   "neighborhood": "Alameda",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "alameda.jpg",
+   "credit": "Pirado",
+   "license": "Public domain",
+   "source": "https://commons.wikimedia.org/wiki/File:Alameda_de_H%C3%A9rcules.JPG"
+  }
  },
  {
   "id": "mercado-feria",
@@ -411,7 +501,13 @@
   "summary": "Seville's oldest market, where locals shop; the tapas counters at the back are busy at lunchtime.",
   "localName": "Mercado de Feria",
   "neighborhood": "Feria",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "mercado-feria.jpg",
+   "credit": "Zarateman",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla_-_Mercado_de_Feria_2.jpg"
+  }
  },
  {
   "id": "rinconcillo",
@@ -433,7 +529,13 @@
   },
   "summary": "Seville's oldest bar, open since 1670; tabs are still chalked on the wooden counter.",
   "neighborhood": "Santa Catalina",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "rinconcillo.jpg",
+   "credit": "CarlosVdeHabsburgo",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:El_Rinconcillo_(Sevilla).jpg"
+  }
  },
  {
   "id": "bodega-santa-cruz",
@@ -478,7 +580,13 @@
   },
   "summary": "An intimate flamenco show in a 15th-century courtyard house, with performances every evening.",
   "neighborhood": "Centro",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "casa-memoria.jpg",
+   "credit": "Mx. Granger",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File:Casa_de_la_Memoria_de_Al-Andalus.jpg"
+  }
  },
  {
   "id": "jardines-murillo",
@@ -500,7 +608,13 @@
   "summary": "Shady gardens along the old city wall beside Santa Cruz, with the Columbus monument.",
   "localName": "Jardines de Murillo",
   "neighborhood": "Santa Cruz",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "jardines-murillo.jpg",
+   "credit": "CarlosVdeHabsburgo",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Fuente_Jardines_de_Murillo.jpg"
+  }
  },
  {
   "id": "la-campana",
@@ -522,7 +636,13 @@
   },
   "summary": "A pastry shop from 1885 on Seville's main shopping street, good for coffee and yemas.",
   "neighborhood": "Centro",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "la-campana.jpg",
+   "credit": "Zarateman",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla_-_Confiter%C3%ADa_La_Campana_2.jpg"
+  }
  },
  {
   "id": "calle-betis",
@@ -545,7 +665,13 @@
   },
   "summary": "Triana's riverside street of colourful houses and bars, facing the Torre del Oro across the water.",
   "neighborhood": "Triana",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "calle-betis.jpg",
+   "credit": "Anual",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Callebetisrioguadalquivir2015001.jpg"
+  }
  },
  {
   "id": "salvador",
@@ -574,7 +700,13 @@
   "summary": "A huge baroque church on the site of the old main mosque, with gilded altarpieces; the square outside fills up at aperitivo time.",
   "localName": "Iglesia del Salvador",
   "neighborhood": "Centro",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "salvador.jpg",
+   "credit": "Kent Wang from Barcelona, Spain",
+   "license": "CC BY-SA 2.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Seville_(49727120056).jpg"
+  }
  },
  {
   "id": "museo-flamenco",
@@ -597,7 +729,13 @@
   "summary": "A museum about flamenco's history with costumes and video, plus evening shows.",
   "localName": "Museo del Baile Flamenco",
   "neighborhood": "Santa Cruz",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "museo-flamenco.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Museo_del_baile_flamenco,_sevilla.jpg"
+  }
  },
  {
   "id": "triana-ceramics",
@@ -627,7 +765,13 @@
   "summary": "A museum in an old tile factory telling the story of Triana's potters, whose tiles cover the city.",
   "localName": "Centro Cerámica Triana",
   "neighborhood": "Triana",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "triana-ceramics.jpg",
+   "credit": "José Antonio Montero Fernández",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Museo_de_la_Cer%C3%A1mica_de_Triana_2.jpg"
+  }
  },
  {
   "id": "eslava",
@@ -735,7 +879,13 @@
   },
   "summary": "A rambling bar in a former coal yard with free, informal flamenco most nights.",
   "neighborhood": "Santa Cruz",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "la-carboneria.jpg",
+   "credit": "Benjamín Núñez González",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:San_Bartolom%C3%A9,_Carboner%C3%ADa,_Sevilla,_Espa%C3%B1a,_2015_15.JPG"
+  }
  },
  {
   "id": "alfalfa",
@@ -756,7 +906,13 @@
    "daily": "24h"
   },
   "summary": "A lively little square ringed by tapas bars, busy with locals in the evening.",
-  "neighborhood": "Alfalfa"
+  "neighborhood": "Alfalfa",
+  "photo": {
+   "file": "alfalfa.jpg",
+   "credit": "Mx. Granger",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File:Plaza_de_la_Alfalfa_1.jpg"
+  }
  },
  {
   "id": "torre-perdigones",
@@ -783,7 +939,13 @@
   },
   "summary": "A 19th-century shot tower with a camera obscura at the top that projects live views of the city.",
   "neighborhood": "Macarena",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "torre-perdigones.jpg",
+   "credit": "No machine-readable author provided. Lobillo assumed (based on copyright claims).",
+   "license": "Public domain",
+   "source": "https://commons.wikimedia.org/wiki/File:SevillaTorreDeLosPerdigones01.JPG"
+  }
  },
  {
   "id": "lonja-barranco",
@@ -813,7 +975,13 @@
   },
   "summary": "A gourmet food hall in an iron-and-glass 19th-century fish market on the river, by the Triana bridge.",
   "neighborhood": "Arenal",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "lonja-barranco.jpg",
+   "credit": "CarlosVdeHabsburgo",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Lonja_del_Barranco.jpg"
+  }
  },
  {
   "id": "venerables",
@@ -837,7 +1005,13 @@
   },
   "summary": "A baroque former home for retired priests in Santa Cruz, with a painted church and a Velázquez centre.",
   "neighborhood": "Santa Cruz",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "venerables.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Hospital_Venerables_001.jpg"
+  }
  },
  {
   "id": "macarena",
@@ -861,7 +1035,13 @@
   },
   "summary": "Home of the Virgin of La Macarena, the city's best-loved Holy Week image, beside the old city gate.",
   "neighborhood": "Macarena",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "macarena.jpg",
+   "credit": "Suicasmo",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Exterior_of_Bas%C3%ADlica_de_la_Macarena,_Sevilla_20180719.jpg"
+  }
  },
  {
   "id": "plaza-nueva",
@@ -882,7 +1062,13 @@
    "daily": "24h"
   },
   "summary": "The broad square in front of the City Hall and its carved Plateresque façade, at the start of the shopping streets.",
-  "neighborhood": "Centro"
+  "neighborhood": "Centro",
+  "photo": {
+   "file": "plaza-nueva.jpg",
+   "credit": "Gzzz",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Plaza_Nueva_Sevilla_(1).jpg"
+  }
  },
  {
   "id": "casa-ciencia",
@@ -911,7 +1097,13 @@
   },
   "summary": "A science museum with a planetarium in the Peru pavilion from the 1929 Ibero-American Exposition.",
   "neighborhood": "El Prado",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "casa-ciencia.jpg",
+   "credit": "Victoria Muñoz",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Museo_casa_de_la_ciencia-2.jpg"
+  }
  },
  {
   "id": "museo-arqueologico",
@@ -940,7 +1132,13 @@
   },
   "summary": "Roman and Tartessian finds, including the gold Carambolo treasure, in a pavilion in María Luisa Park.",
   "neighborhood": "Parque de María Luisa",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "museo-arqueologico.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Museo_arqueologico_2009.jpg"
+  }
  },
  {
   "id": "puerta-macarena",
@@ -961,7 +1159,13 @@
    "daily": "24h"
   },
   "summary": "The best-preserved stretch of the medieval city walls, with towers and an arched gate.",
-  "neighborhood": "Macarena"
+  "neighborhood": "Macarena",
+  "photo": {
+   "file": "puerta-macarena.jpg",
+   "credit": "Anual",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Arco_de_la_macarena_002An2022.jpg"
+  }
  },
  {
   "id": "castillo-san-jorge",
@@ -988,7 +1192,13 @@
   },
   "summary": "Ruins of the castle that housed the Inquisition, now a small museum beneath Triana Market.",
   "neighborhood": "Triana",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "castillo-san-jorge.jpg",
+   "credit": "Gzzz",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Castillo_de_San_Jorge_Sevilla_1.jpg"
+  }
  },
  {
   "id": "las-teresas",
@@ -1061,7 +1271,13 @@
   },
   "summary": "A small Arenal tapas bar, a local favourite for pringá and other Seville classics.",
   "neighborhood": "Arenal",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "bodeguita-romero.jpg",
+   "credit": "Rubén Vique",
+   "license": "CC BY 2.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Bodeguita_Romero_(7850714980).jpg"
+  }
  },
  {
   "id": "la-brunilda",
@@ -1109,7 +1325,13 @@
   },
   "summary": "A traditional fried-fish shop: pick fish by weight, served in a paper cone.",
   "neighborhood": "San Bernardo",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "freiduria-puerta-carne.jpg",
+   "credit": "Zarateman",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla_-_Freidur%C3%ADa_Puerta_de_la_Carne.jpg"
+  }
  },
  {
   "id": "los-gallos",
@@ -1154,7 +1376,13 @@
   },
   "summary": "A large flamenco tablao near the bullring, with dinner during the show.",
   "neighborhood": "Arenal",
-  "price": 3
+  "price": 3,
+  "photo": {
+   "file": "tablao-arenal.jpg",
+   "credit": "Noeliv",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Espect%C3%A1culo_flamenco_en_Tablao_Flamenco_El_Arenal.jpg"
+  }
  },
  {
   "id": "casa-guitarra",
@@ -1198,7 +1426,13 @@
   },
   "summary": "A noble house whose floors are paved with Roman mosaics brought from nearby Itálica.",
   "neighborhood": "Centro",
-  "price": 2
+  "price": 2,
+  "photo": {
+   "file": "palacio-lebrija.jpg",
+   "credit": "Unknown author",
+   "license": "Public domain",
+   "source": "https://commons.wikimedia.org/wiki/File:SevillaPalacioDeLebrija01.JPG"
+  }
  },
  {
   "id": "pabellon-navegacion",
@@ -1228,7 +1462,13 @@
   },
   "summary": "A museum of sea voyages from the 1992 Expo, with a tower viewpoint over the river.",
   "neighborhood": "La Cartuja",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "pabellon-navegacion.jpg",
+   "credit": "Anual",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Pabellon_navegacion_e2012003.jpg"
+  }
  },
  {
   "id": "caac",
@@ -1258,7 +1498,13 @@
   },
   "summary": "Contemporary art inside the Cartuja monastery, where Columbus once stayed, among old ceramic-factory kilns.",
   "neighborhood": "La Cartuja",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "caac.jpg",
+   "credit": "Sergio Lora Villar",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Cartuja_de_Santa_Mar%C3%ADa_de_la_Cuevas.jpg"
+  }
  },
  {
   "id": "san-luis-franceses",
@@ -1287,7 +1533,13 @@
   },
   "summary": "A former Jesuit church with one of the richest baroque interiors in Seville.",
   "neighborhood": "San Julián",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "san-luis-franceses.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:IglesiadeSan_Luis_001.jpg"
+  }
  },
  {
   "id": "gran-poder",
@@ -1310,7 +1562,13 @@
   },
   "summary": "Home of the Jesús del Gran Poder, one of Holy Week's most revered images, on Plaza de San Lorenzo.",
   "neighborhood": "San Lorenzo",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "gran-poder.jpg",
+   "credit": "Luca Nebuloni",
+   "license": "CC BY 2.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Seville_(17936535223).jpg"
+  }
  },
  {
   "id": "santa-ana",
@@ -1333,7 +1591,13 @@
   },
   "summary": "Triana's oldest church, known locally as the Cathedral of Triana.",
   "neighborhood": "Triana",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "santa-ana.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Santa_ana2011001.jpg"
+  }
  },
  {
   "id": "capilla-marineros",
@@ -1355,7 +1619,13 @@
   },
   "summary": "The chapel of the Esperanza de Triana, the image Triana carries in Holy Week.",
   "neighborhood": "Triana",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "capilla-marineros.jpg",
+   "credit": "CarlosVdeHabsburgo",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Capilla_de_los_Marineros_01.jpg"
+  }
  },
  {
   "id": "hospital-caridad",
@@ -1379,7 +1649,13 @@
   },
   "summary": "A 17th-century charity hospital whose church holds major paintings by Murillo and Valdés Leal.",
   "neighborhood": "Arenal",
-  "price": 1
+  "price": 1,
+  "photo": {
+   "file": "hospital-caridad.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Fachada_del_Hospital_de_la_Caridad.jpg"
+  }
  },
  {
   "id": "universidad",
@@ -1407,7 +1683,13 @@
   },
   "summary": "The 18th-century tobacco factory where the opera's Carmen worked, now the University of Seville.",
   "neighborhood": "El Prado",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "universidad.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Universidad_de_Sevilla_(rectorado)_001.jpg"
+  }
  },
  {
   "id": "san-telmo",
@@ -1427,7 +1709,13 @@
    "daily": "24h"
   },
   "summary": "A baroque palace with a richly carved doorway, now the seat of the Andalusian government; seen from outside.",
-  "neighborhood": "El Prado"
+  "neighborhood": "El Prado",
+  "photo": {
+   "file": "san-telmo.jpg",
+   "credit": "CarlosVdeHabsburgo",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Palacio_de_San_Telmo_(Sevilla).jpg"
+  }
  },
  {
   "id": "plaza-america",
@@ -1450,7 +1738,13 @@
   },
   "summary": "A square of 1929 Exposition pavilions at the far end of María Luisa Park, famous for its white doves.",
   "neighborhood": "Parque de María Luisa",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "plaza-america.jpg",
+   "credit": "Taken by the uploader, w:es:Usuario:Barcex",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla_-_Plaza_de_Am%C3%A9rica_-_Palomas_-_20070519-14.jpg"
+  }
  },
  {
   "id": "jardin-delicias",
@@ -1472,7 +1766,13 @@
   },
   "summary": "Quiet 19th-century gardens by the river with classical statues and shady paths.",
   "neighborhood": "El Porvenir",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "jardin-delicias.jpg",
+   "credit": "Anual",
+   "license": "CC BY 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Jard%C3%ADn_de_las_delicias_001.jpg"
+  }
  },
  {
   "id": "casa-murillo",
@@ -1500,6 +1800,12 @@
   },
   "summary": "The house in Santa Cruz where the painter Murillo lived and died.",
   "neighborhood": "Santa Cruz",
-  "price": 0
+  "price": 0,
+  "photo": {
+   "file": "casa-murillo.jpg",
+   "credit": "Lobillo, (España)",
+   "license": "Public domain",
+   "source": "https://commons.wikimedia.org/wiki/File:SevillaCasaMuseoMurillo.JPG"
+  }
  }
 ]

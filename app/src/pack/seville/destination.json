@@ -13,5 +13,41 @@
   37.37,
   -5.975,
   37.405
- ]
+ ],
+ "dishes": [
+  "salmorejo (thick orange cold tomato soup topped with chopped egg and ham)",
+  "gazpacho (thin cold tomato soup, often drunk from a glass)",
+  "espinacas con garbanzos (spinach stewed with chickpeas)",
+  "tortilla de patatas (thick potato omelette)",
+  "pescaíto frito (small fried fish)",
+  "montadito (small filled bread roll)",
+  "carrillada (slow-cooked pork cheek in sauce)",
+  "churros con chocolate (fried dough sticks with thick hot chocolate)"
+ ],
+ "heroes": {
+  "midday": {
+   "file": "hero-midday.jpg",
+   "credit": "Carlos Delgado",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Plaza_de_Espa%C3%B1a_(Sevilla)_-_01.jpg"
+  },
+  "afternoon": {
+   "file": "hero-afternoon.jpg",
+   "credit": "Ingo Mehling",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Sevilla_Cathedral_-_Southeast.jpg"
+  },
+  "dusk": {
+   "file": "hero-dusk.jpg",
+   "credit": "Gonzo1983",
+   "license": "CC BY-SA 3.0 es",
+   "source": "https://commons.wikimedia.org/wiki/File:Torre_del_Oro,_atardecer.JPG"
+  },
+  "night": {
+   "file": "hero-night.jpg",
+   "credit": "Anual",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File:Metropolparasolnov2011001.jpg"
+  }
+ }
 }

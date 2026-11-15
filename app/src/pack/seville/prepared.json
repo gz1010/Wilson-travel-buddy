@@ -1,0 +1,33 @@
+{
+ "preparedAt": "2026-11-14T23:47:56-05:00",
+ "places": 60,
+ "facts": 81,
+ "wikiFacts": 44,
+ "photos": 51,
+ "heroes": 4,
+ "tiles": 44,
+ "forecastFrom": "2026-11-15T00:00",
+ "forecastTo": "2026-11-21T23:00",
+ "steps": [
+  {
+   "name": "facts",
+   "ok": true,
+   "seconds": 0
+  },
+  {
+   "name": "photos",
+   "ok": true,
+   "seconds": 54
+  },
+  {
+   "name": "forecast",
+   "ok": true,
+   "seconds": 0
+  },
+  {
+   "name": "tiles",
+   "ok": true,
+   "seconds": 13
+  }
+ ]
+}

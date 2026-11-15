@@ -368,5 +368,583 @@
    "markets",
    "architecture"
   ]
+ },
+ {
+  "id": "wiki-catedral",
+  "placeId": "catedral",
+  "title": "Seville Cathedral",
+  "body": "The Cathedral of Saint Mary of the See, better known as Seville Cathedral, is a Catholic cathedral in Seville, Andalusia, Spain. It was registered in 1987 by UNESCO as a World Heritage Site, along with the adjoining Alcázar palace complex and the General Archive of the Indies. It is one of the largest churches in the world and the largest Gothic cathedral.",
+  "tags": [
+   "architecture",
+   "history",
+   "religion",
+   "views"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Seville_Cathedral",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-alcazar",
+  "placeId": "alcazar",
+  "title": "Alcázar of Seville",
+  "body": "The Alcázar of Seville, officially called Royal Alcázar of Seville, is a historic royal palace in Seville, Spain and one of the official residences of the Spanish royal family. It was formerly the site of the Islamic-era citadel of the city, begun in the 10th century under the Umayyads and then developed into a larger palace complex by the Abbadid dynasty and the Almohads. After the Castilian conquest of the city in 1248, the site was progressively rebuilt and replaced by new palaces and gardens.",
+  "tags": [
+   "architecture",
+   "history",
+   "nature"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Alc%C3%A1zar_of_Seville",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-plaza-espana",
+  "placeId": "plaza-espana",
+  "title": "Plaza de España, Seville",
+  "body": "The Plaza de España is a plaza in Maria Luisa Park in Seville, Spain. It was built in 1928 for the Ibero-American Exposition of 1929. It is a landmark example of Regionalism Architecture, mixing elements of the Baroque Revival, Renaissance Revival and Moorish Revival (Neo-Mudéjar) styles of Spanish architecture.",
+  "tags": [
+   "architecture",
+   "views",
+   "history"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Plaza_de_Espa%C3%B1a%2C_Seville",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-parque-maria-luisa",
+  "placeId": "parque-maria-luisa",
+  "title": "Parque de María Luisa",
+  "body": "The Parque de María Luisa (María Luisa Park) is a public park that stretches along the Guadalquivir River in Seville, Spain. It is Seville's principal green area.",
+  "tags": [
+   "nature",
+   "quiet",
+   "family"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Parque_de_Mar%C3%ADa_Luisa",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-setas",
+  "placeId": "setas",
+  "title": "Metropol Parasol",
+  "body": "The Setas de Sevilla or Las Setas, initially titled Metropol Parasol, is a large, predominantly wood structure located at La Encarnación square in the old quarter of Seville, Spain. It accommodates a traditional market, restaurants, a performance square, archaeological museum, a venue for MICE events Metropol Eventos — and 'rooftop' terrace with a panoramic view of Seville's old city.",
+  "tags": [
+   "architecture",
+   "views"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Metropol_Parasol",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-mercado-triana",
+  "placeId": "mercado-triana",
+  "title": "Mercado de Triana",
+  "body": "El mercado de Triana se encuentra en la plaza del Altozano, en el barrio de Triana, Sevilla, Andalucía, España. En esta parcela existe una plaza de abastos desde 1823, aunque las actuales instalaciones datan de 2001.",
+  "tags": [
+   "food",
+   "markets",
+   "local-life",
+   "tapas"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Mercado_de_Triana",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-puente-triana",
+  "placeId": "puente-triana",
+  "title": "Puente de Isabel II",
+  "body": "The Puente de Isabel II, Puente de Triana or Triana Bridge, is a metal arch bridge in Seville, Spain, that connects the Triana neighbourhood with the centre of the city. It crosses the Canal de Alfonso XIII, one of the arms of the River Guadalquivir that isolate Triana as an almost-island.",
+  "tags": [
+   "views",
+   "history"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Puente_de_Isabel_II",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-torre-oro",
+  "placeId": "torre-oro",
+  "title": "Torre del Oro",
+  "body": "The Torre del Oro (Arabic: بُرْج الذَّهَب, romanized: burj aḏẖ-ḏẖahab, lit. 'Tower of Gold') is a dodecagonal military watchtower in Seville, southern Spain. It was erected by the Almohad Caliphate in order to control access to Seville via the Guadalquivir river. Constructed in the first third of the 13th century, the tower served as a prison during the Middle Ages. Its name comes from the golden shine it projected on the river, due to its building materials (a mixture of mortar, lime and pressed hay).",
+  "tags": [
+   "history",
+   "views",
+   "museums"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Torre_del_Oro",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-santa-cruz",
+  "placeId": "santa-cruz",
+  "title": "Santa Cruz, Seville",
+  "body": "Santa Cruz is the primary tourist neighborhood of Seville, Spain, and the former Jewish quarter of the medieval city. Santa Cruz is bordered by the Jardines de Murillo, the Real Alcázar, Calle Mateos Gago, and Calle Santa María La Blanca/San José. The neighbourhood is the location of many of Seville's oldest churches and is home to the Cathedral of Seville, including the converted minaret of the old Moorish mosque Giralda.",
+  "tags": [
+   "architecture",
+   "history",
+   "local-life",
+   "quiet"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Santa_Cruz%2C_Seville",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-casa-pilatos",
+  "placeId": "casa-pilatos",
+  "title": "Casa de Pilatos",
+  "body": "La Casa de Pilatos is an Andalusian palace in Seville, Spain, which serves as the permanent residence of the Dukes of Medinaceli. It is an example of an Italian Renaissance building with Mudéjar elements and decorations. It is considered the prototype of the Andalusian palace.",
+  "tags": [
+   "architecture",
+   "art",
+   "history",
+   "museums"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Casa_de_Pilatos",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-bellas-artes",
+  "placeId": "bellas-artes",
+  "title": "Museum of Fine Arts of Seville",
+  "body": "The Museum of Fine Arts of Seville is one of the main art galleries in Seville, Spain, with a collection of Spanish visual arts from the medieval period to the early 20th century. The collection includes a choice selection of works by artists from the Golden Age of Sevillian painting during the 17th century, such as Bartolomé Esteban Murillo, Francisco de Zurbarán, and Valdés Leal.",
+  "tags": [
+   "art",
+   "museums",
+   "history"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Museum_of_Fine_Arts_of_Seville",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-archivo-indias",
+  "placeId": "archivo-indias",
+  "title": "General Archive of the Indies",
+  "body": "The Archivo General de Indias, often simply called the Archive of the Indies, was created by Charles III and inaugurated in 1785. It is housed in the former merchant guild building in Seville, Spain, built in the late 16th century. It became the repository of archival materials documenting the history of the Spanish Empire in the Americas and Asia. The building was designed by Juan de Herrera; it is an Italianate example of Spanish Renaissance architecture.",
+  "tags": [
+   "history",
+   "museums",
+   "architecture"
+  ],
+  "source": "https://en.wikipedia.org/wiki/General_Archive_of_the_Indies",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-maestranza",
+  "placeId": "maestranza",
+  "title": "Maestranza (Seville)",
+  "body": "The Plaza de Toros de la Real Maestranza de Caballería de Sevilla is a 12,000-capacity bullring in Seville, Spain. During the annual Seville Fair in Seville, it is the site of one of the most well-known bullfighting festivals in the world. It is a part of the Real Maestranza de Caballería de Sevilla, a noble guild established for traditional cavalry training.",
+  "tags": [
+   "history",
+   "architecture"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Maestranza_(Seville)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-palacio-duenas",
+  "placeId": "palacio-duenas",
+  "title": "Palacio de las Dueñas",
+  "body": "Palacio de las Dueñas is a palace in Seville, Spain, currently belonging to the House of Alba. It was built in the late 15th century in the Renaissance style with Gothic and Moorish influences. The palace is one of the major historic homes of great architectural and artistic heritage in the city. The poet Antonio Machado was born here, as were Carlos Falcó, 5th Marquess of Griñón, and the Marquess of Castel-Moncayo. On October 5, 2011, Cayetana Fitz-James Stuart, 18th Duchess of Alba, married her third husband here. The palace became a national monument on June 3, 1931.",
+  "tags": [
+   "architecture",
+   "art",
+   "nature",
+   "history"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Palacio_de_las_Due%C3%B1as",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-alameda",
+  "placeId": "alameda",
+  "title": "Alameda de Hércules",
+  "body": "The Alameda de Hércules, or simply La Alameda, is a garden square or mall in Seville, southern Spain. Built in 1574, it was originally a promenaded public garden, named after the eight rows of white poplar trees that fill its central part. Located in the northern half of the city's casco antiguo, between the Guadalquivir River and the Macarena neighbourhood, it was the oldest public garden in Spain and Europe.",
+  "tags": [
+   "nightlife",
+   "local-life",
+   "food"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Alameda_de_H%C3%A9rcules",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-casa-memoria",
+  "placeId": "casa-memoria",
+  "title": "Casa de la Memoria de al-Ándalus",
+  "body": "La Casa de la Memoria de Al-Andalus es un museo privado dedicado al flamenco más tradicional y a la cultura andalusí, está ubicado en Sevilla, en pleno centro de la ciudad (c/ Cuna, 6).",
+  "tags": [
+   "flamenco",
+   "music",
+   "art",
+   "nightlife"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Casa_de_la_Memoria_de_al-%C3%81ndalus",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-jardines-murillo",
+  "placeId": "jardines-murillo",
+  "title": "Jardines de Murillo",
+  "body": "Los jardines de Murillo son una zona verde situada junto al barrio Santa Cruz entre la muralla del Alcázar y la Ronda Histórica, en Sevilla, Andalucía, España. Están unidos al también ajardinado paseo de Catalina de Ribera. Ambos fueron acondicionados como tal a comienzos del siglo XX y catalogados como bien de interés cultural de forma conjunta en 2002.",
+  "tags": [
+   "nature",
+   "quiet"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Jardines_de_Murillo",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-calle-betis",
+  "placeId": "calle-betis",
+  "title": "Calle Betis",
+  "body": "La calle Betis de Sevilla es una vía que discurre paralela al cauce histórico del río Guadalquivir, en el barrio de Triana, en la ribera opuesta al núcleo central de la ciudad intramuros. La calle se encuentra encuadrada entre el puente de Isabel II o «puente de Triana», como es comúnmente conocido situado en el Altozano en el norte y el puente de San Telmo en la plaza de Cuba en el sur, formando por tanto el borde del barrio de Triana.",
+  "tags": [
+   "views",
+   "nightlife",
+   "food",
+   "local-life"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Calle_Betis",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-salvador",
+  "placeId": "salvador",
+  "title": "Church of San Salvador (Seville)",
+  "body": "The Church of San Salvador is a church in Seville, Spain. It is the second-largest church in Seville, after the city's cathedral.",
+  "tags": [
+   "architecture",
+   "religion",
+   "art"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Church_of_San_Salvador_(Seville)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-museo-flamenco",
+  "placeId": "museo-flamenco",
+  "title": "Museo del Baile Flamenco (Sevilla)",
+  "body": "El Museo del Baile Flamenco de Sevilla, está situado en pleno centro de la ciudad, en el Barrio de Santa Cruz; entre la conocida Plaza de la Alfalfa y la Catedral. La práctica totalidad del Museo, está dedicado a una de las expresiones artísticas que más arraigo e importancia ha tenido en la cultura de Andalucía, como es el baile Flamenco. Es el primer, y único museo en el mundo conocido hasta la fecha, dedicado a dicho arte. Visitantes de todas las partes del mundo, vienen a conocer de cerca los orígenes y evolución de una tradición y cultura centenaria.",
+  "tags": [
+   "flamenco",
+   "music",
+   "museums"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Museo_del_Baile_Flamenco_(Sevilla)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-triana-ceramics",
+  "placeId": "triana-ceramics",
+  "title": "Centro Cerámica Triana",
+  "body": "El Centro Cerámica Triana es un museo creado en el año 2014 por el Ayuntamiento de Sevilla, con la colaboración de la Junta de Andalucía, para conservar y promocionar la tradición cerámica de la ciudad.",
+  "tags": [
+   "art",
+   "history",
+   "museums",
+   "local-life"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Centro_Cer%C3%A1mica_Triana",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-la-carboneria",
+  "placeId": "la-carboneria",
+  "title": "La Carbonería",
+  "body": "La Carbonería es un espacio cultural situado en la Judería de Sevilla considerado bien de interés cultural por las actividades sociales y culturales que desarrolla desde 1970, así como por la arquitectura que lo acoge. Conformado por dos locales unidos por un patio común, en 2016 La Carbonería hubo de renunciar al local histórico de la calle Levíes 18 ante el empuje especulativo del arquitecto Ignacio Medina y Fernández de Córdoba, propietario del inmueble y del \"Hotel de los Mercaderes\".",
+  "tags": [
+   "nightlife",
+   "flamenco",
+   "music",
+   "local-life"
+  ],
+  "source": "https://es.wikipedia.org/wiki/La_Carboner%C3%ADa",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-alfalfa",
+  "placeId": "alfalfa",
+  "title": "Plaza de la Alfalfa",
+  "body": "La plaza de la Alfalfa es un espacio público del centro histórico de la ciudad de Sevilla. Constituye la prolongación natural de la calle Alfalfa cuyas coordenadas geográficas son: longitud 5°59'26\" Oeste, latitud 37°23'26\" Norte.",
+  "tags": [
+   "nightlife",
+   "tapas",
+   "local-life"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Plaza_de_la_Alfalfa",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-torre-perdigones",
+  "placeId": "torre-perdigones",
+  "title": "Torre de los Perdigones (Sevilla)",
+  "body": "La torre de los Perdigones es una torre que formaba parte de la antigua fábrica de \"San Francisco de Paula\", conocida popularmente como \"Fábrica de Perdigones\", ubicada en la calle Resolana, en el barrio de San Gil de Sevilla junto al Puente de la Barqueta, principal acceso a la Expo'92.",
+  "tags": [
+   "views",
+   "history"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Torre_de_los_Perdigones_(Sevilla)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-venerables",
+  "placeId": "venerables",
+  "title": "Hospital de los Venerables",
+  "body": "The Hospital de los Venerables of Seville, Spain, is a baroque 17th-century building which served as a residence for priests. It currently houses the Velázquez Center, dedicated to the famous painter Diego Velázquez. It is located in the Plaza de los Venerables, in the center of the Barrio de Santa Cruz and close to the Murillo Gardens, the Seville Cathedral and Alcázar.",
+  "tags": [
+   "art",
+   "architecture",
+   "history",
+   "museums",
+   "religion"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Hospital_de_los_Venerables",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-macarena",
+  "placeId": "macarena",
+  "title": "Basílica de la Macarena",
+  "body": "La basílica de la Macarena, denominada oficialmente basílica de María Santísima de la Esperanza Macarena, es un templo católico situado en el número 1 de la Plaza de la Esperanza Macarena, junto a la Ronda Histórica en el barrio Macarena,perteneciente al distrito Casco Antiguo de la ciudad de Sevilla (España).",
+  "tags": [
+   "religion",
+   "history",
+   "art",
+   "local-life"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Bas%C3%ADlica_de_la_Macarena",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-plaza-nueva",
+  "placeId": "plaza-nueva",
+  "title": "Plaza Nueva, Seville",
+  "body": "Plaza Nueva is a public square in the city center of Seville, Spain, containing the Seville City Hall. The land which the plaza is built on was formerly part of the San Fernando convent from 1270 to 1840. The land was later acquired by the local government and converted into a public square. The plaza was completed in 1856.",
+  "tags": [
+   "architecture",
+   "local-life",
+   "shopping"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Plaza_Nueva%2C_Seville",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-casa-ciencia",
+  "placeId": "casa-ciencia",
+  "title": "La Casa de la Ciencia",
+  "body": "La Casa de la Ciencia (The House of Science) in the city of Seville, Spain is a centre for popularizing science. Along with a museum, the building houses the Andalusian headquarters of the Spanish National Research Council (CSIC). CSIC is the largest public institution devoted to research in Spain, and the third largest in Europe. The building was opened to the public in 2008, with the goal of sharing knowledge acquired through scientific research.",
+  "tags": [
+   "museums",
+   "family",
+   "nature"
+  ],
+  "source": "https://en.wikipedia.org/wiki/La_Casa_de_la_Ciencia",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-museo-arqueologico",
+  "placeId": "museo-arqueologico",
+  "title": "Archeological Museum of Seville",
+  "body": "The Archeological Museum of Seville is a museum in Seville, southern Spain, housed in the Pabellón del Renacimiento, one of the pavilions designed by the architect Aníbal González. These pavilions at the Plaza de España were created for the Ibero-American Exposition of 1929.",
+  "tags": [
+   "museums",
+   "history",
+   "architecture"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Archeological_Museum_of_Seville",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-puerta-macarena",
+  "placeId": "puerta-macarena",
+  "title": "Macarena Gate",
+  "body": "The Macarena Gate, also known as the Macarena Arch, is one of three city gates that remain today of the original walls of Seville, alongside the Oil Postern and the Córdoba Gate. It is located on Resolana street, within the San Gil neighborhood, which belongs to the district of Casco Antiguo of the city of Seville, in Andalusia, Spain.",
+  "tags": [
+   "history",
+   "architecture"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Macarena_Gate",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-castillo-san-jorge",
+  "placeId": "castillo-san-jorge",
+  "title": "Castle of San Jorge",
+  "body": "The Castle of San Jorge was a medieval fortress built on the west bank of the Guadalquivir river in the Spanish city of Seville (Spain). It was also used as headquarters and prison for the Spanish Inquisition. It was demolished in the 19th century and made into a food market. A museum in the underground ruins focuses on the history of the castle, the Spanish Inquisition and of religious repression. Next to the food market in the Barrio de Triana, the Alley of the Inquisition, which was part of the fortifications, now connects Castilla Street with the Nuestra Señora de la O Walk.",
+  "tags": [
+   "history",
+   "museums"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Castle_of_San_Jorge",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-palacio-lebrija",
+  "placeId": "palacio-lebrija",
+  "title": "Palace of the Countess of Lebrija",
+  "body": "The Lebrija Palace or Palacio de la Condesa de Lebrija is a house museum in central Seville, Spain. Dating to the 16th century and remodeled between the 18th and 20th centuries, the palace is characterised by its collection of art, including Roman mosaics and other antiquities as well as Asian art, paintings by European masters and European decorative arts.",
+  "tags": [
+   "architecture",
+   "history",
+   "art",
+   "museums"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Palace_of_the_Countess_of_Lebrija",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-pabellon-navegacion",
+  "placeId": "pabellon-navegacion",
+  "title": "Pabellón de la Navegación (Sevilla)",
+  "body": "El Pabellón de la Navegación fue construido para la Exposición universal de Sevilla en 1992, proyectado por el arquitecto sevillano Guillermo Vázquez Consuegra que por ello recibió una mención de edificación en la II Bienal de Arquitectura Española. Desde 2012, el edificio es un espacio museístico que cuenta la evolución de la navegación atlántica.",
+  "tags": [
+   "museums",
+   "history",
+   "views",
+   "family"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Pabell%C3%B3n_de_la_Navegaci%C3%B3n_(Sevilla)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-caac",
+  "placeId": "caac",
+  "title": "Centro Andaluz de Arte Contemporáneo",
+  "body": "El Centro Andaluz de Arte Contemporáneo (CAAC) es un museo dedicado al arte contemporáneo ubicado en Sevilla, dependiente de la Consejería de Cultura de la Junta de Andalucía. Desde 1997 tiene su sede en el monasterio de Santa María de las Cuevas, también conocido como la Cartuja, un espacio recuperado para la Exposición Universal de 1992.",
+  "tags": [
+   "art",
+   "museums",
+   "history",
+   "quiet"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Centro_Andaluz_de_Arte_Contempor%C3%A1neo",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-san-luis-franceses",
+  "placeId": "san-luis-franceses",
+  "title": "Church of Saint Louis of France",
+  "body": "The Church of Saint Louis of France, located in the historic district of Seville, Spain, represents an example of Baroque architecture in the 18th century. The church was designed by the architect Leonardo of Figueroa and constructed between 1699 and 1731 on behalf of the Jesuits. Following the expulsion of the Jesuits from Spain in 1835, it had different uses and was eventually deconsecrated. The building currently belongs to the Provincial Council of Seville.",
+  "tags": [
+   "architecture",
+   "art",
+   "religion"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Church_of_Saint_Louis_of_France",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-gran-poder",
+  "placeId": "gran-poder",
+  "title": "Basílica de Jesús del Gran Poder",
+  "body": "La basílica de Jesús del Gran Poder es un templo católico situado en el barrio de San Lorenzo de la ciudad de Sevilla, comunidad autónoma de Andalucía, en España.",
+  "tags": [
+   "religion",
+   "art",
+   "local-life"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Bas%C3%ADlica_de_Jes%C3%BAs_del_Gran_Poder",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-santa-ana",
+  "placeId": "santa-ana",
+  "title": "Iglesia de Santa Ana (Sevilla)",
+  "body": "}} La iglesia de Santa Ana de Sevilla, es un templo católico de estilo gótico, declarado bien de interés cultural, cuya construcción se inició a finales del siglo XIII. Se encuentra situada en el barrio de Triana de Sevilla y es conocida popularmente como la catedral de Triana.",
+  "tags": [
+   "religion",
+   "history",
+   "architecture"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Iglesia_de_Santa_Ana_(Sevilla)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-capilla-marineros",
+  "placeId": "capilla-marineros",
+  "title": "Capilla de los Marineros",
+  "body": "La capilla de los Marineros es un templo culto católico localizado en el barrio de Triana, en la ciudad de Sevilla, Andalucía, España. Es la sede de la Hermandad de la Esperanza de Triana.",
+  "tags": [
+   "religion",
+   "local-life"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Capilla_de_los_Marineros",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-hospital-caridad",
+  "placeId": "hospital-caridad",
+  "title": "Hospital de la Caridad (Seville)",
+  "body": "The Hospital de la Caridad is a Roman Catholic baroque charity hospital building near Plaza de toros de la Real Maestranza de Caballería de Sevilla in Spain. The hospital is dedicated to the Blessed Virgin Mary under the venerated title of Our Lady of Charity, where a venerated 15th—century image is enshrined within the Church of Saint George of Lydda within the hospital property.",
+  "tags": [
+   "art",
+   "religion",
+   "history",
+   "museums"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Hospital_de_la_Caridad_(Seville)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-universidad",
+  "placeId": "universidad",
+  "title": "Royal Tobacco Factory",
+  "body": "The Royal Tobacco Factory is an 18th-century stone building in Seville, southern Spain. Since the 1950s it has been the seat of the rectorate of the University of Seville. Prior to that, it was, as its name indicates, a tobacco factory: the most prominent such institution in Europe, and a lineal descendant of Europe's first tobacco factory, which was located nearby. It is one of the most notable and splendid examples of industrial architecture from the era of Spain's Antiguo Régimen.",
+  "tags": [
+   "architecture",
+   "history"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Royal_Tobacco_Factory",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-san-telmo",
+  "placeId": "san-telmo",
+  "title": "Palacio de San Telmo",
+  "body": "The Palace of San Telmo is a historic edifice in Seville, southern Spain, formerly the Universidad de Mareantes, now the seat of the presidency of the Andalusian Autonomous Government. Construction of the building began in 1682 outside the walls of the city, on property belonging to the Tribunal of the Holy Office, the institution responsible for the Spanish Inquisition. It was originally constructed as the seat of the University of Navigators, a school to educate orphaned children and train them as sailors.",
+  "tags": [
+   "architecture",
+   "history"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Palacio_de_San_Telmo",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-plaza-america",
+  "placeId": "plaza-america",
+  "title": "Plaza de América",
+  "body": "The Plaza de América, located in the Parque de María Luisa, was built by architect Aníbal González for the Ibero-American exhibition of 1929. The Plaza is flanked by three buildings, also built by González for the exhibition, in three distinct architectural styles: the Museum of Popular Arts (Neomudéjar), the Archaeological Museum (Neo-Renaissance), and the Royal Pavilion (Gothic).",
+  "tags": [
+   "architecture",
+   "nature",
+   "family",
+   "quiet"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Plaza_de_Am%C3%A9rica",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-jardin-delicias",
+  "placeId": "jardin-delicias",
+  "title": "Jardines de las Delicias (Sevilla)",
+  "body": "Los jardines de las Delicias son una zona verde de Sevilla (Andalucía, España), ubicada en el paseo de las Delicias frente al parque de María Luisa y colindante con el muelle de las Delicias.",
+  "tags": [
+   "nature",
+   "quiet"
+  ],
+  "source": "https://es.wikipedia.org/wiki/Jardines_de_las_Delicias_(Sevilla)",
+  "license": "CC BY-SA 4.0"
+ },
+ {
+  "id": "wiki-casa-murillo",
+  "placeId": "casa-murillo",
+  "title": "Casa de Murillo",
+  "body": "The Casa de Murillo is a historical house in Seville, Andalusia, Spain, at number 8, calle Santa Teresa, in the historic Barrio de Santa Cruz. It was the home of the painter Bartolomé Esteban Murillo (1617–1682) in the latter years of his life. The building has two storeys and a central patio (courtyard) with columns.",
+  "tags": [
+   "art",
+   "history",
+   "museums"
+  ],
+  "source": "https://en.wikipedia.org/wiki/Casa_de_Murillo",
+  "license": "CC BY-SA 4.0"
  }
 ]
