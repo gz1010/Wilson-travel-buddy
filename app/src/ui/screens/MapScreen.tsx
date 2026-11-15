@@ -16,6 +16,7 @@ import { setTabBarTint } from '../dusk/Nav';
 import { PhotoFade, PlacePhoto } from '../dusk/Photos';
 import { dusk, font, ground, white } from '../dusk/tokens';
 import type { ScreenProps } from './types';
+import { noteMapTouch, tapWasOnOverlay } from '../touches';
 import { useScreenSize } from '../dusk/Screen';
 
 // AntMap: the offline map full screen, a glass search bar and a Layers button on top, and a glass
@@ -223,6 +224,8 @@ export function MapScreen({ b, nav }: ScreenProps) {
   };
 
   const onMapPress = (p: GeoPoint) => {
+    // A click on a control over the map reaches the map too on macOS (see ui/touches.ts): not a map tap.
+    if (tapWasOnOverlay()) return;
     // A tap on the map first closes what floats over it.
     if (layersOpen) setLayersOpen(false);
     else if (showList) closeList();
@@ -302,7 +305,7 @@ export function MapScreen({ b, nav }: ScreenProps) {
 
   return (
     <View style={styles.root}>
-      <View style={StyleSheet.absoluteFill}>
+      <View style={StyleSheet.absoluteFill} onStartShouldSetResponderCapture={noteMapTouch}>
         <MapView
           theme="dusk"
           layer={layer}

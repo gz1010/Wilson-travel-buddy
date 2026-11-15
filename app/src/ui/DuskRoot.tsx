@@ -15,6 +15,7 @@ import { LookScreen } from './screens/LookScreen';
 import { TalkScreen } from './screens/TalkScreen';
 import type { WelcomeProps } from './screens/types';
 import { WelcomeScreen } from './screens/WelcomeScreen';
+import { noteTouch } from './touches';
 import { useBuddy } from './useBuddy';
 
 /**
@@ -110,7 +111,8 @@ function DuskApp({ runtime, index }: { runtime: Runtime; index: PackIndex }) {
   if (!decided) return <ScreenSizeProvider style={{ backgroundColor: dusk.color.ground }}>{null}</ScreenSizeProvider>;
 
   return (
-    <ScreenSizeProvider style={{ backgroundColor: dusk.color.ground }}>
+    // noteTouch: where touches start, so the map can tell its own taps from clicks on controls over it (ui/touches.ts).
+    <ScreenSizeProvider style={{ backgroundColor: dusk.color.ground }} onStartShouldSetResponderCapture={noteTouch}>
       <StatusBar barStyle="light-content" />
       {screen === 'setup' && <SetupScreen b={b} nav={nav} />}
       {screen === 'now' && <NowScreen b={b} nav={nav} />}

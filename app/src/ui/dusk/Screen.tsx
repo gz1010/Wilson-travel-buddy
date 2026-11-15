@@ -7,11 +7,12 @@ import { dusk } from './tokens';
 // the real size from the root view's layout instead.
 const ScreenSize = createContext({ width: dusk.layout.phoneWidth, height: dusk.layout.phoneHeight });
 
-export function ScreenSizeProvider({ style, children }: { style?: StyleProp<ViewStyle>; children: React.ReactNode }) {
+export function ScreenSizeProvider({ style, onStartShouldSetResponderCapture, children }: { style?: StyleProp<ViewStyle>; onStartShouldSetResponderCapture?: () => boolean; children: React.ReactNode }) {
   const [size, setSize] = useState({ width: dusk.layout.phoneWidth, height: dusk.layout.phoneHeight });
   return (
     <View
       style={[{ flex: 1 }, style]}
+      onStartShouldSetResponderCapture={onStartShouldSetResponderCapture}
       onLayout={e => {
         const { width, height } = e.nativeEvent.layout;
         if (width > 0 && height > 0 && (width !== size.width || height !== size.height)) setSize({ width, height });
