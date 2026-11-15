@@ -36,6 +36,20 @@ export const ArrowIcon = ({ size = 30, color = '#fff', strokeWidth = 2, bearing 
   </Svg>
 );
 
+export const CameraIcon = ({ size = 24, color = '#fff', strokeWidth = 2 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+    <Path d="M12 9.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
+  </Svg>
+);
+
+/** A right-pointing arrow for send buttons (no rotate transform: drawn pointing right). */
+export const SendIcon = ({ size = 16, color = '#fff', strokeWidth = 2.4 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M4 12h15M13 6l6 6-6 6" />
+  </Svg>
+);
+
 export const SearchIcon = ({ size = 16, color = '#fff', strokeWidth = 2 }: IconProps) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round">
     <Path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />

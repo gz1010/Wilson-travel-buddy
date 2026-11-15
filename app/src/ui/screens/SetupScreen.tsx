@@ -15,7 +15,7 @@ import { addDays, weekday, WEEKDAY_KEYS, WEEKDAY_NAMES } from '../../core/time';
 import { tripDay } from '../../core/trip';
 import type { Trip } from '../../core/types';
 import { Glass, GlassButton, GlassIconButton, onGlass } from '../dusk/Glass';
-import { CloseIcon } from '../dusk/Icons';
+import { CloseIcon, SendIcon } from '../dusk/Icons';
 import { MicOrb } from '../dusk/Nav';
 import { HeroPhoto, PhotoFade } from '../dusk/Photos';
 import { useReduceMotion } from '../dusk/motion';
@@ -32,6 +32,9 @@ const PLACEHOLDER = "Tell me how long you're here, where you're staying and what
 const TRANSCRIPT_SIZE = dusk.font.transcript.size;
 const TRANSCRIPT_LINE = Math.round(TRANSCRIPT_SIZE * 1.32);
 const MAX_DAY_TILES = 5;
+// react-native-macos draws a focus ring round a focused field; the glass pill is the field. The
+// prop is macOS-only, so it isn't in react-native's TextInput types.
+const NO_FOCUS_RING = { enableFocusRing: false } as object;
 // Narrow no-break space: pads a pill without letting the line break between the padding and the word.
 const THIN_SPACE = '\u202F';
 
@@ -165,7 +168,7 @@ export function SetupScreen({ b, nav }: ScreenProps) {
   const onArea = (e: LayoutChangeEvent) => setAreaHeight(e.nativeEvent.layout.height);
   const lines = Math.max(2, Math.floor(areaHeight / TRANSCRIPT_LINE) || 7);
 
-  // Typed input when there is no microphone.
+  // The typed row, always there: type the plans instead of (or as well as) saying them.
   const [typed, setTyped] = useState('');
   const input = useRef<TextInput>(null);
   const submit = () => {
@@ -186,6 +189,9 @@ export function SetupScreen({ b, nav }: ScreenProps) {
 
   const photoHeight = Math.min(height, 560);
   const keyboardUp = keyboard > 0;
+  // Short windows (under the 844 design height): a smaller orb and tighter spacing so the
+  // typed row, the orb and "Looks right" still fit under the card.
+  const compact = height < 800;
 
   return (
     <View style={[styles.root, { backgroundColor: dusk.color.ground }]}>
@@ -267,28 +273,34 @@ export function SetupScreen({ b, nav }: ScreenProps) {
           </View>
         </Glass>
 
-        {/* Bottom: typed input (no microphone), mic orb, confirm. */}
-        <View style={[styles.bottom, keyboardUp && { marginTop: 12 }]}>
-          {!hasMic && (
-            <Glass kind="clear" radius={999} style={[styles.field, { width: Math.min(width - 40 * sx, 330 * sx) }, !keyboardUp && { marginBottom: 12 }]}>
-              <TextInput
-                ref={input}
-                accessibilityLabel="Type your trip"
-                value={typed}
-                onChangeText={setTyped}
-                onSubmitEditing={submit}
-                returnKeyType="send"
-                blurOnSubmit
-                editable={!b.busy}
-                placeholder="Or type it here…"
-                placeholderTextColor={dusk.color.pending}
-                style={styles.input}
-              />
-            </Glass>
-          )}
+        {/* Typed plans: a clear-glass pill with a send button. Enter also sends. */}
+        <Glass kind="clear" radius={999} style={[styles.field, { marginHorizontal: 14 * sx, marginTop: compact ? 12 : 16 }]}>
+          <TextInput
+            ref={input}
+            accessibilityLabel="Type your plans"
+            value={typed}
+            onChangeText={setTyped}
+            onSubmitEditing={submit}
+            returnKeyType="send"
+            blurOnSubmit
+            editable={!b.busy}
+            placeholder="Or type your plans…"
+            placeholderTextColor={dusk.color.pending}
+            selectionColor={dusk.color.white}
+            keyboardAppearance="dark"
+            {...NO_FOCUS_RING}
+            style={styles.input}
+          />
+          <GlassIconButton accessibilityLabel="Send" onPress={submit} size={36} kind="prominent" blur={false}>
+            <SendIcon size={16} />
+          </GlassIconButton>
+        </Glass>
+
+        {/* Bottom: mic orb and confirm. */}
+        <View style={[styles.bottom, { marginTop: keyboardUp ? 12 : compact ? 18 : 30, gap: compact ? 10 : 16 }]}>
           {!keyboardUp && (
             <>
-              <OrbWithRings listening={b.listening} onPress={onMic} reduce={reduce} />
+              <OrbWithRings listening={b.listening} onPress={onMic} reduce={reduce} size={compact ? 64 : dusk.size.micOrb} />
               <GlassButton
                 label="Looks right"
                 height={dusk.size.buttonSmall}
@@ -358,9 +370,8 @@ function Pill({ label }: { label: string }) {
   );
 }
 
-/** The 80 px mic orb with the two faint concentric rings; the rings breathe while listening. */
-function OrbWithRings({ listening, onPress, reduce }: { listening: boolean; onPress: () => void; reduce: boolean }) {
-  const size = dusk.size.micOrb;
+/** The mic orb (80 px, 64 on short windows) with the two faint concentric rings; the rings breathe while listening. */
+function OrbWithRings({ listening, onPress, reduce, size = dusk.size.micOrb }: { listening: boolean; onPress: () => void; reduce: boolean; size?: number }) {
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!listening || reduce) {
@@ -394,8 +405,8 @@ function OrbWithRings({ listening, onPress, reduce }: { listening: boolean; onPr
   );
   return (
     <View style={{ width: size, height: size }}>
-      {ring(26, 0.035)}
-      {ring(12, 0.07)}
+      {ring(Math.round(size * 0.32), 0.035)}
+      {ring(Math.round(size * 0.15), 0.07)}
       <MicOrb listening={listening} onPress={onPress} size={size} />
     </View>
   );
@@ -437,8 +448,9 @@ const styles = StyleSheet.create({
   pill: { paddingVertical: 6, paddingHorizontal: 11 },
   pillText: { ...font('700'), fontSize: 12, color: dusk.color.text },
   empty: { ...font('500'), fontSize: 13, lineHeight: 19, color: dusk.color.pending },
-  bottom: { alignItems: 'center', gap: 16, marginTop: 42 },
-  field: { height: dusk.size.touch, justifyContent: 'center', paddingHorizontal: 18 },
-  input: { ...font('500'), fontSize: 15, color: dusk.color.text, height: dusk.size.touch, padding: 0 },
+  bottom: { alignItems: 'center' },
+  field: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 20, paddingRight: 6 },
+  // Transparent, no bezel: the glass pill is the field (macOS otherwise draws a grey box).
+  input: { ...font('500'), flex: 1, fontSize: 15, color: dusk.color.white, height: 48, padding: 0, backgroundColor: 'transparent', borderWidth: 0 },
   confirm: { width: 220 },
 });
